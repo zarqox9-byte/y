@@ -5680,6 +5680,71 @@ def clipper_upload_short():
     return jsonify({'task_id': task_id})
 
 
+@app.route('/api/clipper/sync_rendered_short', methods=['POST'])
+def clipper_sync_rendered_short():
+    """
+    Hybrid Architecture Endpoint:
+    Receives locally processed and rendered MP4 video & thumbnail from Local Worker,
+    saves into uploads/clipper_shorts/, and updates the job checkpoint so the web UI
+    can instantly stream and display the completed Short.
+    """
+    try:
+        job_id = request.form.get('job_id')
+        part_num = request.form.get('part', '1')
+        short_json_str = request.form.get('short_json')
+        short_data = json.loads(short_json_str) if short_json_str else {}
+
+        video_file = request.files.get('video')
+        thumb_file = request.files.get('thumbnail')
+
+        if not video_file:
+            return jsonify({'success': False, 'error': 'No video file provided'}), 400
+
+        os.makedirs(clipper_engine.CLIPPER_DIR, exist_ok=True)
+        filename = secure_filename(video_file.filename)
+        save_video_path = os.path.join(clipper_engine.CLIPPER_DIR, filename)
+        video_file.save(save_video_path)
+
+        if thumb_file:
+            tname = secure_filename(thumb_file.filename)
+            save_thumb_path = os.path.join(clipper_engine.CLIPPER_DIR, tname)
+            thumb_file.save(save_thumb_path)
+
+        # Update in-memory and disk checkpoints
+        if job_id:
+            ckpt = clipper_engine.load_job_checkpoint(job_id) or {}
+            completed = ckpt.get('completed_shorts') or {}
+            if isinstance(completed, list):
+                completed = {str(s.get('part', i+1)): s for i, s in enumerate(completed)}
+            elif not isinstance(completed, dict):
+                completed = {}
+
+            if not short_data:
+                short_data = {
+                    'part': int(part_num),
+                    'filename': filename,
+                    'video_url': f'/api/clipper/media/{filename}',
+                    'thumbnail_url': f'/api/clipper/media/{filename.replace("short_", "thumb_").replace(".mp4", ".jpg")}',
+                    'status': 'ready'
+                }
+            completed[str(part_num)] = short_data
+            ckpt['completed_shorts'] = completed
+            clipper_engine.save_job_checkpoint(job_id, ckpt)
+
+            task_key = f"{job_id}_{part_num}"
+            generation_tasks[task_key] = {
+                'status': 'completed',
+                'progress': 100,
+                'current_step': f'Part {part_num} ready (rendered via Local Worker)!',
+                'short': short_data,
+                'error': None
+            }
+
+        return jsonify({'success': True, 'filename': filename, 'video_url': f'/api/clipper/media/{filename}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/clipper/media/<path:filename>')
 def clipper_serve_media(filename):
     return send_from_directory(clipper_engine.CLIPPER_DIR, secure_filename(filename))

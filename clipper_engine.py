@@ -832,6 +832,8 @@ _STREAM_URL_CACHE: Dict[str, Dict[str, Any]] = {}
 
 def get_youtube_video_id(url: str) -> Optional[str]:
     """Extracts the 11-character YouTube video ID from various URL formats."""
+    if not url or not isinstance(url, str):
+        return None
     patterns = [
         r"(?:v=|\/embed\/|\/watch\?v=|\/shorts\/|^)([0-9A-Za-z_-]{11})(?:[\&\?\/]|$)",
         r"youtu\.be\/([0-9A-Za-z_-]{11})"
@@ -851,6 +853,8 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
     3. Standard yt-dlp fallback
     4. Piped CDN API fallback (bypasses datacenter IP blocks completely)
     """
+    if not youtube_url:
+        return None
     global _STREAM_URL_CACHE
     vid = get_youtube_video_id(youtube_url) or youtube_url
     now = time.time()
