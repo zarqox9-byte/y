@@ -58,6 +58,10 @@ ACCOUNTS_STORE_FILE = os.path.join(BASE_DIR, "user_accounts.json")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(gemini_engine.THUMBNAILS_DIR, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_shorts"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_temp"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_jobs"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_cuts"), exist_ok=True)
 
 # Cloud deployment environment variable fallback
 if not os.path.exists(CLIENT_SECRETS_FILE) and os.environ.get("GOOGLE_CLIENT_SECRET_JSON"):
@@ -2152,12 +2156,23 @@ HTML_MAIN = """
                         <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-size: 13px; font-weight: 600;">Target Duration</span>
-                                <span style="font-size: 11px; color: #10b981;">Montage Safe (50-70s)</span>
+                                <span style="font-size: 11px; color: #10b981;">Shorts (50-70s) &amp; Long (1-20m)</span>
                             </div>
                             <select id="clipperDurationSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
-                                <option value="50">50 Seconds (8-10 Cuts, Fast Paced)</option>
-                                <option value="58" selected>58 Seconds (10-12 Cuts, Recommended)</option>
-                                <option value="70">70 Seconds (12-14 Cuts, Extended Climax)</option>
+                                <optgroup label="⚡ Shorts Montages (9:16 Vertical / Fast-Paced)">
+                                    <option value="50">50 Seconds (8-10 Cuts, Fast Paced)</option>
+                                    <option value="58" selected>58 Seconds (10-12 Cuts, Recommended)</option>
+                                    <option value="70">70 Seconds (12-14 Cuts, Extended Climax)</option>
+                                </optgroup>
+                                <optgroup label="🎬 Long Video Montages (Cinematic Recaps)">
+                                    <option value="60">1 Minute Montage (12-16 Cuts)</option>
+                                    <option value="120">2 Minutes Montage (18-24 Cuts)</option>
+                                    <option value="180">3 Minutes Montage (25-32 Cuts)</option>
+                                    <option value="300">5 Minutes Montage (35-45 Cuts)</option>
+                                    <option value="600">10 Minutes Deep Recap (50-70 Cuts)</option>
+                                    <option value="900">15 Minutes Extended Feature (70-90 Cuts)</option>
+                                    <option value="1200">20 Minutes Full Feature Montage (100+ Cuts)</option>
+                                </optgroup>
                             </select>
                         </div>
 
@@ -2165,11 +2180,11 @@ HTML_MAIN = """
                         <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-size: 13px; font-weight: 600;">Voiceover Language</span>
-                                <span style="font-size: 11px; color: #2ba640;">Neural TTS Active</span>
+                                <span style="font-size: 11px; color: #2ba640;">Gemini 3.8 TTS Active</span>
                             </div>
                             <select id="clipperLanguageSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
-                                <option value="Hindi" selected>Hindi (हिन्दी - Madhur Viral Voice)</option>
-                                <option value="English">English (Christopher Movie Narrator)</option>
+                                <option value="Hindi" selected>Hindi (हिन्दी - Cinematic Storyteller)</option>
+                                <option value="English">English (Christopher / Hollywood Narrator)</option>
                             </select>
                         </div>
 
@@ -2183,6 +2198,67 @@ HTML_MAIN = """
                                 <option value="standard_first" selected>Standard Preview First (Instant ~15s, 1-Click 9:16 Convert)</option>
                                 <option value="auto_vertical">Auto-Convert to 9:16 Vertical (Auto Face-Centering)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- Gemini 3.8 Flash TTS Studio Card -->
+                    <div style="margin-top: 18px; background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.05)); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 10px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 18px;">🎙️</span>
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 700; color: #f3e8ff;">Gemini 3.8 Flash TTS Studio</span>
+                                    <span style="font-size: 11px; color: #c084fc; margin-left: 6px; background: rgba(168, 85, 247, 0.2); padding: 1px 6px; border-radius: 4px;">Words-Per-Second Calibrated</span>
+                                </div>
+                            </div>
+                            <div id="clipperWpsBadge" style="font-size: 11px; font-weight: 700; color: #a7f3d0; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); padding: 3px 10px; border-radius: 12px;">
+                                ⚡ Calibrated Pace: 2.23 Words/Sec (42.1s sample)
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
+                            <!-- Voice Selector -->
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: #e9d5ff; margin-bottom: 4px;">
+                                    Voice Actor
+                                </label>
+                                <select id="clipperTtsVoiceSelect" class="form-control" style="width: 100%; padding: 7px 10px; font-size: 12px;">
+                                    <option value="Kore" selected>Kore (Female - Firm, Dramatic Storyteller)</option>
+                                    <option value="Fenrir">Fenrir (Male - Deep Movie Trailer Voice)</option>
+                                    <option value="Puck">Puck (Male - Dynamic &amp; Expressive)</option>
+                                    <option value="Algenib">Algenib (Male - Suspense &amp; Mystery)</option>
+                                    <option value="Charon">Charon (Male - Dark &amp; Brooding Atmospheric)</option>
+                                    <option value="Aoede">Aoede (Female - Sophisticated &amp; Clear)</option>
+                                    <option value="Algieba">Algieba (Female - High-Tension Action)</option>
+                                </select>
+                            </div>
+
+                            <!-- Tone Preset Selector -->
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: #e9d5ff; margin-bottom: 4px;">
+                                    Tone Preset
+                                </label>
+                                <select id="clipperTtsToneSelect" class="form-control" style="width: 100%; padding: 7px 10px; font-size: 12px;">
+                                    <option value="Suspense / Thriller" selected>Suspense / Thriller (Tense dramatic pauses)</option>
+                                    <option value="Movie Trailer">Movie Trailer (Booming cinematic delivery)</option>
+                                    <option value="Narrative Deep">Narrative Deep (Rich storytelling baritone)</option>
+                                    <option value="Fast-Paced Action">Fast-Paced Action (Urgent rapid pace)</option>
+                                    <option value="Emotional Drama">Emotional Drama (Poignant heartfelt narrative)</option>
+                                </select>
+                            </div>
+
+                            <!-- Buttons & Audio Player -->
+                            <div style="display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;">
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="btn-populate" id="btnPreviewTtsVoice" style="flex: 1; padding: 7px 12px; font-size: 12px; background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff;">
+                                        <span id="btnPreviewTtsIcon">🔊</span> <span id="btnPreviewTtsText">Test Voice</span>
+                                    </button>
+                                    <button type="button" class="btn-populate" id="btnCalibrateWps" style="flex: 1; padding: 7px 12px; font-size: 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #a7f3d0;">
+                                        <span id="btnCalibrateIcon">⚡</span> <span id="btnCalibrateText">Calibrate (100w)</span>
+                                    </button>
+                                </div>
+                                <audio id="clipperTtsAudioPlayer" controls style="display: none; width: 100%; height: 28px; margin-top: 4px;"></audio>
+                            </div>
                         </div>
                     </div>
 
@@ -3765,6 +3841,93 @@ HTML_MAIN = """
             }
         }
 
+        let currentClipperWps = 2.23;
+
+        // Gemini 3.8 Flash TTS Studio - Preview & Calibration
+        const btnPreviewTtsVoice = document.getElementById('btnPreviewTtsVoice');
+        const btnCalibrateWps = document.getElementById('btnCalibrateWps');
+        const clipperTtsAudioPlayer = document.getElementById('clipperTtsAudioPlayer');
+        const clipperWpsBadge = document.getElementById('clipperWpsBadge');
+
+        if (btnPreviewTtsVoice) {
+            btnPreviewTtsVoice.addEventListener('click', async () => {
+                const voice = document.getElementById('clipperTtsVoiceSelect')?.value || 'Kore';
+                const tone = document.getElementById('clipperTtsToneSelect')?.value || 'Suspense / Thriller';
+                const lang = clipperLanguageSelect?.value || 'Hindi';
+                const icon = document.getElementById('btnPreviewTtsIcon');
+                const text = document.getElementById('btnPreviewTtsText');
+
+                btnPreviewTtsVoice.disabled = true;
+                if (icon) icon.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; display: inline-block;"></span>';
+                if (text) text.textContent = 'Generating...';
+
+                try {
+                    const res = await fetch('/api/clipper/tts/preview', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voice, tone, language: lang })
+                    });
+                    const d = await res.json();
+                    if (!res.ok || !d.success) throw new Error(d.error || 'TTS preview failed');
+
+                    if (clipperTtsAudioPlayer && d.audio_url) {
+                        clipperTtsAudioPlayer.src = d.audio_url;
+                        clipperTtsAudioPlayer.style.display = 'block';
+                        clipperTtsAudioPlayer.play().catch(e => console.log('Autoplay:', e));
+                    }
+                } catch (e) {
+                    alert('Voice preview failed: ' + e.message);
+                } finally {
+                    btnPreviewTtsVoice.disabled = false;
+                    if (icon) icon.textContent = '🔊';
+                    if (text) text.textContent = 'Test Voice';
+                }
+            });
+        }
+
+        if (btnCalibrateWps) {
+            btnCalibrateWps.addEventListener('click', async () => {
+                const voice = document.getElementById('clipperTtsVoiceSelect')?.value || 'Kore';
+                const tone = document.getElementById('clipperTtsToneSelect')?.value || 'Suspense / Thriller';
+                const lang = clipperLanguageSelect?.value || 'Hindi';
+                const icon = document.getElementById('btnCalibrateIcon');
+                const text = document.getElementById('btnCalibrateText');
+
+                btnCalibrateWps.disabled = true;
+                if (icon) icon.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; display: inline-block;"></span>';
+                if (text) text.textContent = 'Calibrating 100w...';
+
+                try {
+                    const res = await fetch('/api/clipper/tts/calibrate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voice, tone, language: lang, job_id: currentClipperJobId })
+                    });
+                    const d = await res.json();
+                    if (!res.ok || !d.success) throw new Error(d.error || 'Calibration failed');
+
+                    const cal = d.result;
+                    currentClipperWps = cal.wps;
+                    if (clipperWpsBadge) {
+                        clipperWpsBadge.innerHTML = `⚡ Calibrated Pace: <strong>${cal.wps} Words/Sec</strong> (${cal.duration}s sample)`;
+                        clipperWpsBadge.style.background = 'rgba(16, 185, 129, 0.3)';
+                    }
+                    if (clipperTtsAudioPlayer && cal.audio_url) {
+                        clipperTtsAudioPlayer.src = cal.audio_url;
+                        clipperTtsAudioPlayer.style.display = 'block';
+                        clipperTtsAudioPlayer.play().catch(e => console.log('Autoplay:', e));
+                    }
+                    alert(`✅ Calibration Successful!\nVoice: ${cal.voice} (${cal.tone})\nPace: ${cal.wps} words/second (${cal.word_count} words in ${cal.duration}s)`);
+                } catch (e) {
+                    alert('Calibration failed: ' + e.message);
+                } finally {
+                    btnCalibrateWps.disabled = false;
+                    if (icon) icon.textContent = '⚡';
+                    if (text) text.textContent = 'Calibrate (100w)';
+                }
+            });
+        }
+
         // Analyze & Plan Chronological Shorts
         if (btnAnalyzeClipper) {
             btnAnalyzeClipper.addEventListener('click', async () => {
@@ -3791,8 +3954,11 @@ HTML_MAIN = """
 
                 try {
                     const maxShorts = parseInt(clipperMaxShortsSlider.value) || 5;
-                    const targetDuration = parseInt(clipperDurationSelect.value) || 50;
+                    const targetDuration = parseInt(clipperDurationSelect.value) || 58;
                     const language = clipperLanguageSelect.value || 'Hindi';
+                    const voiceName = document.getElementById('clipperTtsVoiceSelect')?.value || 'Kore';
+                    const toneStyle = document.getElementById('clipperTtsToneSelect')?.value || 'Suspense / Thriller';
+                    const wps = currentClipperWps || 2.23;
 
                     setTimeout(() => {
                         if (clipperProgressStep) {
@@ -3807,7 +3973,10 @@ HTML_MAIN = """
                             url: url,
                             max_shorts: maxShorts,
                             target_duration: targetDuration,
-                            language: language
+                            language: language,
+                            voice_name: voiceName,
+                            tone_style: toneStyle,
+                            wps: wps
                         })
                     });
 
@@ -3885,6 +4054,18 @@ HTML_MAIN = """
             return 'background: rgba(255, 255, 255, 0.08); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.15);';
         }
 
+        window.playCutPreview = function(partNum, cutUrl, cutTitle) {
+            const container = document.getElementById(`cutsPlayerContainer_${partNum}`);
+            const video = document.getElementById(`cutActiveVideo_${partNum}`);
+            const label = document.getElementById(`cutActiveTitle_${partNum}`);
+            if (!container || !video) return;
+
+            video.src = cutUrl;
+            if (label) label.textContent = `▶️ Playing: ${cutTitle}`;
+            container.style.display = 'block';
+            video.play().catch(e => console.log('Autoplay deferred:', e));
+        };
+
         function updateSceneCutsGallery(partNum, cuts) {
             const grid = document.getElementById(`sceneCutsGrid_${partNum}`);
             if (!grid || !cuts || !cuts.length) return;
@@ -3897,9 +4078,9 @@ HTML_MAIN = """
                     <div style="font-size: 10px; font-family: monospace; opacity: 0.9;">${c.start_time} - ${c.end_time}</div>
                     <div style="font-size: 10px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</div>
                     ${c.url ? `
-                        <a href="${c.url}" target="_blank" style="margin-top: 4px; font-size: 10px; color: #38bdf8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                        <button type="button" onclick="playCutPreview(${partNum}, '${c.url}', '${escapeHtml(c.beat || `Cut ${ci+1}`)} (${c.duration}s)')" style="margin-top: 4px; font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 4px; padding: 3px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
                             ▶️ Play Raw Cut
-                        </a>
+                        </button>
                     ` : ''}
                 </div>
             `).join('');
@@ -3954,12 +4135,21 @@ HTML_MAIN = """
                                             <div style="font-size: 10px; font-family: monospace; opacity: 0.9;">${c.start_time} - ${c.end_time}</div>
                                             <div style="font-size: 10px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</div>
                                             ${c.url ? `
-                                                <a href="${c.url}" target="_blank" style="margin-top: 4px; font-size: 10px; color: #38bdf8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                                                <button type="button" onclick="playCutPreview(${scene.part}, '${c.url}', '${escapeHtml(c.beat || `Cut ${ci+1}`)} (${c.duration}s)')" style="margin-top: 4px; font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 4px; padding: 3px 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
                                                     ▶️ Play Raw Cut
-                                                </a>
+                                                </button>
                                             ` : ''}
                                         </div>
                                     `).join('')}
+                                </div>
+
+                                <!-- Direct Interactive Cuts Player -->
+                                <div id="cutsPlayerContainer_${scene.part}" style="display: none; margin-top: 8px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid rgba(168, 85, 247, 0.4);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: #161224; padding: 6px 10px; font-size: 11px; font-weight: 600; color: #d8b4fe;">
+                                        <span id="cutActiveTitle_${scene.part}">▶️ Direct Cut Preview</span>
+                                        <button type="button" onclick="document.getElementById('cutsPlayerContainer_${scene.part}').style.display='none'; document.getElementById('cutActiveVideo_${scene.part}').pause();" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 13px;">✕</button>
+                                    </div>
+                                    <video id="cutActiveVideo_${scene.part}" controls playsinline style="width: 100%; max-height: 180px; object-fit: contain; background: #000;"></video>
                                 </div>
                             </div>
 
@@ -4157,7 +4347,10 @@ HTML_MAIN = """
                         language: clipperLanguageSelect.value || 'Hindi',
                         video_title: currentClipperVideoInfo.title || '',
                         job_id: activeJobId,
-                        auto_vertical: autoVertical
+                        auto_vertical: autoVertical,
+                        voice_name: document.getElementById('clipperTtsVoiceSelect')?.value || 'Kore',
+                        tone_style: document.getElementById('clipperTtsToneSelect')?.value || 'Suspense / Thriller',
+                        wps: currentClipperWps || 2.23
                     })
                 });
 
@@ -5187,8 +5380,11 @@ def clipper_analyze():
     data = request.get_json(force=True, silent=True) or {}
     url = (data.get('url') or '').strip()
     max_shorts = int(data.get('max_shorts') or 5)
-    target_duration = int(data.get('target_duration') or 50)
+    target_duration = int(data.get('target_duration') or 58)
     language = (data.get('language') or 'Hindi').strip()
+    voice_name = (data.get('voice_name') or 'Kore').strip()
+    tone_style = (data.get('tone_style') or 'Suspense / Thriller').strip()
+    wps = float(data.get('wps') or 2.4)
     job_id = (data.get('job_id') or '').strip() or str(uuid.uuid4())
 
     if not url:
@@ -5203,7 +5399,10 @@ def clipper_analyze():
             max_shorts=max_shorts,
             target_duration=target_duration,
             language=language,
-            job_id=job_id
+            job_id=job_id,
+            wps=wps,
+            voice_name=voice_name,
+            tone_style=tone_style
         )
 
         ckpt = clipper_engine.load_job_checkpoint(job_id) or {}
@@ -5220,7 +5419,11 @@ def clipper_analyze():
             'error': quota_error,
             'url': url,
             'scenes': scenes,
-            'video_info': video_info
+            'video_info': video_info,
+            'voice_name': voice_name,
+            'tone_style': tone_style,
+            'wps': wps,
+            'target_duration': target_duration
         }
 
         return jsonify({
@@ -5230,7 +5433,10 @@ def clipper_analyze():
             'error': quota_error,
             'video_info': video_info,
             'scenes': scenes,
-            'completed_shorts': completed_list
+            'completed_shorts': completed_list,
+            'voice_name': voice_name,
+            'tone_style': tone_style,
+            'wps': wps
         })
     except Exception as e:
         print(f"Clipper analysis error: {e}")
@@ -5250,6 +5456,9 @@ def clipper_generate_short():
     part_num = int(scene.get('part', 1))
     sync_mode = bool(data.get('sync', False))
     auto_vertical = bool(data.get('auto_vertical', False))
+    voice_name = (data.get('voice_name') or 'Kore').strip()
+    tone_style = (data.get('tone_style') or 'Suspense / Thriller').strip()
+    wps = float(data.get('wps') or 2.4) if data.get('wps') else None
 
     if not url or not scene:
         return jsonify({'success': False, 'error': 'URL and scene data are required'}), 400
@@ -5292,7 +5501,10 @@ def clipper_generate_short():
                 language=language,
                 video_title=video_title,
                 job_id=job_id,
-                auto_vertical=auto_vertical
+                auto_vertical=auto_vertical,
+                voice_name=voice_name,
+                tone_style=tone_style,
+                wps=wps
             )
             clipper_part_tasks[task_key] = {
                 'status': 'completed',
@@ -5333,7 +5545,10 @@ def clipper_generate_short():
                 video_title=video_title,
                 job_id=job_id,
                 progress_callback=progress_cb,
-                auto_vertical=auto_vertical
+                auto_vertical=auto_vertical,
+                voice_name=voice_name,
+                tone_style=tone_style,
+                wps=wps
             )
             clipper_part_tasks[task_key]['status'] = 'completed'
             clipper_part_tasks[task_key]['progress'] = 100
@@ -5988,7 +6203,87 @@ def clipper_convert_vertical():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ==============================================================
+# GEMINI 3.8 FLASH TTS STUDIO & CALIBRATION ENDPOINTS
+# ==============================================================
+
+@app.route('/api/clipper/tts/voices', methods=['GET'])
+def clipper_get_voices():
+    return jsonify({
+        'success': True,
+        'voices': clipper_engine.GEMINI_TTS_VOICES,
+        'tones': list(clipper_engine.TONE_PROMPT_PRESETS.keys()),
+        'default_voice': 'Kore',
+        'default_tone': 'Suspense / Thriller'
+    })
+
+
+@app.route('/api/clipper/tts/preview', methods=['POST'])
+def clipper_tts_preview():
+    data = request.get_json(force=True, silent=True) or {}
+    voice = (data.get('voice') or 'Kore').strip()
+    tone = (data.get('tone') or 'Suspense / Thriller').strip()
+    language = (data.get('language') or 'Hindi').strip()
+    custom_text = (data.get('text') or '').strip()
+
+    sample_text = custom_text or (
+        "नमस्ते! मैं जेमिनी 3.8 फ्लैश टीटीएस हूँ। यह आवाज आपकी सिनेमाई यूट्यूब शॉर्ट्स के लिए बिल्कुल तैयार है!"
+        if language.lower().startswith('hi') else
+        "Hello! I am Gemini 3.8 Flash TTS. This voice is calibrated and ready for your cinematic YouTube Shorts!"
+    )
+    unique_id = uuid.uuid4().hex[:6]
+    filename = f"preview_{voice}_{unique_id}.mp3"
+    output_path = os.path.join(clipper_engine.TEMP_DIR, filename)
+
+    ok = clipper_engine.generate_gemini_tts_audio(
+        text=sample_text,
+        output_path=output_path,
+        voice_name=voice,
+        tone_style=tone,
+        language=language
+    )
+    if ok and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+        return jsonify({
+            'success': True,
+            'audio_url': f'/api/clipper/tts_sample/{filename}',
+            'voice': voice,
+            'tone': tone
+        })
+    return jsonify({'success': False, 'error': 'Failed to generate voice preview audio'}), 500
+
+
+@app.route('/api/clipper/tts/calibrate', methods=['POST'])
+def clipper_tts_calibrate():
+    data = request.get_json(force=True, silent=True) or {}
+    voice = (data.get('voice') or 'Kore').strip()
+    tone = (data.get('tone') or 'Suspense / Thriller').strip()
+    language = (data.get('language') or 'Hindi').strip()
+    job_id = (data.get('job_id') or '').strip()
+
+    result = clipper_engine.calibrate_voice_speed(voice_name=voice, tone_style=tone, language=language)
+    if job_id:
+        try:
+            ckpt = clipper_engine.load_job_checkpoint(job_id)
+            if ckpt:
+                ckpt['wps'] = result['wps']
+                ckpt['voice_name'] = voice
+                ckpt['tone_style'] = tone
+                clipper_engine.save_job_checkpoint(job_id, ckpt)
+        except Exception as ce:
+            print(f"Failed to persist calibration to job {job_id}: {ce}")
+
+    return jsonify({
+        'success': True,
+        'result': result
+    })
+
+
+@app.route('/api/clipper/tts_sample/<path:filename>')
+def clipper_serve_tts_sample(filename):
+    resp = send_from_directory(clipper_engine.TEMP_DIR, secure_filename(filename), conditional=True)
+    resp.headers['Accept-Ranges'] = 'bytes'
+    return resp
 
 
 if __name__ == '__main__':

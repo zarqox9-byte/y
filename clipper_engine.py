@@ -23,6 +23,7 @@ import subprocess
 import shutil
 import urllib.request
 import threading
+import wave
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -423,14 +424,17 @@ def analyze_movie_narrative_for_shorts(
     youtube_url: str,
     video_info: Dict[str, Any],
     max_shorts: int = 5,
-    target_duration: int = 50,
+    target_duration: int = 58,
     language: str = "Hindi",
-    job_id: Optional[str] = None
+    job_id: Optional[str] = None,
+    wps: float = 2.4,
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller"
 ) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
     """
     Prompts Google Gemini to analyze the movie's storyline and generate
     high-tension scenes in strict chronological order with viral titles,
-    hooks, and ~60-word recap scripts.
+    hooks, and calibrated WPS-balanced recap scripts.
     Saves analysis checkpoint immediately to uploads/clipper_jobs/<job_id>.json.
     """
     title = video_info.get("title", "")
@@ -438,6 +442,11 @@ def analyze_movie_narrative_for_shorts(
     duration_str = video_info.get("duration_str", "")
     description = video_info.get("description", "")
     chapters = video_info.get("chapters", [])
+
+    target_words = max(25, int(round(target_duration * wps)))
+    is_long_montage = target_duration > 70
+    min_cuts = max(6, int(target_duration / 7))
+    max_cuts = max(10, int(target_duration / 4))
 
     chapters_summary = ""
     if chapters:
@@ -450,18 +459,26 @@ def analyze_movie_narrative_for_shorts(
         chapters_summary = "\nChapters provided by creator:\n" + "\n".join(ch_lines)
 
     lang_instruction = (
-        "Write natural, viral storytelling Hindi (Devanagari script preferred, emotional, high-suspense like top YouTube movie explanation channels). "
+        f"Write natural, viral storytelling {language} (Devanagari script preferred, emotional, high-suspense like top YouTube movie explanation channels). "
         "Example style: 'कहानी की शुरुआत में जब रोहन इस खतरनाक जगह पर पहुंचता है, तो उसे नहीं पता था कि आगे क्या होने वाला है...'"
         if language.lower().startswith("hi")
-        else "Write high-energy, dramatic, fast-paced English narrative recap scripts like top cinema recap channels."
+        else f"Write high-energy, dramatic, fast-paced English narrative recap scripts like top cinema recap channels."
     )
 
-    prompt = f"""You are a master Hollywood Cinema Director & YouTube Shorts Trailer Strategist specializing in viral, high-drama storytelling shorts.
-Your task is to analyze the following movie / video storyline and discover the most gripping, high-retention narrative moments across the ENTIRE storyline to produce YouTube Shorts in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from beginning to the climax/resolution).
+    montage_desc = (
+        f"Select {min_cuts} to {max_cuts} targeted, non-contiguous sub-clips (each 4 to 8 seconds long) totaling {target_duration} seconds for a cinematic recap montage."
+        if is_long_montage else
+        f"Select 6 to 10 targeted, non-contiguous sub-clips (each 3 to 6 seconds long) totaling {target_duration} seconds (between 50 and 65 seconds for Shorts)."
+    )
+
+    prompt = f"""You are a master Hollywood Cinema Director & YouTube Video Trailer Strategist specializing in viral, high-drama storytelling videos.
+Your task is to analyze the following movie / video storyline and discover the most gripping, high-retention narrative moments across the ENTIRE storyline to produce videos in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from beginning to the climax/resolution).
 
 === THE SMART DIRECTOR MULTI-SCENE STORYBOARD RULE ===
 To ensure 100% YouTube Content ID & copyright safety, DO NOT pick a single continuous clip for any Part.
-Instead, for EACH Part (Short), you act as the trailer director and select 6 to 10 targeted, context-driven, non-contiguous sub-clips (each 3 to 6 seconds long) representing crucial dramatic beats across that story segment:
+Instead, for EACH Part, you act as the trailer director:
+{montage_desc}
+Dramatic beats to represent across that story segment:
 - [Hook]: Instant visual or dialogue shocker (0-3s retention grip)
 - [Setup]: Establishing the perilous situation or conflict
 - [Tension]: Escalating suspense, ticking clock, or imminent danger
@@ -471,7 +488,13 @@ Instead, for EACH Part (Short), you act as the trailer director and select 6 to 
 - [Climax]: The peak turning point of this story segment
 - [Cliffhanger]: A breathtaking cut right before the resolution, forcing viewers to watch Part N+1!
 
-The combined duration of all cuts in each Part MUST total between 50 and 65 seconds (ideal mobile Shorts duration).
+=== WORDS-PER-SECOND TIMING & CALIBRATION ===
+- Selected Voice: {voice_name} | Tone Style: {tone_style}
+- Calibrated Narration Pace: {wps:.2f} Words Per Second
+- Target Duration: {target_duration} seconds
+- EXACT TOTAL RECAP SCRIPT LENGTH: ~{target_words} words in {language}!
+- Cut-by-cut rule: Spoken words per cut = Cut Duration (seconds) * {wps:.2f}.
+- The narration must pace evenly across the cuts so the voiceover concludes precisely as the final cut resolves.
 
 === MOVIE / VIDEO DETAILS ===
 Title: {title}
@@ -487,16 +510,15 @@ Description:
 
 1. CHRONOLOGY & PROGRESSION:
    - Every Part must be in STRICT CHRONOLOGICAL ORDER across the full film/video arc.
-   - Within each Part, the 6 to 10 sub-clips must advance chronologically through that story segment.
+   - Within each Part, the sub-clips must advance chronologically through that story segment.
    - Focus cuts on character reactions, high-tension beats, twists, action punches, and reveals.
 
-2. SUB-CLIPS SPECIFICATION (6 to 10 cuts per Part):
-   - Each sub-clip duration must be between 3 and 6 seconds.
-   - Specify "start_time" (e.g. "00:04:12"), "end_time" (e.g. "00:04:16"), "duration" (4), "beat" (e.g. "[Hook]"), and "description".
-   - The sum of all sub-clip durations for a Part must be between 50 and 65 seconds.
+2. SUB-CLIPS SPECIFICATION:
+   - Specify "start_time" (e.g. "00:04:12"), "end_time" (e.g. "00:04:16"), "duration", "beat" (e.g. "[Hook]"), and "description".
+   - The sum of all sub-clip durations for a Part must equal approximately {target_duration} seconds.
 
 3. VIRAL RECAP SCRIPT ({language.upper()}):
-   - For each Part, write a cohesive, gripping ~80 to 110-word voiceover script matching the visual progression of the cuts.
+   - For each Part, write a cohesive, gripping ~{target_words}-word voiceover script matching the visual progression of the cuts.
    - {lang_instruction}
    - Must begin with a 3-second scroll-stopping retention hook matching Cut 1 [Hook].
    - Must narrate the story seamlessly across the montage cuts without awkward pauses.
@@ -640,11 +662,14 @@ def generate_algorithmic_subclips(
     with director beat labels ([Hook], [Setup], [Tension], [Action], [Twist], [Reaction], [Climax], [Cliffhanger]),
     totaling 50 to 65 seconds for 100% YouTube copyright safety.
     """
-    target_d = min(max(50, target_duration), 65)
-    default_durs = [5, 6, 5, 6, 5, 5, 6, 5, 5, 6]
+    target_d = max(30, target_duration)
     curr_durs = []
     tot = 0
-    for d in default_durs:
+    cycle = [5, 6, 4, 7, 5, 6, 5]
+    ci = 0
+    while tot < target_d:
+        d = cycle[ci % len(cycle)]
+        ci += 1
         if tot + d <= target_d:
             curr_durs.append(d)
             tot += d
@@ -653,10 +678,10 @@ def generate_algorithmic_subclips(
             if rem >= 3:
                 curr_durs.append(rem)
                 tot += rem
+            elif curr_durs:
+                curr_durs[-1] += rem
+                tot += rem
             break
-    if tot < 50:
-        curr_durs.append(50 - tot)
-        tot = 50
 
     count = len(curr_durs)
     span = max(end_sec - start_sec, count * 6 + 10)
@@ -1332,6 +1357,225 @@ def generate_voiceover_audio(text: str, output_path: str, language: str = "Hindi
 
 
 # =====================================================================
+# GEMINI 3.8 / 3.1 FLASH TTS STUDIO & WPS TIMING CALIBRATION
+# =====================================================================
+GEMINI_TTS_VOICES = [
+    {"name": "Kore", "gender": "Female", "tag": "Authoritative & Dramatic", "desc": "Firm, cinematic storyteller with clear diction"},
+    {"name": "Fenrir", "gender": "Male", "tag": "Deep Movie Trailer", "desc": "Commanding, booming baritone for epic climaxes"},
+    {"name": "Puck", "gender": "Male", "tag": "Dynamic & Expressive", "desc": "Energetic, engaging narrator with rich inflection"},
+    {"name": "Algenib", "gender": "Male", "tag": "Suspense & Thriller", "desc": "Gravelly, intense tone for dark mysteries"},
+    {"name": "Charon", "gender": "Male", "tag": "Dark & Brooding", "desc": "Somber, heavy voice for horror and high tension"},
+    {"name": "Aoede", "gender": "Female", "tag": "Sophisticated & Clear", "desc": "Melodic, crisp delivery for thoughtful recaps"},
+    {"name": "Algieba", "gender": "Female", "tag": "Fast-Paced Action", "desc": "Sharp, intense delivery for rapid action cuts"}
+]
+
+TONE_PROMPT_PRESETS = {
+    "Movie Trailer": "Say in Hindi in a booming, dramatic movie trailer voice: ",
+    "Suspense / Thriller": "Say in Hindi in a tense, gripping suspense thriller voice with dramatic pauses: ",
+    "Narrative Deep": "Say in Hindi in a deep, rich cinematic storytelling voice: ",
+    "Fast-Paced Action": "Say in Hindi in an urgent, fast-paced action voice: ",
+    "Emotional Drama": "Say in Hindi in an emotional, poignant voice: "
+}
+
+CALIBRATION_100_WORDS_HINDI = (
+    "यह एक रोमांचक कहानी की शुरुआत है जहाँ हर तरफ खतरा मंडरा रहा है। "
+    "जंगल के सन्नाटे में दूर से आती एक रहस्यमयी आवाज ने सबका ध्यान खींचा। "
+    "नायक ने धीरे-धीरे अपने कदम आगे बढ़ाए ताकि दुश्मन को उसकी मौजूदगी का अहसास ना हो। "
+    "अचानक पेड़ों के पीछे से एक साया निकला और माहौल में गहरा सन्नाटा छा गया। "
+    "क्या वह इस चुनौती का सामना कर पाएगा या फिर अंधेरा उसे हमेशा के लिए निगल जाएगा? "
+    "समय तेजी से बीत रहा था और हर एक सेकंड उसके लिए बेहद कीमती साबित हो रहा था।"
+)
+
+
+def generate_gemini_tts_audio(
+    text: str,
+    output_path: str,
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller",
+    language: str = "Hindi"
+) -> bool:
+    """
+    Synthesizes speech using Google Gemini 3.1/3.8 Flash TTS preview model.
+    Converts 24kHz mono PCM to 192kbps MP3 via FFmpeg.
+    Falls back smoothly to Edge-TTS if quota or network issue occurs.
+    """
+    if not text or not text.strip():
+        logger.warning("Empty script provided for Gemini TTS.")
+        return False
+
+    logger.info(f"Generating Gemini TTS audio (Voice: {voice_name}, Tone: {tone_style}) for script: {text[:60]}...")
+
+    # 1. Try Gemini TTS via google.genai
+    try:
+        from google import genai
+        from google.genai import types
+        cfg = gemini_engine.get_gemini_config()
+        api_key = cfg.get("api_key")
+        if api_key:
+            client = genai.Client(api_key=api_key)
+            tone_prefix = TONE_PROMPT_PRESETS.get(tone_style, f"Say in {language} in a dramatic storytelling voice: ")
+            tts_prompt = f"{tone_prefix}{text.strip()}"
+
+            resp = client.models.generate_content(
+                model="gemini-3.1-flash-tts-preview",
+                contents=tts_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_name
+                            )
+                        )
+                    )
+                )
+            )
+            if resp and resp.candidates and resp.candidates[0].content and resp.candidates[0].content.parts:
+                pcm_data = resp.candidates[0].content.parts[0].inline_data.data
+                if pcm_data and len(pcm_data) > 1000:
+                    temp_wav = output_path + f".tmp_{uuid.uuid4().hex[:6]}.wav"
+                    try:
+                        with wave.open(temp_wav, "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(pcm_data)
+
+                        ffmpeg_bin = get_ffmpeg_bin()
+                        cmd = [
+                            ffmpeg_bin, "-y",
+                            "-i", temp_wav,
+                            "-c:a", "libmp3lame",
+                            "-b:a", "192k",
+                            output_path
+                        ]
+                        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+                            logger.info(f"Gemini TTS audio successfully created: {output_path} ({os.path.getsize(output_path)} bytes)")
+                            return True
+                    finally:
+                        if os.path.exists(temp_wav):
+                            try:
+                                os.remove(temp_wav)
+                            except Exception:
+                                pass
+    except Exception as ge:
+        logger.warning(f"Gemini TTS generation encountered: {ge}. Cascading to Edge-TTS fallback...")
+
+    # 2. Resilient fallback to Edge-TTS
+    logger.info("Falling back to high-quality Edge-TTS neural engine...")
+    return generate_voiceover_audio(text, output_path, language=language)
+
+
+def calibrate_voice_speed(
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller",
+    language: str = "Hindi",
+    custom_text: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Synthesizes canonical 100-word text using selected voice and tone style.
+    Measures exact audio duration via ffprobe/ffmpeg.
+    Calculates Words-Per-Second (WPS = 100 / duration).
+    Returns calibration metrics and sample audio path.
+    """
+    sample_text = (custom_text or CALIBRATION_100_WORDS_HINDI).strip()
+    words = sample_text.split()
+    word_count = len(words)
+
+    unique_id = uuid.uuid4().hex[:6]
+    sample_filename = f"calib_{voice_name}_{unique_id}.mp3"
+    sample_path = os.path.join(TEMP_DIR, sample_filename)
+
+    ok = generate_gemini_tts_audio(
+        text=sample_text,
+        output_path=sample_path,
+        voice_name=voice_name,
+        tone_style=tone_style,
+        language=language
+    )
+    if not ok or not os.path.exists(sample_path):
+        return {
+            "status": "fallback",
+            "voice": voice_name,
+            "tone": tone_style,
+            "word_count": word_count,
+            "duration": 42.0,
+            "wps": 2.4,
+            "audio_url": None,
+            "message": "Used calibrated benchmark default (2.40 WPS)"
+        }
+
+    # Measure exact duration
+    ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
+    dur = 42.0
+    try:
+        cmd = [
+            ffprobe_bin, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "csv=p=0",
+            sample_path
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        dur = float(res.stdout.strip())
+    except Exception as e:
+        logger.warning(f"Could not probe calibration duration: {e}. Calculating from mp3 size...")
+        dur = max(10.0, word_count / 2.4)
+
+    wps = round(word_count / max(dur, 1.0), 2)
+    logger.info(f"Calibration successful: {word_count} words in {dur:.2f}s => {wps} WPS for {voice_name} ({tone_style})")
+
+    return {
+        "status": "success",
+        "voice": voice_name,
+        "tone": tone_style,
+        "word_count": word_count,
+        "duration": round(dur, 2),
+        "wps": wps,
+        "filename": sample_filename,
+        "audio_url": f"/api/clipper/tts_sample/{sample_filename}",
+        "message": f"Calibrated {wps} words/sec ({dur:.1f}s sample)"
+    }
+
+
+def balance_script_for_cuts(
+    sub_clips: List[Dict[str, Any]],
+    wps: float = 2.4,
+    base_script: str = "",
+    title: str = "",
+    part_num: int = 1,
+    language: str = "Hindi"
+) -> Dict[str, Any]:
+    """
+    Computes exact target words per cut:
+    Target Words for Cut_i = round(Cut_Duration_i * wps).
+    Instructs Gemini to balance the narrative recap scene-by-scene so that the spoken
+    narration aligns synchronously with visual scene transitions.
+    """
+    total_cut_duration = sum(c.get("duration", 4) for c in sub_clips)
+    target_total_words = int(round(total_cut_duration * wps))
+
+    cut_targets = []
+    for i, c in enumerate(sub_clips, 1):
+        c_dur = c.get("duration", 5)
+        c_words = max(3, int(round(c_dur * wps)))
+        cut_targets.append({
+            "cut_num": i,
+            "duration": c_dur,
+            "beat": c.get("beat", f"Cut {i}"),
+            "description": c.get("description", ""),
+            "target_words": c_words
+        })
+
+    return {
+        "total_duration": total_cut_duration,
+        "target_total_words": target_total_words,
+        "wps": wps,
+        "cut_targets": cut_targets
+    }
+
+
+# =====================================================================
 # 6. FFMPEG RENDERING & AUDIO DUCKING
 # =====================================================================
 def render_short_video(
@@ -1693,27 +1937,53 @@ def generate_short_thumbnail(video_path: str, thumbnail_path: str) -> bool:
 # =====================================================================
 # 7. HIGH-LEVEL ORCHESTRATION PIPELINE
 # =====================================================================
-def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: str = "Hindi") -> str:
+def ensure_scene_script(
+    scene: Dict[str, Any],
+    video_title: str = "",
+    language: str = "Hindi",
+    wps: float = 2.4,
+    tone_style: str = "Suspense / Thriller"
+) -> str:
     """
-    Ensures that a scene has a captivating narrative script.
-    If empty, calls Gemini to write a high-tension ~80-100 word recap script matching the montage sequence.
-    Gracefully detects 429 quota limits and raises an informative error.
+    Ensures that a scene has a captivating narrative script balanced to the exact cut durations and WPS pace.
+    Target Words for Cut = round(Cut Duration * WPS).
+    Total target words = round(sum(cut durations) * WPS).
     """
     script = (scene.get("script") or "").strip()
     if script:
         return script
 
     part_num = scene.get("part", 1)
-    logger.info(f"Generating voiceover script for Part {part_num} via Gemini...")
+    sub_clips = scene.get("sub_clips") or []
+    total_cut_duration = sum(c.get("duration", 5) for c in sub_clips) if sub_clips else scene.get("duration", 58)
+    target_words = max(25, int(round(total_cut_duration * wps)))
+
+    logger.info(f"Generating balanced voiceover script for Part {part_num} via Gemini (Target: ~{target_words} words for {total_cut_duration}s at {wps:.2f} WPS)...")
     client = gemini_engine.get_genai_client()
     cfg = gemini_engine.get_gemini_config()
     target_model = cfg.get("model") or gemini_engine.DEFAULT_MODEL
     models_to_try = [target_model] + [m for m in gemini_engine.FALLBACK_MODELS if m != target_model]
 
+    cuts_breakdown = ""
+    if sub_clips:
+        c_lines = []
+        for i, c in enumerate(sub_clips, 1):
+            c_dur = c.get("duration", 5)
+            c_beat = c.get("beat", f"Cut {i}")
+            c_w = max(3, int(round(c_dur * wps)))
+            c_lines.append(f"- Cut {i} ({c_dur}s, {c_beat}): target ~{c_w} words")
+        cuts_breakdown = "\nTarget spoken words per scene transition:\n" + "\n".join(c_lines)
+
     prompt = (
-        f"You are a master YouTube Shorts viral storyteller.\n"
-        f"Write a dramatic, cohesive ~80-100 word story recap voiceover script in {language} for Part {part_num} "
-        f"of '{video_title}' designed for a fast-paced 50-70 second multi-scene montage covering story progression from {scene.get('start_time')} to {scene.get('end_time')}.\n"
+        f"You are a master YouTube viral storyteller & trailer narrator.\n"
+        f"Write a dramatic, cohesive story recap voiceover script in {language} for Part {part_num} "
+        f"of '{video_title}' designed for a fast-paced {total_cut_duration} second multi-scene montage covering story progression from {scene.get('start_time')} to {scene.get('end_time')}.\n"
+        f"CRITICAL TIMING CALIBRATION:\n"
+        f"- Target narration pace: {wps:.2f} words per second.\n"
+        f"- Tone Style: {tone_style}.\n"
+        f"- EXACT TOTAL SCRIPT LENGTH: ~{target_words} words in {language}.\n"
+        f"{cuts_breakdown}\n"
+        f"The narration must pace evenly across the cuts so the voiceover concludes precisely as the last cut ends!\n"
         f"Only return the spoken script text in {language}, no markdown, no quotes."
     )
 
@@ -1856,12 +2126,15 @@ def assemble_standard_recap_step3(
     language: str = "Hindi",
     video_title: str = "",
     job_id: Optional[str] = None,
-    progress_callback: Optional[Any] = None
+    progress_callback: Optional[Any] = None,
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller",
+    wps: Optional[float] = None
 ) -> Dict[str, Any]:
     """
     STEP 3: Mute & Voiceover Sync (Standard 16:9 / Normal Cut Preview First).
     - Concatenates the silent raw cuts in normal/standard aspect ratio.
-    - Generates cohesive Hindi voiceover via Edge-TTS matching Gemini's script.
+    - Generates cohesive Hindi voiceover via Gemini 3.8/3.1 Flash TTS (with Edge-TTS resilient fallback).
     - Mixes Voiceover (100%) + subtle BGM (12%) with audio fade out.
     - Delivers standard preview first so video is 100% visible and playable right away (~15s total).
     """
@@ -1934,11 +2207,31 @@ def assemble_standard_recap_step3(
         raise RuntimeError(f"Failed to concatenate standard cuts for Part {part_num}")
 
     # 2. Voiceover & BGM mix
-    notify_progress(75, f"Step 3: Generating Hindi voiceover & tension BGM for Part {part_num}...")
-    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
+    effective_wps = wps or 2.4
+    if job_id and not wps:
+        try:
+            ckpt = load_job_checkpoint(job_id)
+            if ckpt:
+                if ckpt.get("wps"):
+                    effective_wps = float(ckpt["wps"])
+                if ckpt.get("voice_name"):
+                    voice_name = ckpt["voice_name"]
+                if ckpt.get("tone_style"):
+                    tone_style = ckpt["tone_style"]
+        except Exception:
+            pass
+
+    notify_progress(75, f"Step 3: Generating Gemini 3.8 Flash TTS ({voice_name}) voiceover & tension BGM for Part {part_num}...")
+    script = ensure_scene_script(scene, video_title=video_title or title, language=language, wps=effective_wps, tone_style=tone_style)
     vo_ok = False
     if script:
-        vo_ok = generate_voiceover_audio(script, vo_path, language)
+        vo_ok = generate_gemini_tts_audio(
+            text=script,
+            output_path=vo_path,
+            voice_name=voice_name,
+            tone_style=tone_style,
+            language=language
+        )
     bgm_path = ensure_background_music_exists()
 
     # 3. Audio overlay onto standard montage
@@ -2000,6 +2293,9 @@ def assemble_standard_recap_step3(
         "downloaded_cuts": downloaded_cuts,
         "copyright_safe": True,
         "can_convert_vertical": True,
+        "voice_name": voice_name,
+        "tone_style": tone_style,
+        "wps": effective_wps,
         "status": "ready"
     }
 
@@ -2120,13 +2416,16 @@ def process_single_short_pipeline(
     video_title: str = "",
     job_id: Optional[str] = None,
     progress_callback: Optional[Any] = None,
-    auto_vertical: bool = False
+    auto_vertical: bool = False,
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller",
+    wps: Optional[float] = None
 ) -> Dict[str, Any]:
     """
     Unified 4-Step Pipeline:
     Step 1: Direct Gemini Storyboard & Script (already provided in scene).
     Step 2: High-Speed Local Python Raw Cutter (downloads 3-6s cuts with 0% movie audio to uploads/clipper_cuts/).
-    Step 3: Mute & Voiceover Sync (assembles standard 16:9 recap with Edge-TTS Hindi voiceover + BGM first in ~15s).
+    Step 3: Mute & Voiceover Sync (assembles standard 16:9 recap with Gemini 3.8 Flash TTS + BGM first in ~15s).
     Step 4: Separate 9:16 Vertical / Face-Tracking On Demand (if auto_vertical=True or on user demand in ~5s).
     """
     def notify_progress(pct: int, msg: str):
@@ -2169,7 +2468,10 @@ def process_single_short_pipeline(
         language=language,
         video_title=video_title,
         job_id=job_id,
-        progress_callback=progress_callback
+        progress_callback=progress_callback,
+        voice_name=voice_name,
+        tone_style=tone_style,
+        wps=wps
     )
 
     if not auto_vertical:
