@@ -22,6 +22,8 @@ import logging
 import subprocess
 import shutil
 import urllib.request
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List, Optional, Tuple
 
 def get_ffmpeg_bin() -> str:
@@ -452,13 +454,22 @@ def analyze_movie_narrative_for_shorts(
         else "Write high-energy, dramatic, fast-paced English narrative recap scripts like top cinema recap channels."
     )
 
-    prompt = f"""You are an elite YouTube Shorts Strategist and Cinema Editor specializing in viral, 100% copyright-safe movie recap shorts.
-Analyze the following movie / video narrative and segment it into high-retention, high-drama, engaging YouTube Shorts in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from the beginning of the movie to the climax/ending).
+    prompt = f"""You are a master Hollywood Cinema Director & YouTube Shorts Trailer Strategist specializing in viral, high-drama storytelling shorts.
+Your task is to analyze the following movie / video storyline and discover the most gripping, high-retention narrative moments across the ENTIRE storyline to produce YouTube Shorts in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from beginning to the climax/resolution).
 
-=== CRITICAL COPYRIGHT-SAFETY & DYNAMIC MONTAGE RULE ===
-To guarantee 100% YouTube Content ID and copyright safety, DO NOT select a single continuous 50-second clip for any Part.
-Instead, for EACH Part (Short), you MUST generate a dynamic MULTI-SCENE MONTAGE composed of 8 to 14 engaging sub-clips sampled across the relevant narrative act (each sub-clip MUST be between 3 and 6 seconds long, e.g., 01:15-01:19, 02:40-02:44, 04:10-04:15).
-The combined total duration of all sub-clips in the Part MUST be between 50 seconds and 70 seconds (1 min 10 sec max).
+=== THE SMART DIRECTOR MULTI-SCENE STORYBOARD RULE ===
+To ensure 100% YouTube Content ID & copyright safety, DO NOT pick a single continuous clip for any Part.
+Instead, for EACH Part (Short), you act as the trailer director and select 6 to 10 targeted, context-driven, non-contiguous sub-clips (each 3 to 6 seconds long) representing crucial dramatic beats across that story segment:
+- [Hook]: Instant visual or dialogue shocker (0-3s retention grip)
+- [Setup]: Establishing the perilous situation or conflict
+- [Tension]: Escalating suspense, ticking clock, or imminent danger
+- [Action]: Sudden movement, fight, pursuit, or explosion
+- [Twist]: Shocking discovery or unexpected betrayal
+- [Reaction]: Extreme emotional facial close-up or disbelief
+- [Climax]: The peak turning point of this story segment
+- [Cliffhanger]: A breathtaking cut right before the resolution, forcing viewers to watch Part N+1!
+
+The combined duration of all cuts in each Part MUST total between 50 and 65 seconds (ideal mobile Shorts duration).
 
 === MOVIE / VIDEO DETAILS ===
 Title: {title}
@@ -473,18 +484,19 @@ Description:
    - Do NOT return fewer or more than {max_shorts} Parts.
 
 1. CHRONOLOGY & PROGRESSION:
-   - Every Part must be in STRICT CHRONOLOGICAL ORDER (Part 1 covers the opening/inciting incident, Part 2 follows Part 1, Part 3 advances further towards climax).
-   - Within each Part, the 8 to 14 sub-clips must also progress chronologically through that story segment.
-   - Sub-clips must focus on key character reactions, high-tension beats, twists, action, and reveals.
+   - Every Part must be in STRICT CHRONOLOGICAL ORDER across the full film/video arc.
+   - Within each Part, the 6 to 10 sub-clips must advance chronologically through that story segment.
+   - Focus cuts on character reactions, high-tension beats, twists, action punches, and reveals.
 
-2. SUB-CLIPS SPECIFICATION (8 to 14 cuts per Part):
+2. SUB-CLIPS SPECIFICATION (6 to 10 cuts per Part):
    - Each sub-clip duration must be between 3 and 6 seconds.
-   - The sum of all sub-clip durations for a Part must total between 50 and 70 seconds.
+   - Specify "start_time" (e.g. "00:04:12"), "end_time" (e.g. "00:04:16"), "duration" (4), "beat" (e.g. "[Hook]"), and "description".
+   - The sum of all sub-clip durations for a Part must be between 50 and 65 seconds.
 
 3. VIRAL RECAP SCRIPT ({language.upper()}):
-   - For each Part, write a cohesive, gripping ~80 to 110-word voiceover script matching the 50-70 second visual sequence.
+   - For each Part, write a cohesive, gripping ~80 to 110-word voiceover script matching the visual progression of the cuts.
    - {lang_instruction}
-   - Must begin with a 3-second scroll-stopping retention hook.
+   - Must begin with a 3-second scroll-stopping retention hook matching Cut 1 [Hook].
    - Must narrate the story seamlessly across the montage cuts without awkward pauses.
    - Must end on a high-retention cliffhanger prompting viewers to like and watch Part N+1!
 
@@ -502,22 +514,24 @@ Return ONLY a valid JSON array of objects with no markdown explanation:
     "script": "Complete 80-110 word cohesive narrative voiceover script in {language}...",
     "tags": ["shorts", "movie", "viral", "recap", "part1"],
     "total_duration": 58,
-    "start_time": "00:01:10",
-    "end_time": "00:06:45",
+    "start_time": "00:04:12",
+    "end_time": "00:15:45",
     "sub_clips": [
       {{
         "clip_num": 1,
-        "start_time": "00:01:10",
-        "end_time": "00:01:15",
-        "duration": 5,
-        "description": "Character arrives at location"
+        "start_time": "00:04:12",
+        "end_time": "00:04:16",
+        "duration": 4,
+        "beat": "[Hook]",
+        "description": "Explosive opening confrontation"
       }},
       {{
         "clip_num": 2,
-        "start_time": "00:02:20",
-        "end_time": "00:02:25",
+        "start_time": "00:07:30",
+        "end_time": "00:07:35",
         "duration": 5,
-        "description": "Mystery object discovered"
+        "beat": "[Setup]",
+        "description": "Danger is revealed"
       }}
     ]
   }}
@@ -602,21 +616,33 @@ Return ONLY a valid JSON array of objects with no markdown explanation:
     return sanitized_scenes, status, quota_error_msg
 
 
+BEAT_DEFINITIONS = [
+    ("[Hook]", "Opening shock / high-retention visual hook"),
+    ("[Setup]", "Setting the dangerous premise and stakes"),
+    ("[Tension]", "Rising suspense and imminent threat"),
+    ("[Action]", "Explosive movement, conflict, or high-energy chase"),
+    ("[Twist]", "Unexpected revelation or sudden turn of events"),
+    ("[Reaction]", "Dramatic character emotion and intensity"),
+    ("[Climax]", "Peak conflict and breathtaking confrontation"),
+    ("[Cliffhanger]", "Suspenseful cliffhanger cut urging Part progression")
+]
+
+
 def generate_algorithmic_subclips(
     start_sec: int,
     end_sec: int,
     target_duration: int = 58
 ) -> List[Dict[str, Any]]:
     """
-    Generates 8 to 12 dynamic sub-clips (3 to 6 seconds each) across [start_sec, end_sec]
-    with total combined duration between 50 and 70 seconds for 100% YouTube copyright safety.
+    Generates 6 to 10 dynamic targeted sub-clips (3 to 6 seconds each) across [start_sec, end_sec]
+    with director beat labels ([Hook], [Setup], [Tension], [Action], [Twist], [Reaction], [Climax], [Cliffhanger]),
+    totaling 50 to 65 seconds for 100% YouTube copyright safety.
     """
-    durs = [6, 7, 6, 7, 6, 7, 6, 7]
-    target_d = min(max(50, target_duration), 70)
-
+    target_d = min(max(50, target_duration), 65)
+    default_durs = [5, 6, 5, 6, 5, 5, 6, 5, 5, 6]
     curr_durs = []
     tot = 0
-    for d in durs:
+    for d in default_durs:
         if tot + d <= target_d:
             curr_durs.append(d)
             tot += d
@@ -639,6 +665,12 @@ def generate_algorithmic_subclips(
         c_start = int(start_sec + k * step)
         c_dur = curr_durs[k]
         c_end = c_start + c_dur
+        beat_tag, beat_desc = BEAT_DEFINITIONS[min(k, len(BEAT_DEFINITIONS) - 1)]
+        if k == count - 1:
+            beat_tag, beat_desc = "[Cliffhanger]", "Suspenseful cliffhanger cut urging Part progression"
+        elif k == count - 2 and count >= 4:
+            beat_tag, beat_desc = "[Climax]", "Peak conflict and breathtaking confrontation"
+
         sub_clips.append({
             "clip_num": k + 1,
             "start_time": format_seconds_to_timestamp(c_start),
@@ -646,7 +678,8 @@ def generate_algorithmic_subclips(
             "start_seconds": c_start,
             "end_seconds": c_end,
             "duration": c_dur,
-            "description": f"Narrative Beat {k+1}"
+            "beat": beat_tag,
+            "description": beat_desc
         })
     return sub_clips
 
@@ -676,17 +709,19 @@ def generate_algorithmic_scenes(
         if language.lower().startswith("hi"):
             script = (
                 f"फिल्म के पार्ट {i} में कहानी एक बेहद खतरनाक और रोमांचक मोड़ लेती है। "
-                f"मुख्य किरदार इस अनपेक्षित परिस्थिति में फंस जाता है जहां हर सेकंड उसकी जान दांव पर लगी थी। "
-                f"लेकिन क्या वह इस जाल से बचकर निकल पाएगा? देखिए आगे की पूरी कहानी और सब्सक्राइब करना बिल्कुल न भूलें!"
+                f"जब मुख्य किरदार इस भयानक संकट में घिर जाता है, तो हर सेकंड मौत उसके सामने खड़ी थी। "
+                f"लेकिन एक चौंकाने वाले खुलासे ने सब कुछ बदल कर रख दिया! "
+                f"क्या वह इस खौफनाक जाल से जिंदा बच पाएगा? देखिए आगे और पार्ट {i+1} के लिए सब्सक्राइब जरूर करें!"
             )
-            hook = f"फिल्म के पार्ट {i} का यह सबसे खतरनाक सीन देखकर आपके रोंगटे खड़े हो जाएंगे!"
+            hook = f"पार्ट {i} का यह सबसे खतरनाक सीन देखकर आपके रोंगटे खड़े हो जाएंगे! 😱"
         else:
             script = (
-                f"In Part {i} of this intense story, the plot takes an unexpected dramatic turn. "
+                f"In Part {i} of this intense story, danger escalates to an all-time high. "
                 f"Trapped in an impossible situation with no easy way out, every second counts. "
+                f"Just when escape seems impossible, a shocking revelation turns everything upside down! "
                 f"Will the hero survive the ultimate test? Watch till the end to find out, and subscribe for Part {i+1}!"
             )
-            hook = f"The most shocking twist in Part {i} you never saw coming!"
+            hook = f"The most shocking twist in Part {i} you never saw coming! 😱"
 
         scenes.append({
             "part": i,
@@ -715,16 +750,16 @@ def sanitize_and_order_scenes(
     language: str = "Hindi"
 ) -> List[Dict[str, Any]]:
     """
-    Ensures chronological sorting, validates 8-14 sub-clips per Part,
-    enforces 50-70s total montage duration, and delivers EXACTLY `max_shorts` parts.
+    Ensures chronological sorting, validates 6-10 sub-clips per Part with director beat tags,
+    enforces 50-65s total montage duration, and delivers EXACTLY `max_shorts` parts.
     """
     valid_scenes = []
-    target_d = min(max(50, target_duration), 70)
+    target_d = min(max(50, target_duration), 65)
 
     for s in scenes:
         raw_clips = s.get("sub_clips") or []
         valid_sub_clips = []
-        if isinstance(raw_clips, list) and len(raw_clips) >= 4:
+        if isinstance(raw_clips, list) and len(raw_clips) >= 3:
             for idx, c in enumerate(raw_clips, 1):
                 start_s = c.get("start_seconds")
                 if start_s is None:
@@ -742,6 +777,12 @@ def sanitize_and_order_scenes(
                     end_s = max(0, total_duration - 1)
                     start_s = max(0, end_s - dur)
 
+                # Determine beat
+                raw_beat = str(c.get("beat") or "").strip()
+                if not raw_beat or not raw_beat.startswith("["):
+                    beat_def = BEAT_DEFINITIONS[min(idx - 1, len(BEAT_DEFINITIONS) - 1)]
+                    raw_beat = beat_def[0]
+
                 valid_sub_clips.append({
                     "clip_num": idx,
                     "start_time": format_seconds_to_timestamp(start_s),
@@ -749,11 +790,12 @@ def sanitize_and_order_scenes(
                     "start_seconds": int(start_s),
                     "end_seconds": int(end_s),
                     "duration": int(end_s - start_s),
-                    "description": c.get("description", f"Montage Cut {idx}")
+                    "beat": raw_beat,
+                    "description": c.get("description", f"Director Beat {idx}")
                 })
 
-        # If Gemini didn't provide valid sub_clips or fewer than 4 were valid, synthesize cuts
-        if len(valid_sub_clips) < 4:
+        # If Gemini didn't provide valid sub_clips or fewer than 3 were valid, synthesize cuts
+        if len(valid_sub_clips) < 3:
             s_start = s.get("start_seconds")
             if s_start is None:
                 s_start = parse_timestamp_to_seconds(s.get("start_time", "00:00"))
@@ -768,11 +810,15 @@ def sanitize_and_order_scenes(
         valid_sub_clips.sort(key=lambda x: x["start_seconds"])
         for idx, c in enumerate(valid_sub_clips, 1):
             c["clip_num"] = idx
+            if idx == 1 and not c.get("beat"):
+                c["beat"] = "[Hook]"
+            elif idx == len(valid_sub_clips) and not c.get("beat"):
+                c["beat"] = "[Cliffhanger]"
 
-        # Enforce total montage duration between 50 and 70 seconds
+        # Enforce total montage duration between 50 and 65 seconds
         total_dur = sum(c["duration"] for c in valid_sub_clips)
-        if total_dur > 70:
-            while total_dur > 70 and len(valid_sub_clips) > 8:
+        if total_dur > 65:
+            while total_dur > 65 and len(valid_sub_clips) > 6:
                 removed = valid_sub_clips.pop()
                 total_dur -= removed["duration"]
         elif total_dur < 50:
@@ -829,6 +875,7 @@ def sanitize_and_order_scenes(
 # 3. DIRECT STREAM RESOLUTION & RESILIENT CHUNK DOWNLOAD
 # =====================================================================
 _STREAM_URL_CACHE: Dict[str, Dict[str, Any]] = {}
+_STREAM_CACHE_LOCK = threading.Lock()
 
 def get_youtube_video_id(url: str) -> Optional[str]:
     """Extracts the 11-character YouTube video ID from various URL formats."""
@@ -860,16 +907,17 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
     now = time.time()
 
     # 1. Check cache
-    if vid in _STREAM_URL_CACHE:
-        entry = _STREAM_URL_CACHE[vid]
-        if now < entry.get("expires_at", 0):
-            logger.info(f"Using cached direct stream URL for video {vid}")
-            return entry.get("url")
-        else:
-            try:
-                del _STREAM_URL_CACHE[vid]
-            except Exception:
-                pass
+    with _STREAM_CACHE_LOCK:
+        if vid in _STREAM_URL_CACHE:
+            entry = _STREAM_URL_CACHE[vid]
+            if now < entry.get("expires_at", 0):
+                logger.info(f"Using cached direct stream URL for video {vid}")
+                return entry.get("url")
+            else:
+                try:
+                    del _STREAM_URL_CACHE[vid]
+                except Exception:
+                    pass
 
     # 2. Try yt-dlp -g with formats suited for video extraction
     formats_to_try = [
@@ -893,7 +941,8 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
                 lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
                 if lines:
                     direct_url = lines[0]
-                    _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
+                    with _STREAM_CACHE_LOCK:
+                        _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
                     logger.info(f"Retrieved direct stream URL via yt-dlp ({fmt}) for video {vid}")
                     return direct_url
         except Exception as e:
@@ -915,7 +964,8 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
                 lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
                 if lines:
                     direct_url = lines[0]
-                    _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
+                    with _STREAM_CACHE_LOCK:
+                        _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
                     logger.info(f"Retrieved direct stream URL via yt-dlp default ({fmt}) for video {vid}")
                     return direct_url
         except Exception:
@@ -943,7 +993,8 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
                         if mp4_streams:
                             mp4_streams.sort(key=lambda x: x.get("quality", "360p"), reverse=True)
                             chosen_url = mp4_streams[0]["url"]
-                            _STREAM_URL_CACHE[vid] = {"url": chosen_url, "expires_at": now + 900}
+                            with _STREAM_CACHE_LOCK:
+                                _STREAM_URL_CACHE[vid] = {"url": chosen_url, "expires_at": now + 900}
                             logger.info(f"Retrieved stream URL from Piped CDN ({api_url}) for video {vid}")
                             return chosen_url
             except Exception as pe:
@@ -964,7 +1015,9 @@ def download_clip_section(
     Uses direct stream URL extraction + FFmpeg fast cutting first (taking 1-3 seconds),
     with fallback to yt-dlp --download-sections if needed.
     """
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     if os.path.exists(output_path):
         try:
             os.remove(output_path)
@@ -1030,11 +1083,12 @@ def download_clip_section(
 
     # 2. Invalidate cache in case URL expired or connection failed
     vid = get_youtube_video_id(youtube_url) or youtube_url
-    if vid in _STREAM_URL_CACHE:
-        try:
-            del _STREAM_URL_CACHE[vid]
-        except Exception:
-            pass
+    with _STREAM_CACHE_LOCK:
+        if vid in _STREAM_URL_CACHE:
+            try:
+                del _STREAM_URL_CACHE[vid]
+            except Exception:
+                pass
 
     # 3. Fallback to yt-dlp --download-sections
     section_arg = f"*{start_time}-{end_time}"
@@ -1732,107 +1786,105 @@ def process_single_short_pipeline(
 
     logger.info(f"--- Starting Dynamic Multi-Scene Montage for Part {part_num} ({len(sub_clips)} cuts: {start_time} to {end_time}) ---")
 
-    # Step 1: Ensure narrative voiceover script exists & generate neural voiceover audio
-    notify_progress(12, "Generating neural AI voiceover script...")
-    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
-    vo_ok = False
-    if script:
-        notify_progress(18, "Synthesizing neural voiceover narration (Edge-TTS)...")
-        vo_ok = generate_voiceover_audio(script, vo_path, language)
+    # Step 1: Pre-resolve stream URL (10%)
+    notify_progress(10, f"Pre-resolving stream URL for Part {part_num}...")
+    direct_url = get_direct_stream_url(youtube_url)
+    if direct_url:
+        logger.info(f"Direct stream URL pre-resolved successfully for Part {part_num}.")
+    else:
+        logger.warning(f"Could not pre-resolve direct stream URL; will use resilient fallback cutters.")
 
-    # Step 2: Ensure subtle copyright-free background music exists
-    notify_progress(25, "Synthesizing cinematic ambient background music...")
-    bgm_path = ensure_background_music_exists()
+    # Step 2: High-Speed Targeted Sub-Clip Slicing & 9:16 Reframing (15% -> 75%)
+    total_cuts = len(sub_clips)
+    notify_progress(15, f"Extracting {total_cuts} targeted 3-6s cuts with 0% original audio...")
+    logger.info(f"Downloading {total_cuts} targeted cuts for Part {part_num} (no bulky act downloads)...")
 
-    # Step 3: Download and reframe sub-clips to 9:16 vertical (stripping 100% movie audio)
-    notify_progress(30, "Downloading fast video stream segment...")
     normalized_clips = []
     temp_clip_paths = []
-    ffmpeg_bin = get_ffmpeg_bin()
+    cut_results = {}
+    completed_cuts_count = 0
+    cuts_lock = threading.Lock()
 
-    # Optimization: Download the act segment in ONE network request (~3s), then slice cuts locally in 0.1s
-    act_segment_path = os.path.join(TEMP_DIR, f"act_seg_{part_num}_{unique_id}.mp4")
-    temp_clip_paths.append(act_segment_path)
-    act_dl_ok = download_clip_section(youtube_url, start_time, end_time, act_segment_path)
-    if act_dl_ok and os.path.exists(act_segment_path) and os.path.getsize(act_segment_path) > 10000:
-        logger.info(f"Downloaded act segment for Part {part_num} in one pass: {act_segment_path} ({os.path.getsize(act_segment_path)} bytes)")
-    else:
-        logger.warning(f"Single-pass act segment download failed. Falling back to per-cut streaming.")
-        act_segment_path = None
-
-    start_sec = parse_timestamp_to_seconds(start_time)
-    total_cuts = len(sub_clips)
-    for idx, c in enumerate(sub_clips, 1):
+    def process_single_cut(cut_item: Tuple[int, Dict[str, Any]]) -> Tuple[int, Optional[str]]:
+        nonlocal completed_cuts_count
+        idx, c = cut_item
         c_start = c.get("start_time")
         c_end = c.get("end_time")
+        beat = c.get("beat", f"Beat {idx}")
         if not c_start or not c_end:
-            continue
+            return idx, None
 
         raw_sub = os.path.join(TEMP_DIR, f"sub_raw_{part_num}_{idx}_{unique_id}.mp4")
         norm_sub = os.path.join(TEMP_DIR, f"sub_norm_{part_num}_{idx}_{unique_id}.mp4")
-        temp_clip_paths.extend([raw_sub, norm_sub])
+        with cuts_lock:
+            temp_clip_paths.extend([raw_sub, norm_sub])
 
-        cut_pct = 35 + int(((idx - 1) / max(total_cuts, 1)) * 38)
-        notify_progress(cut_pct, f"Centering faces & 9:16 reframing (Cut {idx}/{total_cuts})...")
-
-        logger.info(f"Processing Cut {idx}/{len(sub_clips)} for Part {part_num}: [{c_start} - {c_end}]")
-        dl_ok = False
-
-        if act_segment_path and os.path.exists(act_segment_path):
-            rel_start = max(0, parse_timestamp_to_seconds(c_start) - start_sec)
-            dur = max(1, parse_timestamp_to_seconds(c_end) - parse_timestamp_to_seconds(c_start))
-            cmd_slice = [
-                ffmpeg_bin, "-y",
-                "-ss", str(rel_start),
-                "-t", str(dur),
-                "-i", act_segment_path,
-                "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
-                raw_sub
-            ]
-            try:
-                subprocess.run(cmd_slice, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
-                if os.path.exists(raw_sub) and os.path.getsize(raw_sub) > 5000:
-                    dl_ok = True
-            except Exception as se:
-                logger.warning(f"Local slice failed: {se}")
-
-        if not dl_ok:
-            dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
-
-        if dl_ok:
+        logger.info(f"Targeted Slicing Cut {idx}/{total_cuts} {beat}: [{c_start} - {c_end}]")
+        dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
+        if dl_ok and os.path.exists(raw_sub) and os.path.getsize(raw_sub) > 5000:
             rf_ok = reframe_subclip_to_vertical_916(raw_sub, norm_sub)
             if os.path.exists(raw_sub):
                 try:
                     os.remove(raw_sub)
                 except Exception:
                     pass
-            if rf_ok and os.path.exists(norm_sub):
-                normalized_clips.append(norm_sub)
-        else:
-            logger.warning(f"Sub-clip {idx} ({c_start}-{c_end}) failed download. Proceeding with remaining cuts...")
+            if rf_ok and os.path.exists(norm_sub) and os.path.getsize(norm_sub) > 5000:
+                with cuts_lock:
+                    completed_cuts_count += 1
+                    pct = 15 + int((completed_cuts_count / max(total_cuts, 1)) * 60)
+                notify_progress(pct, f"Cut {idx}/{total_cuts} {beat} centered in 9:16 ({pct}%)...")
+                logger.info(f"✓ Cut {idx}/{total_cuts} {beat} ready: {norm_sub} ({os.path.getsize(norm_sub)} bytes)")
+                return idx, norm_sub
+
+        logger.warning(f"Targeted cut {idx} ({c_start}-{c_end}) failed.")
+        return idx, None
+
+    # Run subclip cuts with ThreadPoolExecutor (3 workers)
+    max_w = min(3, max(1, total_cuts))
+    with ThreadPoolExecutor(max_workers=max_w) as executor:
+        futures = {executor.submit(process_single_cut, (i, cut)): i for i, cut in enumerate(sub_clips, 1)}
+        for future in as_completed(futures):
+            try:
+                res_idx, res_path = future.result()
+                if res_path:
+                    cut_results[res_idx] = res_path
+            except Exception as fe:
+                logger.warning(f"Cut task error: {fe}")
+
+    # Assemble in chronological cut order
+    for i in range(1, total_cuts + 1):
+        if i in cut_results and os.path.exists(cut_results[i]):
+            normalized_clips.append(cut_results[i])
+
+    # If too few cuts succeeded, retry missing cuts sequentially
+    if len(normalized_clips) < 2:
+        logger.warning(f"Only {len(normalized_clips)} cuts succeeded in parallel. Retrying failed cuts sequentially...")
+        for i, cut in enumerate(sub_clips, 1):
+            if i not in cut_results:
+                res_idx, res_path = process_single_cut((i, cut))
+                if res_path and os.path.exists(res_path):
+                    cut_results[res_idx] = res_path
+        normalized_clips = [cut_results[k] for k in sorted(cut_results.keys()) if os.path.exists(cut_results[k])]
 
     if not normalized_clips:
-        if act_segment_path and os.path.exists(act_segment_path) and os.path.getsize(act_segment_path) > 10000:
-            logger.info(f"Using full act segment as fallback single vertical clip for Part {part_num}...")
-            norm_fallback = os.path.join(TEMP_DIR, f"fallback_norm_{part_num}_{unique_id}.mp4")
-            temp_clip_paths.append(norm_fallback)
-            if reframe_subclip_to_vertical_916(act_segment_path, norm_fallback):
-                normalized_clips.append(norm_fallback)
-
-    if not normalized_clips:
-        raise RuntimeError(f"Failed to stream and download sub-clips for Part {part_num}")
+        raise RuntimeError(f"Failed to stream and download targeted sub-clips for Part {part_num}")
 
     logger.info(f"Successfully processed {len(normalized_clips)} vertical cuts for Part {part_num}. Concatenating montage...")
 
-    # Step 4: Concatenate normalized silent sub-clips
-    notify_progress(78, "Concatenating vertical sub-clips into fast-paced montage...")
+    # Step 4: Concatenate normalized silent sub-clips (80%)
+    notify_progress(80, "Concatenating vertical sub-clips into fast-paced montage...")
     concat_ok = concat_normalized_clips(normalized_clips, silent_montage_path)
     if not concat_ok or not os.path.exists(silent_montage_path):
         raise RuntimeError(f"Failed to concatenate montage sub-clips for Part {part_num}")
 
-    # Step 5: Overlay AI Voiceover & Copyright-Free Background Music (0% original movie audio)
-    notify_progress(88, "Merging voiceover narration & copyright-free BGM...")
+    # Step 5: Generating Edge-TTS Neural Voiceover & BGM mix (85%)
+    notify_progress(85, "Generating Edge-TTS Neural Voiceover & BGM mix...")
+    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
+    vo_ok = False
+    if script:
+        vo_ok = generate_voiceover_audio(script, vo_path, language)
+    bgm_path = ensure_background_music_exists()
+
     render_ok = render_montage_with_audio_overlay(
         montage_video_path=silent_montage_path,
         voiceover_path=vo_path if vo_ok else None,
@@ -1842,8 +1894,8 @@ def process_single_short_pipeline(
     if not render_ok or not os.path.exists(final_video_path):
         raise RuntimeError(f"FFmpeg failed to render final montage Short for Part {part_num}")
 
-    # Step 6: Extract Preview Thumbnail Frame
-    notify_progress(96, "Generating HD thumbnail preview...")
+    # Step 6: Extract Preview Thumbnail Frame (95%)
+    notify_progress(95, "Generating HD thumbnail preview...")
     generate_short_thumbnail(final_video_path, final_thumb_path)
     notify_progress(100, f"Part {part_num} short ready!")
 

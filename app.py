@@ -3808,6 +3808,14 @@ HTML_MAIN = """
                     currentClipperVideoInfo = data.video_info;
                     currentClipperScenes = data.scenes || [];
 
+                    // Populate any already completed parts
+                    completedClipperShorts = {};
+                    if (data.completed_shorts && Array.isArray(data.completed_shorts)) {
+                        data.completed_shorts.forEach(s => {
+                            if (s && s.part) completedClipperShorts[s.part] = s;
+                        });
+                    }
+
                     // Render Movie Metadata Box
                     clipperMovieThumb.src = currentClipperVideoInfo.thumbnail || '';
                     clipperMovieTitle.textContent = currentClipperVideoInfo.title || 'Movie';
@@ -3821,6 +3829,13 @@ HTML_MAIN = """
                     clipperBatchBar.style.display = 'flex';
                     clipperQueueContainer.style.display = 'block';
                     clipperQueueBadge.textContent = `${currentClipperScenes.length} Parts`;
+
+                    // Mark completed parts immediately in UI
+                    currentClipperScenes.forEach(sc => {
+                        if (completedClipperShorts[sc.part]) {
+                            markPartAsCompleted(sc.part, completedClipperShorts[sc.part]);
+                        }
+                    });
 
                     // If quota limit occurred during analysis
                     if (data.status === 'PAUSED_QUOTA_LIMIT' || (data.error && data.error.includes('429'))) {
@@ -3845,6 +3860,19 @@ HTML_MAIN = """
             });
         }
 
+        function getBeatStyle(beat) {
+            const b = (beat || '').toLowerCase();
+            if (b.includes('hook')) return 'background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);';
+            if (b.includes('setup')) return 'background: rgba(245, 158, 11, 0.2); color: #fde047; border: 1px solid rgba(245, 158, 11, 0.4);';
+            if (b.includes('tension')) return 'background: rgba(168, 85, 247, 0.2); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.4);';
+            if (b.includes('action')) return 'background: rgba(244, 63, 94, 0.2); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.4);';
+            if (b.includes('twist')) return 'background: rgba(217, 70, 239, 0.2); color: #f0abfc; border: 1px solid rgba(217, 70, 239, 0.4);';
+            if (b.includes('reaction')) return 'background: rgba(6, 182, 212, 0.2); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.4);';
+            if (b.includes('climax')) return 'background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4);';
+            if (b.includes('cliffhanger')) return 'background: rgba(234, 179, 8, 0.2); color: #fef08a; border: 1px solid rgba(234, 179, 8, 0.4);';
+            return 'background: rgba(255, 255, 255, 0.08); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.15);';
+        }
+
         function renderClipperScenesQueue(scenes) {
             clipperScenesGrid.innerHTML = scenes.map((scene, idx) => `
                 <div class="scene-item-card" id="sceneCard_${scene.part}">
@@ -3863,7 +3891,7 @@ HTML_MAIN = """
                             <div class="placeholder-916">
                                 <span style="font-size: 28px;">🎬</span>
                                 <span style="font-weight: 600; font-size: 13px;">9:16 Dynamic Montage</span>
-                                <span style="font-size: 11px; color: var(--text-muted);">${(scene.sub_clips || []).length || 10} Fast Cuts (3-6s) • Muted Audio • BGM &amp; Voiceover</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">${(scene.sub_clips || []).length || 8} Fast Cuts (3-6s) • Muted Audio • BGM &amp; Voiceover</span>
                             </div>
                         </div>
 
@@ -3880,12 +3908,20 @@ HTML_MAIN = """
                             </div>
 
                             <div>
-                                <label class="field-label">🎬 Multi-Scene Cuts Timeline (${(scene.sub_clips || []).length} Cuts)</label>
-                                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; max-height: 72px; overflow-y: auto; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label class="field-label" style="margin: 0;">🎬 Smart Director Storyboard (${(scene.sub_clips || []).length} Cuts • 50-65s Total)</label>
+                                    <span style="font-size: 11px; color: #10b981; font-weight: 600;">⚡ High-Speed Sliced (0% Movie Audio)</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 6px; max-height: 140px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
                                     ${(scene.sub_clips || []).map((c, ci) => `
-                                        <span style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #e2e8f0; white-space: nowrap;">
-                                            #${c.clip_num || ci+1}: ${c.start_time}-${c.end_time} (${c.duration}s)
-                                        </span>
+                                        <div style="display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 6px; ${getBeatStyle(c.beat)}">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="font-weight: 700; font-size: 11px;">${escapeHtml(c.beat || `Cut ${ci+1}`)}</span>
+                                                <span style="font-size: 10px; opacity: 0.85;">⏱️ ${c.duration}s</span>
+                                            </div>
+                                            <div style="font-size: 10px; font-family: monospace; opacity: 0.9;">${c.start_time} - ${c.end_time}</div>
+                                            <div style="font-size: 10px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</div>
+                                        </div>
                                     `).join('')}
                                 </div>
                             </div>
@@ -3931,11 +3967,29 @@ HTML_MAIN = """
             }
             if (mediaBox && shortObj && shortObj.video_url) {
                 mediaBox.innerHTML = `
-                    <video src="${shortObj.video_url}" controls playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>
+                    <video src="${shortObj.video_url}" poster="${shortObj.thumbnail_url || ''}" controls playsinline preload="metadata" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></video>
                 `;
             }
             if (btn) btn.style.display = 'none';
-            if (uploadBtn) uploadBtn.style.display = 'inline-flex';
+            if (uploadBtn) {
+                uploadBtn.style.display = 'inline-flex';
+                let dlBtn = document.getElementById(`btnDlPart_${partNum}`);
+                if (!dlBtn && uploadBtn.parentNode) {
+                    dlBtn = document.createElement('a');
+                    dlBtn.id = `btnDlPart_${partNum}`;
+                    dlBtn.href = shortObj.video_url;
+                    dlBtn.download = shortObj.filename || `short_part_${partNum}.mp4`;
+                    dlBtn.className = 'btn-action btn-secondary';
+                    dlBtn.style.textDecoration = 'none';
+                    dlBtn.style.padding = '8px 14px';
+                    dlBtn.style.fontSize = '12px';
+                    dlBtn.style.display = 'inline-flex';
+                    dlBtn.style.alignItems = 'center';
+                    dlBtn.style.gap = '6px';
+                    dlBtn.innerHTML = '📥 Download MP4';
+                    uploadBtn.parentNode.insertBefore(dlBtn, uploadBtn.nextSibling);
+                }
+            }
             updateBatchUploadVisibility();
         }
 
@@ -5029,12 +5083,16 @@ def clipper_analyze():
             job_id=job_id
         )
 
+        ckpt = clipper_engine.load_job_checkpoint(job_id) or {}
+        raw_completed = ckpt.get('completed_shorts') or {}
+        completed_list = list(raw_completed.values()) if isinstance(raw_completed, dict) else (raw_completed if isinstance(raw_completed, list) else [])
+
         clipper_jobs[job_id] = {
             'job_id': job_id,
             'status': status,
-            'progress': 0,
+            'progress': int((len(completed_list) / max(len(scenes), 1)) * 100) if scenes else 0,
             'current_step': 'Analysis complete' if status != 'PAUSED_QUOTA_LIMIT' else 'Paused: Gemini API quota limit reached',
-            'completed_shorts': [],
+            'completed_shorts': completed_list,
             'total_parts': len(scenes),
             'error': quota_error,
             'url': url,
@@ -5048,7 +5106,8 @@ def clipper_analyze():
             'status': status,
             'error': quota_error,
             'video_info': video_info,
-            'scenes': scenes
+            'scenes': scenes,
+            'completed_shorts': completed_list
         })
     except Exception as e:
         print(f"Clipper analysis error: {e}")
@@ -5164,12 +5223,12 @@ def clipper_generate_short():
 
     return jsonify({
         'success': True,
-        'status': 'started',
+        'status': 'processing',
         'job_id': job_id,
         'part': part_num,
         'task_key': task_key,
         'message': f'Generation for Part {part_num} started in background'
-    }), 202
+    }), 200
 
 
 @app.route('/api/clipper/status/<job_id>/<int:part_num>', methods=['GET'])
@@ -5747,7 +5806,9 @@ def clipper_sync_rendered_short():
 
 @app.route('/api/clipper/media/<path:filename>')
 def clipper_serve_media(filename):
-    return send_from_directory(clipper_engine.CLIPPER_DIR, secure_filename(filename))
+    resp = send_from_directory(clipper_engine.CLIPPER_DIR, secure_filename(filename), conditional=True)
+    resp.headers['Accept-Ranges'] = 'bytes'
+    return resp
 
 if __name__ == '__main__':
     print("="*60)
