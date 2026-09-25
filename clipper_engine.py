@@ -845,10 +845,11 @@ def get_youtube_video_id(url: str) -> Optional[str]:
 
 def get_direct_stream_url(youtube_url: str) -> Optional[str]:
     """
-    Extracts a direct playable MP4 video stream URL using:
+    Extracts a direct playable video stream URL using:
     1. In-memory cache (15-min TTL)
-    2. yt-dlp -g with anti-bot clients (android, ios, mweb)
-    3. Piped CDN API fallback (bypasses datacenter IP blocks completely)
+    2. yt-dlp -g with anti-bot clients (android, ios, mweb) and robust video format selector
+    3. Standard yt-dlp fallback
+    4. Piped CDN API fallback (bypasses datacenter IP blocks completely)
     """
     global _STREAM_URL_CACHE
     vid = get_youtube_video_id(youtube_url) or youtube_url
@@ -866,27 +867,55 @@ def get_direct_stream_url(youtube_url: str) -> Optional[str]:
             except Exception:
                 pass
 
-    # 2. Try yt-dlp -g with android,ios,mweb clients
-    try:
-        cmd = [
-            sys.executable, "-m", "yt_dlp",
-            "-g",
-            "-f", "best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best",
-            "--extractor-args", "youtube:player_client=android,ios,mweb",
-            "--socket-timeout", "20",
-            "--retries", "3",
-            youtube_url
-        ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
-        if proc.returncode == 0 and proc.stdout.strip():
-            lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
-            if lines:
-                direct_url = lines[0]
-                _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
-                logger.info(f"Retrieved direct stream URL via yt-dlp for video {vid}")
-                return direct_url
-    except Exception as e:
-        logger.warning(f"yt-dlp -g failed for {vid}: {e}")
+    # 2. Try yt-dlp -g with formats suited for video extraction
+    formats_to_try = [
+        "bestvideo[height<=720]/best[height<=720]/bestvideo/best",
+        "best/18/22",
+        "worst"
+    ]
+    for fmt in formats_to_try:
+        try:
+            cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "-g",
+                "-f", fmt,
+                "--extractor-args", "youtube:player_client=android,ios,mweb",
+                "--socket-timeout", "20",
+                "--retries", "3",
+                youtube_url
+            ]
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+            if proc.returncode == 0 and proc.stdout.strip():
+                lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
+                if lines:
+                    direct_url = lines[0]
+                    _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
+                    logger.info(f"Retrieved direct stream URL via yt-dlp ({fmt}) for video {vid}")
+                    return direct_url
+        except Exception as e:
+            logger.warning(f"yt-dlp -g ({fmt}) failed for {vid}: {e}")
+
+    # Fallback without extractor-args
+    for fmt in ["bestvideo[height<=720]/bestvideo", "best"]:
+        try:
+            cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "-g",
+                "-f", fmt,
+                "--socket-timeout", "20",
+                "--retries", "3",
+                youtube_url
+            ]
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+            if proc.returncode == 0 and proc.stdout.strip():
+                lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
+                if lines:
+                    direct_url = lines[0]
+                    _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
+                    logger.info(f"Retrieved direct stream URL via yt-dlp default ({fmt}) for video {vid}")
+                    return direct_url
+        except Exception:
+            pass
 
     # 3. Piped CDN API Fallback (Zero Bot Challenge on Datacenter IPs)
     if vid and len(vid) == 11:
@@ -940,15 +969,21 @@ def download_clip_section(
 
     ffmpeg_bin = get_ffmpeg_bin()
     direct_url = get_direct_stream_url(youtube_url)
+    dur = max(1, parse_timestamp_to_seconds(end_time) - parse_timestamp_to_seconds(start_time))
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
     # 1. Direct stream FFmpeg cutting (Super fast & immune to datacenter download limits)
     if direct_url:
-        # Attempt A: Stream copy (-c copy)
+        # Attempt A: Stream copy (-c copy) with user-agent and reconnect options
         cmd_copy = [
             ffmpeg_bin, "-y",
+            "-user_agent", ua,
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
             "-ss", start_time,
-            "-to", end_time,
             "-i", direct_url,
+            "-t", str(dur),
             "-c", "copy",
             "-avoid_negative_ts", "make_zero",
             output_path
@@ -966,9 +1001,13 @@ def download_clip_section(
         # Attempt B: Ultrafast transcode slice if copy boundary was not on keyframe
         cmd_trans = [
             ffmpeg_bin, "-y",
+            "-user_agent", ua,
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
             "-ss", start_time,
-            "-to", end_time,
             "-i", direct_url,
+            "-t", str(dur),
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "24",
@@ -1003,7 +1042,7 @@ def download_clip_section(
         "--download-sections", section_arg,
         "--force-keyframes-at-cuts",
         "--extractor-args", "youtube:player_client=android,ios,mweb",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "--user-agent", ua,
         "--add-header", "Accept-Language:en-US,en;q=0.9",
         "--compat-options", "no-youtube-unavailable-videos",
         "--socket-timeout", "30",
@@ -1016,8 +1055,9 @@ def download_clip_section(
     ]
 
     format_attempts = [
-        "best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best",
-        "best/18"
+        "bestvideo[height<=720]/best[height<=720]/bestvideo/best",
+        "best/18",
+        "worst"
     ]
 
     dl_dir = os.path.dirname(output_path)
@@ -1767,6 +1807,14 @@ def process_single_short_pipeline(
                 normalized_clips.append(norm_sub)
         else:
             logger.warning(f"Sub-clip {idx} ({c_start}-{c_end}) failed download. Proceeding with remaining cuts...")
+
+    if not normalized_clips:
+        if act_segment_path and os.path.exists(act_segment_path) and os.path.getsize(act_segment_path) > 10000:
+            logger.info(f"Using full act segment as fallback single vertical clip for Part {part_num}...")
+            norm_fallback = os.path.join(TEMP_DIR, f"fallback_norm_{part_num}_{unique_id}.mp4")
+            temp_clip_paths.append(norm_fallback)
+            if reframe_subclip_to_vertical_916(act_segment_path, norm_fallback):
+                normalized_clips.append(norm_fallback)
 
     if not normalized_clips:
         raise RuntimeError(f"Failed to stream and download sub-clips for Part {part_num}")
