@@ -14,11 +14,15 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 import google.auth.transport.requests
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import gemini_engine
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32)
+
+# Enable ProxyFix for reverse proxies (Render, Cloudflare, etc.)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Allow HTTP and relaxed scope matching for local testing
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -36,6 +40,7 @@ SCOPES = [
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_SECRETS_FILE = os.path.join(BASE_DIR, "client_secret.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
+ACCOUNTS_STORE_FILE = os.path.join(BASE_DIR, "user_accounts.json")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(gemini_engine.THUMBNAILS_DIR, exist_ok=True)
@@ -58,11 +63,86 @@ if not os.path.exists(TOKEN_FILE) and os.environ.get("YOUTUBE_TOKEN_JSON"):
 # In-memory tracking of background upload tasks
 upload_tasks = {}
 
+def load_accounts_store() -> dict:
+    if os.path.exists(ACCOUNTS_STORE_FILE):
+        try:
+            with open(ACCOUNTS_STORE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading accounts store: {e}")
+    return {}
+
+def save_accounts_store(data: dict):
+    try:
+        with open(ACCOUNTS_STORE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error saving accounts store: {e}")
+
+def save_user_account(email: str, creds_dict: dict, channels: list, active_channel_id: str = None) -> str:
+    accounts = load_accounts_store()
+    account_key = email.lower().strip() if email else (active_channel_id or "default")
+    accounts[account_key] = {
+        "email": email,
+        "credentials": creds_dict,
+        "channels": channels,
+        "active_channel_id": active_channel_id or (channels[0]['id'] if channels else None),
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    save_accounts_store(accounts)
+    return account_key
+
+def get_oauth_redirect_uri():
+    # Force HTTPS when behind reverse proxy like Render or if request is secure
+    if request.headers.get('X-Forwarded-Proto') == 'https' or request.is_secure:
+        scheme = 'https'
+    else:
+        scheme = request.scheme
+    return url_for('oauth2callback', _external=True, _scheme=scheme)
+
 def get_stored_credentials():
     creds = None
+    account_key = session.get('active_account_key')
+
+    # 1. Check session credentials first (isolated per browser session)
     if 'credentials' in session:
-        creds = Credentials(**session['credentials'])
-    elif os.path.exists(TOKEN_FILE):
+        try:
+            creds = Credentials(**session['credentials'])
+        except Exception:
+            creds = None
+
+    # 2. Check accounts store by active account key
+    if not creds and account_key:
+        accounts = load_accounts_store()
+        if account_key in accounts:
+            try:
+                creds_data = accounts[account_key]['credentials']
+                creds = Credentials(**creds_data)
+                session['credentials'] = creds_data
+                session['user_email'] = accounts[account_key].get('email', '')
+                if not session.get('active_channel_id'):
+                    session['active_channel_id'] = accounts[account_key].get('active_channel_id')
+            except Exception:
+                creds = None
+
+    # 3. Check any account from persistent accounts store
+    if not creds:
+        accounts = load_accounts_store()
+        if accounts:
+            first_key = next(iter(accounts))
+            try:
+                creds_data = accounts[first_key]['credentials']
+                creds = Credentials(**creds_data)
+                session['active_account_key'] = first_key
+                session['credentials'] = creds_data
+                session['user_email'] = accounts[first_key].get('email', '')
+                if not session.get('active_channel_id'):
+                    session['active_channel_id'] = accounts[first_key].get('active_channel_id')
+            except Exception:
+                creds = None
+
+    # 4. Fallback to initial TOKEN_FILE if available
+    if not creds and os.path.exists(TOKEN_FILE):
         try:
             with open(TOKEN_FILE, 'r') as f:
                 creds_data = json.load(f)
@@ -72,11 +152,12 @@ def get_stored_credentials():
             print(f"Error loading token.json: {e}")
             creds = None
 
+    # Auto token refresh handling
     if creds and creds.expired and creds.refresh_token:
         try:
             req = google.auth.transport.requests.Request()
             creds.refresh(req)
-            session['credentials'] = {
+            updated_dict = {
                 'token': creds.token,
                 'refresh_token': creds.refresh_token,
                 'token_uri': creds.token_uri,
@@ -84,11 +165,22 @@ def get_stored_credentials():
                 'client_secret': creds.client_secret,
                 'scopes': creds.scopes
             }
-            with open(TOKEN_FILE, 'w') as f:
-                json.dump(session['credentials'], f)
+            session['credentials'] = updated_dict
+            act_k = session.get('active_account_key')
+            if act_k:
+                accounts = load_accounts_store()
+                if act_k in accounts:
+                    accounts[act_k]['credentials'] = updated_dict
+                    save_accounts_store(accounts)
+            try:
+                with open(TOKEN_FILE, 'w') as f:
+                    json.dump(updated_dict, f)
+            except Exception:
+                pass
         except Exception as e:
             print(f"Token refresh failed: {e}")
             return None
+
     return creds
 
 HTML_MAIN = """
@@ -2780,25 +2872,63 @@ HTML_MAIN = """
                 document.getElementById('statViews').textContent = Number(data.viewCount).toLocaleString();
                 document.getElementById('statVideos').textContent = Number(data.videoCount).toLocaleString();
 
-                // Render channels in dropdown
+                // Render channels & accounts in dropdown
                 const listEl = document.getElementById('dropdownChannelsList');
-                if (listEl && data.allChannels && data.allChannels.length > 0) {
-                    listEl.innerHTML = data.allChannels.map(ch => {
-                        const isActive = ch.id === data.id;
-                        return `
-                            <div class="dropdown-channel-item ${isActive ? 'active-channel' : ''}" onclick="onSwitchChannelClick('${ch.id}', ${isActive})">
-                                <img src="${ch.avatar || 'https://via.placeholder.com/32/333333/ffffff?text=YT'}" alt="ch">
-                                <div class="channel-item-details">
-                                    <div class="channel-item-title">${ch.title}</div>
-                                    <div class="channel-item-subs">${Number(ch.subscriberCount || 0).toLocaleString()} subs</div>
+                if (listEl) {
+                    let html = '';
+                    if (data.allAccounts && data.allAccounts.length > 1) {
+                        html += '<div style="font-size: 11px; text-transform: uppercase; color: var(--accent-blue); padding: 6px 12px; font-weight: 500;">Google Accounts</div>';
+                        data.allAccounts.forEach(acc => {
+                            const isCurAcc = acc.is_active;
+                            html += `
+                                <div class="dropdown-channel-item ${isCurAcc ? 'active-channel' : ''}" style="margin-bottom: 4px;" onclick="onSwitchAccountClick('${acc.key}')">
+                                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #3ea6ff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #fff;">
+                                        ${acc.email ? acc.email[0].toUpperCase() : 'G'}
+                                    </div>
+                                    <div class="channel-item-details">
+                                        <div class="channel-item-title">${acc.email}</div>
+                                        <div class="channel-item-subs">${(acc.channels && acc.channels.length) ? acc.channels.length + ' Channel(s)' : 'Connected'}</div>
+                                    </div>
+                                    ${isCurAcc ? '<span class="active-check-badge">Active</span>' : ''}
                                 </div>
-                                ${isActive ? '<span class="active-check-badge">✓</span>' : ''}
-                            </div>
-                        `;
-                    }).join('');
+                            `;
+                        });
+                        html += '<div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); padding: 8px 12px 4px 12px; font-weight: 500;">Channels</div>';
+                    }
+
+                    if (data.allChannels && data.allChannels.length > 0) {
+                        html += data.allChannels.map(ch => {
+                            const isActive = ch.id === data.id;
+                            return `
+                                <div class="dropdown-channel-item ${isActive ? 'active-channel' : ''}" onclick="onSwitchChannelClick('${ch.id}', ${isActive})">
+                                    <img src="${ch.avatar || 'https://via.placeholder.com/32/333333/ffffff?text=YT'}" alt="ch">
+                                    <div class="channel-item-details">
+                                        <div class="channel-item-title">${ch.title}</div>
+                                        <div class="channel-item-subs">${Number(ch.subscriberCount || 0).toLocaleString()} subs</div>
+                                    </div>
+                                    ${isActive ? '<span class="active-check-badge">✓</span>' : ''}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                    listEl.innerHTML = html;
                 }
             } catch (err) {
                 console.error(err);
+            }
+        }
+
+        async function onSwitchAccountClick(accountKey) {
+            try {
+                const drop = document.getElementById('accountDropdown');
+                if (drop) drop.classList.remove('show');
+                const res = await fetch(`/api/switch_account/${encodeURIComponent(accountKey)}`, { method: 'POST' });
+                if (res.ok) {
+                    await loadChannelInfo();
+                    await loadRecentVideos();
+                }
+            } catch (e) {
+                console.error("Switch account error:", e);
             }
         }
 
@@ -3122,10 +3252,11 @@ def authorize():
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return redirect('/setup')
 
+    redirect_uri = get_oauth_redirect_uri()
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE,
         scopes=SCOPES,
-        redirect_uri=url_for('oauth2callback', _external=True)
+        redirect_uri=redirect_uri
     )
 
     # Prompt select_account so the user can choose ANY email or add a new account freely
@@ -3147,28 +3278,36 @@ def authorize():
 @app.route('/switch_account')
 def switch_account():
     # Clear session credentials so user can pick any new or existing Google account
-    session.clear()
+    session.pop('credentials', None)
+    session.pop('state', None)
+    session.pop('code_verifier', None)
     return redirect('/authorize?prompt=select_account')
 
 @app.route('/oauth2callback')
 def oauth2callback():
     state = session.get('state')
+    redirect_uri = get_oauth_redirect_uri()
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE,
         scopes=SCOPES,
         state=state,
-        redirect_uri=url_for('oauth2callback', _external=True)
+        redirect_uri=redirect_uri
     )
     if 'code_verifier' in session and session['code_verifier']:
         flow.code_verifier = session['code_verifier']
-    flow.fetch_token(authorization_response=request.url)
+
+    auth_response = request.url
+    if (request.headers.get('X-Forwarded-Proto') == 'https' or request.is_secure) and auth_response.startswith('http://'):
+        auth_response = 'https://' + auth_response[7:]
+
+    flow.fetch_token(authorization_response=auth_response)
     credentials = flow.credentials
 
     # Fetch user email
     user_email = ""
     try:
         import requests
-        u_res = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers={'Authorization': f'Bearer {credentials.token}'}, timeout=4)
+        u_res = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers={'Authorization': f'Bearer {credentials.token}'}, timeout=5)
         if u_res.ok:
             user_email = u_res.json().get('email', '')
     except Exception as e:
@@ -3182,23 +3321,72 @@ def oauth2callback():
         'client_secret': credentials.client_secret,
         'scopes': credentials.scopes
     }
+
+    # Fetch YouTube channels for this newly signed-in account
+    channels_list = []
+    try:
+        yt = build('youtube', 'v3', credentials=credentials)
+        res = yt.channels().list(mine=True, part='snippet,statistics').execute()
+        for ch in res.get('items', []):
+            channels_list.append({
+                'id': ch.get('id'),
+                'title': ch.get('snippet', {}).get('title', 'YouTube Creator'),
+                'avatar': ch.get('snippet', {}).get('thumbnails', {}).get('medium', {}).get('url', ''),
+                'subscriberCount': ch.get('statistics', {}).get('subscriberCount', '0')
+            })
+    except Exception as ye:
+        print(f"Channels fetch during oauth notice: {ye}")
+
+    account_key = save_user_account(user_email, creds_dict, channels_list)
+    session['active_account_key'] = account_key
     session['credentials'] = creds_dict
     session['user_email'] = user_email
-    session.pop('active_channel_id', None)
+    if channels_list:
+        session['active_channel_id'] = channels_list[0]['id']
+    else:
+        session.pop('active_channel_id', None)
 
-    with open(TOKEN_FILE, 'w') as f:
-        json.dump(creds_dict, f)
+    try:
+        with open(TOKEN_FILE, 'w') as f:
+            json.dump(creds_dict, f)
+    except Exception:
+        pass
+
     return redirect('/')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    if os.path.exists(TOKEN_FILE):
-        try:
-            os.remove(TOKEN_FILE)
-        except Exception:
-            pass
     return redirect('/authorize')
+
+@app.route('/api/accounts')
+def list_accounts():
+    accounts = load_accounts_store()
+    current_key = session.get('active_account_key', '')
+    acc_list = []
+    for k, v in accounts.items():
+        acc_list.append({
+            'key': k,
+            'email': v.get('email', k),
+            'channels': v.get('channels', []),
+            'active_channel_id': v.get('active_channel_id', ''),
+            'is_active': (k == current_key)
+        })
+    return jsonify({'accounts': acc_list, 'active_account_key': current_key})
+
+@app.route('/api/switch_account/<path:account_key>', methods=['POST'])
+def switch_active_account(account_key):
+    accounts = load_accounts_store()
+    account_key = account_key.lower().strip()
+    if account_key not in accounts:
+        return jsonify({'error': 'Account not found'}), 404
+
+    acc = accounts[account_key]
+    session['active_account_key'] = account_key
+    session['credentials'] = acc['credentials']
+    session['user_email'] = acc.get('email', '')
+    session['active_channel_id'] = acc.get('active_channel_id')
+    return jsonify({'success': True, 'account': account_key})
 
 @app.route('/api/switch_channel/<channel_id>', methods=['POST'])
 def switch_channel(channel_id):
@@ -3274,6 +3462,18 @@ def channel_info():
             except Exception:
                 pass
 
+        accounts = load_accounts_store()
+        current_key = session.get('active_account_key', '')
+        connected_accounts = []
+        for k, acc in accounts.items():
+            connected_accounts.append({
+                'key': k,
+                'email': acc.get('email', k),
+                'channels': acc.get('channels', []),
+                'active_channel_id': acc.get('active_channel_id', ''),
+                'is_active': (k == current_key)
+            })
+
         return jsonify({
             'id': active_ch.get('id'),
             'title': snippet.get('title', 'YouTube Creator'),
@@ -3284,7 +3484,8 @@ def channel_info():
             'viewCount': stats.get('viewCount', '0'),
             'uploadsPlaylist': uploads_playlist,
             'userEmail': user_email,
-            'allChannels': all_channels
+            'allChannels': all_channels,
+            'allAccounts': connected_accounts
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
