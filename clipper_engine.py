@@ -591,7 +591,7 @@ def generate_algorithmic_subclips(
     Generates 8 to 12 dynamic sub-clips (3 to 6 seconds each) across [start_sec, end_sec]
     with total combined duration between 50 and 70 seconds for 100% YouTube copyright safety.
     """
-    durs = [5, 6, 5, 6, 5, 5, 6, 5, 6, 5, 6]
+    durs = [6, 7, 6, 7, 6, 7, 6, 7]
     target_d = min(max(50, target_duration), 70)
 
     curr_durs = []
@@ -1025,101 +1025,101 @@ def calculate_smart_916_crop(video_path: str) -> str:
     Analyzes video frames with OpenCV Haar Cascade face detection to locate
     the horizontal center of the actors. Calculates an optimal 9:16 crop window
     centered on the actors rather than a naive middle crop.
+    Guarantees crop dimensions NEVER exceed actual video dimensions.
     Returns FFmpeg crop & scale filter string.
     """
+    width, height = 1280, 720
+    cap = None
     has_cv2 = False
     try:
         import cv2
         import numpy as np
         has_cv2 = True
-    except ImportError:
-        logger.warning("OpenCV/NumPy not installed. Falling back to high-quality center 9:16 crop.")
-
-    width, height = 1920, 1080
-    # Probe video dimensions with ffprobe
-    probe_cmd = [
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height",
-        "-of", "csv=s=x:p=0",
-        video_path
-    ]
-    try:
-        probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
-        if probe_res.returncode == 0 and "x" in probe_res.stdout:
-            dims = probe_res.stdout.strip().split("x")
-            width, height = int(dims[0]), int(dims[1])
+        cap = cv2.VideoCapture(video_path)
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if actual_w > 0 and actual_h > 0:
+            width, height = actual_w, actual_h
     except Exception as e:
-        logger.warning(f"Could not probe video dimensions with ffprobe: {e}")
+        logger.warning(f"OpenCV probe notice: {e}")
 
-    # Vertical 9:16 crop dimensions
-    # native height is kept, crop width is height * 9 / 16
-    crop_w = int(height * (9 / 16))
+    # Fallback to ffprobe if cv2 didn't get dimensions
+    if width <= 0 or height <= 0 or not has_cv2:
+        ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
+        probe_cmd = [
+            ffprobe_bin, "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=s=x:p=0",
+            video_path
+        ]
+        try:
+            probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+            if probe_res.returncode == 0 and "x" in probe_res.stdout:
+                dims = probe_res.stdout.strip().split("x")
+                width, height = int(dims[0]), int(dims[1])
+        except Exception:
+            pass
+
+    # Ensure valid positive bounds
+    width = max(width, 320)
+    height = max(height, 240)
+
+    # Calculate 9:16 vertical crop inside [width, height]
+    target_crop_w = int(height * (9 / 16))
+    if target_crop_w > width:
+        crop_w = width
+        crop_h = int(width * (16 / 9))
+    else:
+        crop_w = target_crop_w
+        crop_h = height
+
     crop_w = crop_w - (crop_w % 2)  # must be even
+    crop_h = crop_h - (crop_h % 2)  # must be even
+    crop_w = max(2, min(crop_w, width))
+    crop_h = max(2, min(crop_h, height))
 
-    # Default fallback: center crop
     default_crop_x = max(0, int((width - crop_w) / 2))
+    default_crop_y = max(0, int((height - crop_h) / 2))
 
-    if not has_cv2 or not os.path.exists(video_path):
-        logger.info(f"Applying default center crop: crop={crop_w}:{height}:{default_crop_x}:0,scale=1080:1920")
-        return f"crop={crop_w}:{height}:{default_crop_x}:0,scale=1080:1920:flags=lanczos"
+    if not has_cv2 or cap is None or not cap.isOpened():
+        return f"crop={crop_w}:{crop_h}:{default_crop_x}:{default_crop_y},scale=1080:1920:flags=bicubic"
 
-    # Analyze frames with OpenCV Face Detection / Visual Saliency
     try:
         import cv2
         import numpy as np
 
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-
-        # Check for Haar Cascade support
         face_cascade = None
         if hasattr(cv2, 'CascadeClassifier') and hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
             try:
                 cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
                 if os.path.exists(cascade_path):
                     face_cascade = cv2.CascadeClassifier(cascade_path)
-            except Exception as ce:
-                logger.warning(f"Haar cascade initialization notice: {ce}")
-
-        detected_centers = []
-        saliency_centers = []
-        # Sample ~25 frames evenly across the clip
-        sample_step = max(1, total_frames // 25) if total_frames > 25 else 1
-
-        frame_idx = 0
-        while cap.isOpened() and frame_idx < total_frames:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                break
-
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # 1. Try Face Detection
-            if face_cascade is not None:
-                try:
-                    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=4, minSize=(50, 50))
-                    for (fx, fy, fw, fh) in faces:
-                        center_x = fx + (fw / 2.0)
-                        weight = fw * fh  # larger faces have higher weight
-                        detected_centers.append((center_x, weight))
-                except Exception:
-                    pass
-
-            # 2. Compute Visual Saliency (Actor / Movement Sharpness)
-            try:
-                sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-                energy_x = np.sum(np.abs(sobel_x), axis=0)
-                sum_e = np.sum(energy_x)
-                if sum_e > 100:
-                    sal_x = float(np.sum(np.arange(len(energy_x)) * energy_x) / sum_e)
-                    saliency_centers.append(sal_x)
             except Exception:
                 pass
 
-            frame_idx += sample_step
+        detected_centers = []
+        sample_indices = [int(total_frames * r) for r in [0.15, 0.35, 0.55, 0.75, 0.90] if int(total_frames * r) < total_frames]
+        if not sample_indices:
+            sample_indices = [0]
+
+        for frame_idx in sample_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                continue
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if face_cascade is not None:
+                try:
+                    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=3, minSize=(30, 30))
+                    for (fx, fy, fw, fh) in faces:
+                        center_x = fx + (fw / 2.0)
+                        weight = fw * fh
+                        detected_centers.append((center_x, weight))
+                except Exception:
+                    pass
 
         cap.release()
 
@@ -1128,21 +1128,15 @@ def calculate_smart_916_crop(video_path: str) -> str:
             weighted_center_x = sum(cx * w for cx, w in detected_centers) / total_weight
             crop_x = int(weighted_center_x - (crop_w / 2.0))
             crop_x = max(0, min(crop_x, width - crop_w))
-            logger.info(f"Smart Face Centering detected! Weighted Face X: {weighted_center_x:.1f}px -> Crop X: {crop_x}px")
-        elif saliency_centers:
-            avg_saliency_x = float(np.mean(saliency_centers))
-            crop_x = int(avg_saliency_x - (crop_w / 2.0))
-            crop_x = max(0, min(crop_x, width - crop_w))
-            logger.info(f"Visual Saliency Subject Centering applied! Subject X: {avg_saliency_x:.1f}px -> Crop X: {crop_x}px")
+            logger.info(f"Smart Face Centering detected! Center X: {weighted_center_x:.1f}px -> Crop X: {crop_x}px")
         else:
             crop_x = default_crop_x
-            logger.info(f"Using default center crop: {crop_x}px")
 
-        return f"crop={crop_w}:{height}:{crop_x}:0,scale=1080:1920:flags=lanczos"
+        return f"crop={crop_w}:{crop_h}:{crop_x}:{default_crop_y},scale=1080:1920:flags=bicubic"
 
     except Exception as e:
-        logger.error(f"Error during smart face tracking: {e}. Falling back to center crop.")
-        return f"crop={crop_w}:{height}:{default_crop_x}:0,scale=1080:1920:flags=lanczos"
+        logger.warning(f"Smart face tracking fallback to center crop: {e}")
+        return f"crop={crop_w}:{crop_h}:{default_crop_x}:{default_crop_y},scale=1080:1920:flags=bicubic"
 
 
 # =====================================================================
@@ -1358,15 +1352,15 @@ def reframe_subclip_to_vertical_916(
         "-map", "[vout]",
         "-an",  # Strip original movie audio completely!
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "22",
+        "-preset", "ultrafast",
+        "-crf", "23",
         "-r", "30",
         "-pix_fmt", "yuv420p",
         output_norm_path
     ]
 
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
         if proc.returncode == 0 and os.path.exists(output_norm_path) and os.path.getsize(output_norm_path) > 5000:
             return True
         logger.warning(f"Reframe subclip failed: {proc.stderr[:160]}")

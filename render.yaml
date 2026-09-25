@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
