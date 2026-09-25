@@ -44,6 +44,22 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [Clipper] %(message)s"))
     logger.addHandler(ch)
 
+_RECENT_LOGS: List[str] = []
+
+class MemoryLogHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            _RECENT_LOGS.append(msg)
+            if len(_RECENT_LOGS) > 300:
+                _RECENT_LOGS.pop(0)
+        except Exception:
+            pass
+
+_mem_handler = MemoryLogHandler()
+_mem_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [Clipper] %(message)s"))
+logger.addHandler(_mem_handler)
+
 import gemini_engine
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

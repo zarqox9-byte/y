@@ -5053,6 +5053,60 @@ def clipper_generate_short():
         }), 429 if is_quota else 500
 
 
+@app.route('/api/clipper/debug_logs', methods=['GET'])
+def api_clipper_debug_logs():
+    return jsonify({
+        'success': True,
+        'logs': getattr(clipper_engine, '_RECENT_LOGS', [])[-100:]
+    })
+
+
+@app.route('/api/clipper/diagnostics', methods=['GET'])
+def api_clipper_diagnostics():
+    import shutil, time, subprocess
+    url = request.args.get('url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    diag = {
+        'ffmpeg_bin': clipper_engine.get_ffmpeg_bin(),
+        'ffprobe_bin': shutil.which('ffprobe'),
+        'python_version': sys.version,
+    }
+    
+    # Test direct stream URL resolution
+    t0 = time.time()
+    try:
+        stream_url = clipper_engine.get_direct_stream_url(url)
+        diag['stream_url_retrieval_sec'] = round(time.time() - t0, 2)
+        diag['has_stream_url'] = bool(stream_url)
+        diag['stream_url_preview'] = (stream_url[:80] + '...') if stream_url else None
+    except Exception as e:
+        diag['stream_url_error'] = str(e)
+
+    # Test direct FFmpeg slice
+    if stream_url:
+        t1 = time.time()
+        test_out = os.path.join(clipper_engine.TEMP_DIR, f"diag_test_{uuid.uuid4().hex[:6]}.mp4")
+        try:
+            cmd = [
+                diag['ffmpeg_bin'], '-y',
+                '-ss', '00:00:10',
+                '-to', '00:00:14',
+                '-i', stream_url,
+                '-c', 'copy',
+                '-avoid_negative_ts', 'make_zero',
+                test_out
+            ]
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+            diag['slice_sec'] = round(time.time() - t1, 2)
+            diag['slice_code'] = proc.returncode
+            diag['slice_size'] = os.path.getsize(test_out) if os.path.exists(test_out) else 0
+            if os.path.exists(test_out):
+                os.remove(test_out)
+        except Exception as e:
+            diag['slice_error'] = str(e)
+
+    return jsonify(diag)
+
+
 @app.route('/api/clipper/start_batch_job', methods=['POST'])
 def clipper_start_batch_job():
     data = request.get_json(force=True, silent=True) or {}
