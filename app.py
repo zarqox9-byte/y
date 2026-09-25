@@ -7,6 +7,11 @@ import shutil
 import threading
 import tempfile
 from datetime import datetime
+import socket
+import ssl
+import http.client
+import httplib2
+from googleapiclient.errors import HttpError
 from flask import Flask, request, redirect, session, url_for, jsonify, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
 from google_auth_oauthlib.flow import Flow
@@ -2170,11 +2175,39 @@ HTML_MAIN = """
                         </div>
                     </div>
 
-                    <!-- Action Button -->
-                    <button type="button" class="btn-upload" id="btnAnalyzeClipper" style="margin-top: 20px; background: linear-gradient(135deg, #ff0055, #9333ea);">
-                        <span id="clipperBtnIcon">🚀</span>
-                        <span id="clipperBtnText">Analyze Narrative &amp; Plan Chronological Shorts</span>
-                    </button>
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                        <button type="button" class="btn-upload" id="btnAnalyzeClipper" style="flex: 1; background: linear-gradient(135deg, #ff0055, #9333ea);">
+                            <span id="clipperBtnIcon">🚀</span>
+                            <span id="clipperBtnText">Analyze Narrative &amp; Plan Chronological Shorts</span>
+                        </button>
+                        <button type="button" class="btn-populate" id="btnViewSavedJobs" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); padding: 0 18px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>📂 Checkpoints / Saved Jobs</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gemini Quota / Pause Alert Banner -->
+                <div id="clipperQuotaBanner" style="display: none; background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: flex-start; gap: 12px; max-width: 720px;">
+                            <span style="font-size: 24px;">⚠️</span>
+                            <div>
+                                <div style="font-weight: 700; font-size: 14px; color: #fbbf24;" id="clipperQuotaBannerTitle">Gemini API Quota Limit Reached (429)</div>
+                                <div style="font-size: 12px; color: #fde68a; margin-top: 4px; line-height: 1.4;" id="clipperQuotaBannerDesc">
+                                    Your progress has been safely saved to a local disk checkpoint. You can update your Gemini API key in API Settings or wait for quota reset, then click <strong>Resume Job</strong> to continue from the exact scene without re-analyzing!
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button type="button" class="btn-populate" id="btnResumeClipperJob" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700; border: none; padding: 9px 18px; font-size: 13px;">
+                                ▶️ Resume Job
+                            </button>
+                            <button type="button" class="btn-populate" id="btnOpenKeyModalFromClipper" style="background: rgba(255,255,255,0.08); border: 1px solid #f59e0b; color: #fbbf24; padding: 9px 14px; font-size: 13px;">
+                                ⚙️ Update API Key
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Live Analysis Progress Indicator -->
@@ -2210,6 +2243,9 @@ HTML_MAIN = """
                         <div style="font-size: 12px; color: var(--text-muted);">Downloads exact clips (no full download), tracks faces, reframes 9:16, and records voiceover.</div>
                     </div>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button type="button" class="btn-populate" id="btnResumeBatchShorts" style="display: none; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700; border: none; padding: 10px 18px; font-size: 13px;">
+                            ▶️ Resume Job
+                        </button>
                         <button type="button" class="btn-populate" id="btnGenerateAllShorts" style="background: linear-gradient(135deg, #a855f7, #ec4899); border: none;">
                             ⚡ Generate All Parts Sequentially
                         </button>
@@ -2241,6 +2277,21 @@ HTML_MAIN = """
                     </div>
                     <div id="clipperScenesGrid" style="display: flex; flex-direction: column; gap: 16px;">
                         <!-- Populated dynamically with scene cards -->
+                    </div>
+                </div>
+
+                <!-- Saved Jobs Modal Overlay -->
+                <div id="clipperJobsModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+                    <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 680px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-elevated);">
+                            <h3 style="margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                <span>📂 Saved Clipper Checkpoints</span>
+                            </h3>
+                            <button type="button" id="btnCloseJobsModal" style="background: none; border: none; font-size: 22px; color: var(--text-muted); cursor: pointer; line-height: 1;">&times;</button>
+                        </div>
+                        <div id="clipperJobsListContainer" style="padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; max-height: 60vh;">
+                            <div style="text-align: center; color: var(--text-muted); padding: 30px;">Loading saved checkpoints...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3424,6 +3475,7 @@ HTML_MAIN = """
         // ==============================================================
         // AI MOVIE-TO-SHORTS AUTO-CLIPPER ENGINE JAVASCRIPT CONTROLLER
         // ==============================================================
+        let currentClipperJobId = null;
         let currentClipperVideoInfo = null;
         let currentClipperScenes = [];
         let completedClipperShorts = {}; // keyed by part number
@@ -3439,6 +3491,20 @@ HTML_MAIN = """
         const clipperBtnIcon = document.getElementById('clipperBtnIcon');
         const clipperAnalysisProgress = document.getElementById('clipperAnalysisProgress');
         const clipperProgressStep = document.getElementById('clipperProgressStep');
+
+        // Checkpoint & Quota banner elements
+        const clipperQuotaBanner = document.getElementById('clipperQuotaBanner');
+        const clipperQuotaBannerTitle = document.getElementById('clipperQuotaBannerTitle');
+        const clipperQuotaBannerDesc = document.getElementById('clipperQuotaBannerDesc');
+        const btnResumeClipperJob = document.getElementById('btnResumeClipperJob');
+        const btnOpenKeyModalFromClipper = document.getElementById('btnOpenKeyModalFromClipper');
+        const btnViewSavedJobs = document.getElementById('btnViewSavedJobs');
+        const btnResumeBatchShorts = document.getElementById('btnResumeBatchShorts');
+
+        // Saved jobs modal elements
+        const clipperJobsModalOverlay = document.getElementById('clipperJobsModalOverlay');
+        const btnCloseJobsModal = document.getElementById('btnCloseJobsModal');
+        const clipperJobsListContainer = document.getElementById('clipperJobsListContainer');
 
         const clipperMovieMetaCard = document.getElementById('clipperMovieMetaCard');
         const clipperMovieThumb = document.getElementById('clipperMovieThumb');
@@ -3483,6 +3549,211 @@ HTML_MAIN = """
             });
         }
 
+        // Gemini key button from clipper banner
+        if (btnOpenKeyModalFromClipper) {
+            btnOpenKeyModalFromClipper.addEventListener('click', openKeyModal);
+        }
+
+        // Saved Jobs Modal Open / Close
+        if (btnViewSavedJobs && clipperJobsModalOverlay) {
+            btnViewSavedJobs.addEventListener('click', async () => {
+                clipperJobsModalOverlay.style.display = 'flex';
+                await loadSavedJobsList();
+            });
+        }
+
+        if (btnCloseJobsModal && clipperJobsModalOverlay) {
+            btnCloseJobsModal.addEventListener('click', () => {
+                clipperJobsModalOverlay.style.display = 'none';
+            });
+            clipperJobsModalOverlay.addEventListener('click', (e) => {
+                if (e.target === clipperJobsModalOverlay) {
+                    clipperJobsModalOverlay.style.display = 'none';
+                }
+            });
+        }
+
+        async function loadSavedJobsList() {
+            if (!clipperJobsListContainer) return;
+            clipperJobsListContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;"><div class="spinner" style="margin: 0 auto 10px auto;"></div>Loading saved checkpoints...</div>';
+            try {
+                const res = await fetch('/api/clipper/jobs');
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to fetch saved jobs');
+                }
+                const jobs = data.jobs || [];
+                if (jobs.length === 0) {
+                    clipperJobsListContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px;">No saved checkpoints found in uploads/clipper_jobs/ yet. Analyze a video to create one.</div>';
+                    return;
+                }
+
+                clipperJobsListContainer.innerHTML = jobs.map(job => {
+                    const dateStr = job.updated_at ? new Date(job.updated_at * 1000).toLocaleString() : 'Recently';
+                    let statusBadge = '<span class="status-badge status-planned">⏳ Planned</span>';
+                    if (job.status === 'PAUSED_QUOTA_LIMIT') {
+                        statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b;">⚠️ Paused (Quota)</span>';
+                    } else if (job.status === 'COMPLETED') {
+                        statusBadge = '<span class="status-badge status-ready">✅ Completed</span>';
+                    } else if (job.status === 'PROCESSING') {
+                        statusBadge = '<span class="status-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">⚙️ Processing</span>';
+                    }
+
+                    return `
+                        <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 12px; min-width: 240px; flex: 1;">
+                                <img src="${escapeHtml(job.thumbnail || '')}" alt="" style="width: 70px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; background: #222;" onerror="this.style.display='none'">
+                                <div>
+                                    <div style="font-weight: 600; font-size: 13px; color: #f3f4f6; margin-bottom: 2px;">${escapeHtml(job.title)}</div>
+                                    <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 8px; align-items: center;">
+                                        <span>📅 ${escapeHtml(dateStr)}</span>
+                                        <span>🎬 ${job.completed_count} / ${job.total_scenes} Parts Done</span>
+                                        <span>🌐 ${escapeHtml(job.language || 'Hindi')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${statusBadge}
+                                <button type="button" class="btn-populate" onclick="openAndResumeSavedJob('${job.job_id}')" style="padding: 6px 14px; font-size: 12px;">
+                                    Load &amp; Resume &#8594;
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                clipperJobsListContainer.innerHTML = `<div style="text-align: center; color: #f87171; padding: 20px;">Error loading jobs: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        window.openAndResumeSavedJob = async function(jobId) {
+            clipperJobsModalOverlay.style.display = 'none';
+            try {
+                const res = await fetch(`/api/clipper/job/${jobId}`);
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to load checkpoint');
+                }
+
+                const job = data.job;
+                currentClipperJobId = job.job_id;
+                currentClipperVideoInfo = job.video_info || { title: job.title, url: job.url, thumbnail: job.thumbnail, duration_str: '' };
+                currentClipperScenes = job.scenes || [];
+                completedClipperShorts = {};
+
+                // Process completed shorts
+                const rawCompleted = job.completed_shorts || {};
+                if (Array.isArray(rawCompleted)) {
+                    rawCompleted.forEach(s => { completedClipperShorts[s.part] = s; });
+                } else if (typeof rawCompleted === 'object') {
+                    Object.keys(rawCompleted).forEach(k => {
+                        const s = rawCompleted[k];
+                        completedClipperShorts[s.part || parseInt(k)] = s;
+                    });
+                }
+
+                if (job.url) clipperUrlInput.value = job.url;
+
+                // Render Metadata Card
+                clipperMovieThumb.src = currentClipperVideoInfo.thumbnail || '';
+                clipperMovieTitle.textContent = currentClipperVideoInfo.title || 'Movie';
+                clipperMovieDuration.textContent = `⏱️ Duration: ${currentClipperVideoInfo.duration_str || 'Full Movie'}`;
+                clipperMovieChannel.textContent = `👤 Channel: ${currentClipperVideoInfo.channel || 'YouTube'}`;
+                clipperMoviePartsCount.textContent = `🎬 ${currentClipperScenes.length} Chronological Shorts Planned`;
+                clipperMovieMetaCard.style.display = 'block';
+
+                // Render Scenes Queue
+                renderClipperScenesQueue(currentClipperScenes);
+                clipperBatchBar.style.display = 'flex';
+                clipperQueueContainer.style.display = 'block';
+                clipperQueueBadge.textContent = `${currentClipperScenes.length} Parts (${Object.keys(completedClipperShorts).length} Done)`;
+
+                // Mark already completed shorts
+                Object.keys(completedClipperShorts).forEach(p => {
+                    markPartAsCompleted(parseInt(p), completedClipperShorts[p]);
+                });
+
+                // Check quota paused state
+                if (job.status === 'PAUSED_QUOTA_LIMIT' || (job.error && job.error.includes('429'))) {
+                    clipperQuotaBanner.style.display = 'block';
+                    clipperQuotaBannerTitle.textContent = 'Gemini API Quota Limit (429) — Job Safely Paused';
+                    clipperQuotaBannerDesc.innerHTML = `Loaded saved job <code>${escapeHtml(currentClipperJobId)}</code>. Progress is preserved. Update your API key in Settings or wait for quota reset, then click <strong>Resume Job</strong>.`;
+                    if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
+                } else {
+                    clipperQuotaBanner.style.display = 'none';
+                    if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'none';
+                }
+
+            } catch (err) {
+                alert('Failed to load checkpoint: ' + err.message);
+            }
+        };
+
+        // Resume Job Handlers
+        if (btnResumeClipperJob) {
+            btnResumeClipperJob.addEventListener('click', resumeCurrentClipperJob);
+        }
+        if (btnResumeBatchShorts) {
+            btnResumeBatchShorts.addEventListener('click', resumeCurrentClipperJob);
+        }
+
+        async function resumeCurrentClipperJob() {
+            if (!currentClipperJobId) {
+                alert('No active job ID found. Please select or analyze a video first.');
+                return;
+            }
+
+            if (btnResumeClipperJob) {
+                btnResumeClipperJob.disabled = true;
+                btnResumeClipperJob.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Resuming...';
+            }
+            if (btnResumeBatchShorts) {
+                btnResumeBatchShorts.disabled = true;
+                btnResumeBatchShorts.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Resuming...';
+            }
+
+            try {
+                const res = await fetch('/api/clipper/resume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_id: currentClipperJobId })
+                });
+                const data = await res.json();
+                if (res.status === 429 || data.status === 'PAUSED_QUOTA_LIMIT') {
+                    alert('⚠️ Gemini API Quota is still active (429). Please update your API key in Settings or wait a moment before resuming.');
+                    clipperQuotaBanner.style.display = 'block';
+                    return;
+                }
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to resume job');
+                }
+
+                clipperQuotaBanner.style.display = 'none';
+                if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'none';
+
+                if (data.scenes && data.scenes.length) {
+                    currentClipperScenes = data.scenes;
+                    renderClipperScenesQueue(currentClipperScenes);
+                }
+
+                // Poll batch status until completed or paused
+                pollClipperBatchStatus(currentClipperJobId);
+
+            } catch (err) {
+                console.error('Resume error:', err);
+                alert('Resume error: ' + err.message);
+            } finally {
+                if (btnResumeClipperJob) {
+                    btnResumeClipperJob.disabled = false;
+                    btnResumeClipperJob.innerHTML = '▶️ Resume Job';
+                }
+                if (btnResumeBatchShorts) {
+                    btnResumeBatchShorts.disabled = false;
+                    btnResumeBatchShorts.innerHTML = '▶️ Resume Job';
+                }
+            }
+        }
+
         // Analyze & Plan Chronological Shorts
         if (btnAnalyzeClipper) {
             btnAnalyzeClipper.addEventListener('click', async () => {
@@ -3503,6 +3774,7 @@ HTML_MAIN = """
                 clipperMovieMetaCard.style.display = 'none';
                 clipperBatchBar.style.display = 'none';
                 clipperQueueContainer.style.display = 'none';
+                clipperQuotaBanner.style.display = 'none';
                 currentClipperScenes = [];
                 completedClipperShorts = {};
 
@@ -3533,6 +3805,7 @@ HTML_MAIN = """
                         throw new Error(data.error || 'Failed to analyze video');
                     }
 
+                    currentClipperJobId = data.job_id;
                     currentClipperVideoInfo = data.video_info;
                     currentClipperScenes = data.scenes || [];
 
@@ -3549,6 +3822,17 @@ HTML_MAIN = """
                     clipperBatchBar.style.display = 'flex';
                     clipperQueueContainer.style.display = 'block';
                     clipperQueueBadge.textContent = `${currentClipperScenes.length} Parts`;
+
+                    // If quota limit occurred during analysis
+                    if (data.status === 'PAUSED_QUOTA_LIMIT' || (data.error && data.error.includes('429'))) {
+                        clipperQuotaBanner.style.display = 'block';
+                        clipperQuotaBannerTitle.textContent = 'Gemini API Quota Limit Reached (429) — Job Safely Saved';
+                        clipperQuotaBannerDesc.innerHTML = `Narrative analysis checkpoint saved (<code>${escapeHtml(currentClipperJobId)}</code>). Fallback storyline segments are loaded below. Update your Gemini key in Settings or wait for quota reset, then click <strong>Resume Job</strong> to generate with full AI scripts.`;
+                        if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
+                    } else {
+                        clipperQuotaBanner.style.display = 'none';
+                        if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'none';
+                    }
 
                 } catch (err) {
                     console.error('Clipper analysis error:', err);
@@ -3622,12 +3906,33 @@ HTML_MAIN = """
             `).join('');
         }
 
+        function markPartAsCompleted(partNum, shortObj) {
+            const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
+            const mediaBox = document.getElementById(`sceneMediaBox_${partNum}`);
+            const btn = document.getElementById(`btnGenPart_${partNum}`);
+            const uploadBtn = document.getElementById(`btnUploadPart_${partNum}`);
+
+            if (badge) {
+                badge.className = 'status-badge status-ready';
+                badge.textContent = '✅ Ready to Upload';
+                badge.style.background = '';
+                badge.style.color = '';
+            }
+            if (mediaBox && shortObj && shortObj.video_url) {
+                mediaBox.innerHTML = `
+                    <video src="${shortObj.video_url}" controls playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>
+                `;
+            }
+            if (btn) btn.style.display = 'none';
+            if (uploadBtn) uploadBtn.style.display = 'inline-flex';
+            updateBatchUploadVisibility();
+        }
+
         // Generate Single Part
         window.generateSinglePart = async function(partNum) {
             const btn = document.getElementById(`btnGenPart_${partNum}`);
             const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
             const mediaBox = document.getElementById(`sceneMediaBox_${partNum}`);
-            const uploadBtn = document.getElementById(`btnUploadPart_${partNum}`);
 
             const scene = currentClipperScenes.find(s => s.part === partNum);
             if (!scene) return;
@@ -3661,31 +3966,33 @@ HTML_MAIN = """
                     body: JSON.stringify({
                         url: currentClipperVideoInfo.url,
                         scene: scene,
-                        language: clipperLanguageSelect.value || 'Hindi'
+                        language: clipperLanguageSelect.value || 'Hindi',
+                        video_title: currentClipperVideoInfo.title || '',
+                        job_id: currentClipperJobId
                     })
                 });
 
                 const data = await res.json();
                 if (!res.ok || !data.success) {
+                    if (res.status === 429 || data.is_quota_error) {
+                        clipperQuotaBanner.style.display = 'block';
+                        clipperQuotaBannerTitle.textContent = `Gemini Quota Exceeded at Part ${partNum} — Safely Paused`;
+                        clipperQuotaBannerDesc.innerHTML = `Progress saved. Update your Gemini API key in Settings or wait for quota reset, then click <strong>Resume Job</strong>.`;
+                        badge.className = 'status-badge';
+                        badge.style.background = 'rgba(245, 158, 11, 0.2)';
+                        badge.style.color = '#fbbf24';
+                        badge.textContent = '⚠️ Paused (Quota)';
+                        btn.disabled = false;
+                        btn.textContent = `▶️ Retry Part ${partNum}`;
+                        if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
+                        return;
+                    }
                     throw new Error(data.error || 'Failed to render short');
                 }
 
                 const shortObj = data.short;
                 completedClipperShorts[partNum] = shortObj;
-
-                // Render video player into media box
-                mediaBox.innerHTML = `
-                    <video src="${shortObj.video_url}" controls playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>
-                `;
-
-                badge.className = 'status-badge status-ready';
-                badge.textContent = '✅ Ready to Upload';
-
-                btn.style.display = 'none';
-                uploadBtn.style.display = 'inline-flex';
-
-                // Check if all parts completed to show batch upload button
-                updateBatchUploadVisibility();
+                markPartAsCompleted(partNum, shortObj);
 
             } catch (err) {
                 console.error(`Part ${partNum} generation error:`, err);
@@ -3746,7 +4053,8 @@ HTML_MAIN = """
                         const statusRes = await fetch(`/api/upload_status/${taskId}`);
                         const statusData = await statusRes.json();
                         if (statusData.status === 'uploading') {
-                            badge.textContent = `🚀 Uploading ${Math.round((statusData.progress || 0) * 100)}%`;
+                            const pctText = statusData.status_text || `Uploading ${Math.round((statusData.progress || 0) * 100)}%`;
+                            badge.textContent = `🚀 ${pctText}`;
                         } else if (statusData.status === 'completed') {
                             clearInterval(pollInterval);
                             badge.className = 'status-badge status-uploaded';
@@ -3784,7 +4092,65 @@ HTML_MAIN = """
             }
         }
 
-        // Batch Generate All Parts Sequentially
+        function pollClipperBatchStatus(jobId) {
+            clipperBatchProgressCard.style.display = 'block';
+            const pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/clipper/job_status/${jobId}`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+
+                    clipperBatchStepText.textContent = data.current_step || 'Processing...';
+                    const pct = data.progress || 0;
+                    clipperBatchPercentText.textContent = `${pct}%`;
+                    clipperBatchProgressBar.style.width = `${pct}%`;
+
+                    // Update completed parts
+                    if (data.completed_shorts && Array.isArray(data.completed_shorts)) {
+                        data.completed_shorts.forEach(shortObj => {
+                            const p = shortObj.part;
+                            if (!completedClipperShorts[p]) {
+                                completedClipperShorts[p] = shortObj;
+                                markPartAsCompleted(p, shortObj);
+                            }
+                        });
+                    }
+
+                    if (data.status === 'completed' || data.status === 'COMPLETED') {
+                        clearInterval(pollInterval);
+                        clipperBatchStepText.textContent = '🎉 All chronological Shorts successfully generated!';
+                        clipperBatchProgressBar.style.width = '100%';
+                        clipperBatchPercentText.textContent = '100%';
+                        if (btnGenerateAllShorts) {
+                            btnGenerateAllShorts.disabled = false;
+                            btnGenerateAllShorts.textContent = '⚡ Re-Generate All Parts';
+                        }
+                        updateBatchUploadVisibility();
+                    } else if (data.status === 'PAUSED_QUOTA_LIMIT') {
+                        clearInterval(pollInterval);
+                        clipperQuotaBanner.style.display = 'block';
+                        clipperQuotaBannerTitle.textContent = '⚠️ Gemini Quota Reached: Job Safely Paused';
+                        clipperQuotaBannerDesc.innerHTML = `${escapeHtml(data.error || 'Gemini API 429 quota reached')}. Progress saved in checkpoint. Update your API key and click <strong>Resume Job</strong>.`;
+                        if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
+                        if (btnGenerateAllShorts) {
+                            btnGenerateAllShorts.disabled = false;
+                            btnGenerateAllShorts.textContent = '▶️ Resume Job';
+                        }
+                    } else if (data.status === 'error') {
+                        clearInterval(pollInterval);
+                        if (btnGenerateAllShorts) {
+                            btnGenerateAllShorts.disabled = false;
+                            btnGenerateAllShorts.textContent = '⚡ Generate All Parts Sequentially';
+                        }
+                        alert('Batch processing notice: ' + (data.error || 'Unknown issue'));
+                    }
+                } catch (e) {
+                    console.error('Job status poll error:', e);
+                }
+            }, 1800);
+        }
+
+        // Batch Generate All Parts Sequentially via Background Engine
         if (btnGenerateAllShorts) {
             btnGenerateAllShorts.addEventListener('click', async () => {
                 if (!currentClipperScenes || currentClipperScenes.length === 0) return;
@@ -3793,24 +4159,33 @@ HTML_MAIN = """
                 btnGenerateAllShorts.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Generating All Parts...';
                 clipperBatchProgressCard.style.display = 'block';
 
-                const total = currentClipperScenes.length;
-                for (let i = 0; i < total; i++) {
-                    const scene = currentClipperScenes[i];
-                    clipperBatchStepText.textContent = `Rendering Part ${scene.part} of ${total}: downloading section, tracking faces, mixing voiceover...`;
-                    clipperBatchPercentText.textContent = `${Math.round((i / total) * 100)}%`;
-                    clipperBatchProgressBar.style.width = `${Math.round((i / total) * 100)}%`;
+                try {
+                    const res = await fetch('/api/clipper/start_batch_job', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            url: currentClipperVideoInfo.url,
+                            scenes: currentClipperScenes,
+                            language: clipperLanguageSelect.value || 'Hindi',
+                            video_title: currentClipperVideoInfo.title || '',
+                            job_id: currentClipperJobId
+                        })
+                    });
 
-                    if (!completedClipperShorts[scene.part]) {
-                        await generateSinglePart(scene.part);
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                        throw new Error(data.error || 'Failed to start batch job');
                     }
-                }
 
-                clipperBatchStepText.textContent = `All ${total} Chronological Shorts successfully generated & reframed!`;
-                clipperBatchPercentText.textContent = '100%';
-                clipperBatchProgressBar.style.width = '100%';
-                btnGenerateAllShorts.disabled = false;
-                btnGenerateAllShorts.textContent = '⚡ Re-Generate All Parts';
-                updateBatchUploadVisibility();
+                    currentClipperJobId = data.job_id;
+                    pollClipperBatchStatus(currentClipperJobId);
+
+                } catch (err) {
+                    console.error('Batch start error:', err);
+                    alert('Failed to start batch clipping: ' + err.message);
+                    btnGenerateAllShorts.disabled = false;
+                    btnGenerateAllShorts.textContent = '⚡ Generate All Parts Sequentially';
+                }
             });
         }
 
@@ -4420,10 +4795,39 @@ def execute_youtube_upload(task_id, creds_dict, video_path, thumb_path, title, d
         )
 
         response = None
+        max_retries = 10
+        retry_count = 0
+
         while response is None:
-            status, response = insert_request.next_chunk()
-            if status:
-                upload_tasks[task_id]['progress'] = status.progress()
+            try:
+                status, response = insert_request.next_chunk()
+                if status:
+                    progress_val = float(status.progress())
+                    upload_tasks[task_id]['progress'] = progress_val
+                    upload_tasks[task_id]['status'] = 'uploading'
+                    upload_tasks[task_id]['status_text'] = f"Streaming to YouTube: {int(progress_val * 100)}% complete"
+                retry_count = 0  # Reset retry count on successful chunk transmission
+            except HttpError as err:
+                if err.resp.status in [500, 502, 503, 504]:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        raise err
+                    sleep_time = min(2 ** retry_count, 60)
+                    msg = f"Transient YouTube server error ({err.resp.status}). Auto-resuming in {sleep_time}s (attempt {retry_count}/{max_retries})..."
+                    print(msg)
+                    upload_tasks[task_id]['status_text'] = msg
+                    time.sleep(sleep_time)
+                else:
+                    raise err
+            except (socket.error, socket.timeout, ConnectionResetError, http.client.RemoteDisconnected, httplib2.ServerNotFoundError, ssl.SSLError, Exception) as net_err:
+                retry_count += 1
+                if retry_count > max_retries:
+                    raise net_err
+                sleep_time = min(2 ** retry_count, 60)
+                msg = f"Network interruption detected. Resuming upload in {sleep_time}s (attempt {retry_count}/{max_retries})..."
+                print(msg)
+                upload_tasks[task_id]['status_text'] = msg
+                time.sleep(sleep_time)
 
         video_id = response['id']
         upload_tasks[task_id]['video_id'] = video_id
@@ -4550,21 +4954,40 @@ def clipper_analyze():
     max_shorts = int(data.get('max_shorts') or 5)
     target_duration = int(data.get('target_duration') or 50)
     language = (data.get('language') or 'Hindi').strip()
+    job_id = (data.get('job_id') or '').strip() or str(uuid.uuid4())
 
     if not url:
         return jsonify({'success': False, 'error': 'YouTube URL is required'}), 400
 
     try:
         video_info = clipper_engine.extract_youtube_info(url)
-        scenes = clipper_engine.analyze_movie_narrative_for_shorts(
+        scenes, status, quota_error = clipper_engine.analyze_movie_narrative_for_shorts(
             youtube_url=url,
             video_info=video_info,
             max_shorts=max_shorts,
             target_duration=target_duration,
-            language=language
+            language=language,
+            job_id=job_id
         )
+
+        clipper_jobs[job_id] = {
+            'job_id': job_id,
+            'status': status,
+            'progress': 0,
+            'current_step': 'Analysis complete' if status != 'PAUSED_QUOTA_LIMIT' else 'Paused: Gemini API quota limit reached',
+            'completed_shorts': [],
+            'total_parts': len(scenes),
+            'error': quota_error,
+            'url': url,
+            'scenes': scenes,
+            'video_info': video_info
+        }
+
         return jsonify({
             'success': True,
+            'job_id': job_id,
+            'status': status,
+            'error': quota_error,
             'video_info': video_info,
             'scenes': scenes
         })
@@ -4579,6 +5002,8 @@ def clipper_generate_short():
     url = (data.get('url') or '').strip()
     scene = data.get('scene') or {}
     language = (data.get('language') or 'Hindi').strip()
+    video_title = (data.get('video_title') or '').strip()
+    job_id = (data.get('job_id') or '').strip()
 
     if not url or not scene:
         return jsonify({'success': False, 'error': 'URL and scene data are required'}), 400
@@ -4587,12 +5012,30 @@ def clipper_generate_short():
         short_obj = clipper_engine.process_single_short_pipeline(
             youtube_url=url,
             scene=scene,
-            language=language
+            language=language,
+            video_title=video_title,
+            job_id=job_id if job_id else None
         )
-        return jsonify({'success': True, 'short': short_obj})
+        return jsonify({'success': True, 'short': short_obj, 'job_id': job_id})
     except Exception as e:
-        print(f"Clipper generate short error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        err_msg = str(e)
+        print(f"Clipper generate short error: {err_msg}")
+        is_quota = any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit'])
+        if job_id and is_quota:
+            ckpt = clipper_engine.load_job_checkpoint(job_id)
+            if ckpt:
+                ckpt['status'] = 'PAUSED_QUOTA_LIMIT'
+                ckpt['error'] = f"Gemini Quota Exceeded (429): {err_msg}"
+                clipper_engine.save_job_checkpoint(job_id, ckpt)
+            if job_id in clipper_jobs:
+                clipper_jobs[job_id]['status'] = 'PAUSED_QUOTA_LIMIT'
+                clipper_jobs[job_id]['error'] = err_msg
+        return jsonify({
+            'success': False,
+            'error': err_msg,
+            'is_quota_error': is_quota,
+            'status': 'PAUSED_QUOTA_LIMIT' if is_quota else 'error'
+        }), 429 if is_quota else 500
 
 
 @app.route('/api/clipper/start_batch_job', methods=['POST'])
@@ -4601,16 +5044,35 @@ def clipper_start_batch_job():
     url = (data.get('url') or '').strip()
     scenes = data.get('scenes') or []
     language = (data.get('language') or 'Hindi').strip()
+    video_title = (data.get('video_title') or '').strip()
+    job_id = (data.get('job_id') or '').strip() or str(uuid.uuid4())
 
     if not url or not scenes:
         return jsonify({'success': False, 'error': 'URL and scenes are required'}), 400
 
-    job_id = str(uuid.uuid4())
+    checkpoint = clipper_engine.load_job_checkpoint(job_id) or {
+        'job_id': job_id,
+        'url': url,
+        'scenes': scenes,
+        'options': {'language': language},
+        'completed_shorts': {},
+        'status': 'PROCESSING'
+    }
+
+    raw_completed = checkpoint.get('completed_shorts') or {}
+    if isinstance(raw_completed, list):
+        completed_dict = {str(s.get('part', i+1)): s for i, s in enumerate(raw_completed)}
+    elif isinstance(raw_completed, dict):
+        completed_dict = raw_completed
+    else:
+        completed_dict = {}
+
     clipper_jobs[job_id] = {
+        'job_id': job_id,
         'status': 'processing',
-        'progress': 0,
+        'progress': int((len(completed_dict) / max(len(scenes), 1)) * 100),
         'current_step': f'Queued {len(scenes)} chronological shorts...',
-        'completed_shorts': [],
+        'completed_shorts': list(completed_dict.values()),
         'total_parts': len(scenes),
         'error': None
     }
@@ -4619,20 +5081,48 @@ def clipper_start_batch_job():
         total = len(scenes)
         for idx, scene in enumerate(scenes):
             part = scene.get('part', idx + 1)
+            if str(part) in completed_dict:
+                continue
+
             clipper_jobs[job_id]['current_step'] = f"Processing Part {part} of {total}: downloading clip section, reframing 9:16 with face centering, and generating voiceover..."
-            clipper_jobs[job_id]['progress'] = int((idx / total) * 100)
+            clipper_jobs[job_id]['progress'] = int((len(completed_dict) / total) * 100)
             try:
                 short_obj = clipper_engine.process_single_short_pipeline(
                     youtube_url=url,
                     scene=scene,
-                    language=language
+                    language=language,
+                    video_title=video_title,
+                    job_id=job_id
                 )
-                clipper_jobs[job_id]['completed_shorts'].append(short_obj)
+                completed_dict[str(part)] = short_obj
+                clipper_jobs[job_id]['completed_shorts'] = list(completed_dict.values())
+                clipper_jobs[job_id]['progress'] = int((len(completed_dict) / total) * 100)
+
+                # Persist checkpoint immediately
+                checkpoint['completed_shorts'] = completed_dict
+                checkpoint['status'] = 'PROCESSING'
+                clipper_engine.save_job_checkpoint(job_id, checkpoint)
             except Exception as e:
-                print(f"Error processing Part {part} in batch: {e}")
+                err_msg = str(e)
+                print(f"Error processing Part {part} in batch: {err_msg}")
+                if any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit']):
+                    clipper_jobs[job_id]['status'] = 'PAUSED_QUOTA_LIMIT'
+                    clipper_jobs[job_id]['error'] = f"Paused at Part {part}: Gemini API Quota limit reached (429)."
+                    checkpoint['status'] = 'PAUSED_QUOTA_LIMIT'
+                    checkpoint['error'] = clipper_jobs[job_id]['error']
+                    clipper_engine.save_job_checkpoint(job_id, checkpoint)
+                    return
+                else:
+                    clipper_jobs[job_id]['error'] = f"Notice on Part {part}: {err_msg}"
+                    checkpoint['error'] = err_msg
+                    clipper_engine.save_job_checkpoint(job_id, checkpoint)
+
         clipper_jobs[job_id]['status'] = 'completed'
         clipper_jobs[job_id]['progress'] = 100
         clipper_jobs[job_id]['current_step'] = f'Successfully generated all {total} chronological Shorts!'
+        checkpoint['status'] = 'COMPLETED'
+        checkpoint['error'] = None
+        clipper_engine.save_job_checkpoint(job_id, checkpoint)
 
     th = threading.Thread(target=run_batch_clipping)
     th.daemon = True
@@ -4641,12 +5131,196 @@ def clipper_start_batch_job():
     return jsonify({'success': True, 'job_id': job_id})
 
 
+@app.route('/api/clipper/resume', methods=['POST'])
+def clipper_resume():
+    data = request.get_json(force=True, silent=True) or {}
+    job_id = (data.get('job_id') or '').strip()
+    new_api_key = (data.get('gemini_api_key') or '').strip()
+
+    if not job_id:
+        return jsonify({'success': False, 'error': 'job_id is required to resume a job'}), 400
+
+    # If new API key is provided, persist it immediately
+    if new_api_key:
+        try:
+            cfg = gemini_engine.get_gemini_config()
+            cfg['api_key'] = new_api_key
+            gemini_engine.save_gemini_config(cfg)
+            os.environ['GEMINI_API_KEY'] = new_api_key
+        except Exception as ke:
+            print(f"Warning: Failed to update gemini config in resume: {ke}")
+
+    checkpoint = clipper_engine.load_job_checkpoint(job_id)
+    if not checkpoint:
+        return jsonify({'success': False, 'error': f'Job checkpoint {job_id} not found on disk'}), 404
+
+    url = checkpoint.get('url') or ''
+    scenes = checkpoint.get('scenes') or []
+    options = checkpoint.get('options') or {}
+    language = options.get('language') or 'Hindi'
+    video_info = checkpoint.get('video_info') or {}
+    video_title = video_info.get('title') or ''
+
+    raw_completed = checkpoint.get('completed_shorts') or {}
+    if isinstance(raw_completed, list):
+        completed_dict = {str(s.get('part', i+1)): s for i, s in enumerate(raw_completed)}
+    elif isinstance(raw_completed, dict):
+        completed_dict = raw_completed
+    else:
+        completed_dict = {}
+
+    # If narrative analysis was paused and scripts were algorithmic or missing, attempt Gemini re-analysis
+    needs_script_analysis = checkpoint.get('status') == 'PAUSED_QUOTA_LIMIT' and (not scenes or all(not s.get('script') for s in scenes))
+    if needs_script_analysis:
+        try:
+            scenes, status, quota_error = clipper_engine.analyze_movie_narrative_for_shorts(
+                youtube_url=url,
+                video_info=video_info,
+                max_shorts=options.get('max_shorts', 5),
+                target_duration=options.get('target_duration', 50),
+                language=language,
+                job_id=job_id
+            )
+            checkpoint['scenes'] = scenes
+            checkpoint['status'] = status
+            checkpoint['error'] = quota_error
+            clipper_engine.save_job_checkpoint(job_id, checkpoint)
+            if status == 'PAUSED_QUOTA_LIMIT':
+                return jsonify({
+                    'success': False,
+                    'status': 'PAUSED_QUOTA_LIMIT',
+                    'error': quota_error or 'Gemini API quota still exceeded. Please update API key in Settings.',
+                    'job_id': job_id,
+                    'scenes': scenes
+                }), 429
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Resume analysis failed: {e}'}), 500
+
+    # Start or resume background batch generation
+    clipper_jobs[job_id] = {
+        'job_id': job_id,
+        'status': 'processing',
+        'progress': int((len(completed_dict) / max(len(scenes), 1)) * 100),
+        'current_step': f"Resuming job: {len(completed_dict)}/{len(scenes)} parts already done. Resuming...",
+        'completed_shorts': list(completed_dict.values()),
+        'total_parts': len(scenes),
+        'error': None
+    }
+    checkpoint['status'] = 'PROCESSING'
+    checkpoint['error'] = None
+    clipper_engine.save_job_checkpoint(job_id, checkpoint)
+
+    def run_resumed_clipping():
+        total = len(scenes)
+        for idx, scene in enumerate(scenes):
+            part = scene.get('part', idx + 1)
+            if str(part) in completed_dict:
+                continue
+
+            clipper_jobs[job_id]['current_step'] = f"Processing Part {part} of {total}: downloading clip section, reframing 9:16 with face centering, and generating voiceover..."
+            clipper_jobs[job_id]['progress'] = int((len(completed_dict) / total) * 100)
+
+            try:
+                short_obj = clipper_engine.process_single_short_pipeline(
+                    youtube_url=url,
+                    scene=scene,
+                    language=language,
+                    video_title=video_title,
+                    job_id=job_id
+                )
+                completed_dict[str(part)] = short_obj
+                clipper_jobs[job_id]['completed_shorts'] = list(completed_dict.values())
+                clipper_jobs[job_id]['progress'] = int((len(completed_dict) / total) * 100)
+
+                # Persist checkpoint immediately
+                checkpoint['completed_shorts'] = completed_dict
+                checkpoint['status'] = 'PROCESSING'
+                clipper_engine.save_job_checkpoint(job_id, checkpoint)
+            except Exception as e:
+                err_msg = str(e)
+                print(f"Error processing Part {part} in resumed batch: {err_msg}")
+                if any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit']):
+                    clipper_jobs[job_id]['status'] = 'PAUSED_QUOTA_LIMIT'
+                    clipper_jobs[job_id]['error'] = f"Paused at Part {part}: Gemini API Quota limit reached (429)."
+                    checkpoint['status'] = 'PAUSED_QUOTA_LIMIT'
+                    checkpoint['error'] = clipper_jobs[job_id]['error']
+                    clipper_engine.save_job_checkpoint(job_id, checkpoint)
+                    return
+                else:
+                    clipper_jobs[job_id]['error'] = f"Notice on Part {part}: {err_msg}"
+                    checkpoint['error'] = err_msg
+                    clipper_engine.save_job_checkpoint(job_id, checkpoint)
+
+        clipper_jobs[job_id]['status'] = 'completed'
+        clipper_jobs[job_id]['progress'] = 100
+        clipper_jobs[job_id]['current_step'] = f'Successfully generated all {total} chronological Shorts!'
+        checkpoint['status'] = 'COMPLETED'
+        checkpoint['error'] = None
+        clipper_engine.save_job_checkpoint(job_id, checkpoint)
+
+    th = threading.Thread(target=run_resumed_clipping)
+    th.daemon = True
+    th.start()
+
+    return jsonify({
+        'success': True,
+        'job_id': job_id,
+        'scenes': scenes,
+        'video_info': video_info,
+        'completed_shorts': list(completed_dict.values())
+    })
+
+
+@app.route('/api/clipper/jobs', methods=['GET'])
+def clipper_list_saved_jobs():
+    try:
+        jobs = clipper_engine.list_saved_jobs()
+        return jsonify({'success': True, 'jobs': jobs})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/clipper/job/<job_id>', methods=['GET'])
+def clipper_get_saved_job(job_id):
+    checkpoint = clipper_engine.load_job_checkpoint(job_id)
+    if not checkpoint:
+        mem_job = clipper_jobs.get(job_id)
+        if mem_job:
+            return jsonify({'success': True, 'job': mem_job})
+        return jsonify({'success': False, 'error': f'Job {job_id} not found'}), 404
+    return jsonify({'success': True, 'job': checkpoint})
+
+
 @app.route('/api/clipper/job_status/<job_id>')
 def clipper_job_status(job_id):
     job = clipper_jobs.get(job_id)
     if not job:
+        checkpoint = clipper_engine.load_job_checkpoint(job_id)
+        if checkpoint:
+            raw_completed = checkpoint.get('completed_shorts') or {}
+            if isinstance(raw_completed, dict):
+                completed_list = list(raw_completed.values())
+            elif isinstance(raw_completed, list):
+                completed_list = raw_completed
+            else:
+                completed_list = []
+            scenes = checkpoint.get('scenes') or []
+            total_parts = len(scenes)
+            status = checkpoint.get('status', 'unknown')
+            return jsonify({
+                'job_id': job_id,
+                'status': status,
+                'progress': int((len(completed_list) / max(total_parts, 1)) * 100) if total_parts else 0,
+                'current_step': f"Job {status}: {len(completed_list)}/{total_parts} parts generated",
+                'completed_shorts': completed_list,
+                'total_parts': total_parts,
+                'error': checkpoint.get('error'),
+                'scenes': scenes,
+                'video_info': checkpoint.get('video_info')
+            })
         return jsonify({'error': 'Job not found'}), 404
     return jsonify(job)
+
 
 
 @app.route('/api/clipper/upload_short', methods=['POST'])

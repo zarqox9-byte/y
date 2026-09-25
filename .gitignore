@@ -7,6 +7,7 @@ uploads/thumbnails/*
 !uploads/thumbnails/.gitkeep
 uploads/clipper_temp/*
 uploads/clipper_shorts/*
+uploads/clipper_jobs/*
 __pycache__/
 *.pyc
 test_*.py

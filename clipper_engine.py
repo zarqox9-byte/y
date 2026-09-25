@@ -34,8 +34,86 @@ import gemini_engine
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIPPER_DIR = os.path.join(BASE_DIR, "uploads", "clipper_shorts")
 TEMP_DIR = os.path.join(BASE_DIR, "uploads", "clipper_temp")
+JOBS_DIR = os.path.join(BASE_DIR, "uploads", "clipper_jobs")
 os.makedirs(CLIPPER_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
+os.makedirs(JOBS_DIR, exist_ok=True)
+
+
+# =====================================================================
+# JOB CHECKPOINT & RESUME PERSISTENCE
+# =====================================================================
+def save_job_checkpoint(job_id: str, job_data: Dict[str, Any]) -> str:
+    """
+    Saves the entire job state (scenes, timestamps, scripts, video metadata,
+    and completed shorts) to uploads/clipper_jobs/<job_id>.json atomically.
+    """
+    job_data['job_id'] = job_id
+    job_data['updated_at'] = time.time()
+    if 'created_at' not in job_data:
+        job_data['created_at'] = time.time()
+
+    file_path = os.path.join(JOBS_DIR, f"{job_id}.json")
+    temp_path = os.path.join(JOBS_DIR, f"{job_id}.json.tmp_{uuid.uuid4().hex[:6]}")
+    try:
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump(job_data, f, indent=2, ensure_ascii=False)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        os.rename(temp_path, file_path)
+        logger.info(f"Saved job checkpoint for {job_id} (status: {job_data.get('status')})")
+        return file_path
+    except Exception as e:
+        logger.error(f"Failed to save job checkpoint {job_id}: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        return file_path
+
+
+def load_job_checkpoint(job_id: str) -> Optional[Dict[str, Any]]:
+    """Loads job state from uploads/clipper_jobs/<job_id>.json."""
+    file_path = os.path.join(JOBS_DIR, f"{job_id}.json")
+    if not os.path.exists(file_path):
+        return None
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load job checkpoint {job_id}: {e}")
+        return None
+
+
+def list_saved_jobs() -> List[Dict[str, Any]]:
+    """Returns summaries of all saved jobs sorted by updated_at descending."""
+    jobs = []
+    if not os.path.exists(JOBS_DIR):
+        return jobs
+    for fname in os.listdir(JOBS_DIR):
+        if fname.endswith(".json") and not fname.endswith(".tmp"):
+            job_id = fname[:-5]
+            data = load_job_checkpoint(job_id)
+            if data:
+                v_info = data.get("video_info") or {}
+                scenes = data.get("scenes") or []
+                completed = data.get("completed_shorts") or {}
+                jobs.append({
+                    "job_id": job_id,
+                    "title": v_info.get("title") or "Untitled Movie",
+                    "url": data.get("url") or "",
+                    "thumbnail": v_info.get("thumbnail") or "",
+                    "status": data.get("status", "UNKNOWN"),
+                    "total_scenes": len(scenes),
+                    "completed_count": len(completed),
+                    "language": (data.get("options") or {}).get("language") or "Hindi",
+                    "updated_at": data.get("updated_at", 0),
+                    "created_at": data.get("created_at", 0),
+                    "error": data.get("error")
+                })
+    jobs.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
+    return jobs
 
 
 def format_seconds_to_timestamp(seconds: float) -> str:
@@ -120,12 +198,14 @@ def analyze_movie_narrative_for_shorts(
     video_info: Dict[str, Any],
     max_shorts: int = 5,
     target_duration: int = 50,
-    language: str = "Hindi"
-) -> List[Dict[str, Any]]:
+    language: str = "Hindi",
+    job_id: Optional[str] = None
+) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
     """
     Prompts Google Gemini to analyze the movie's storyline and generate
     high-tension scenes in strict chronological order with viral titles,
     hooks, and ~60-word recap scripts.
+    Saves analysis checkpoint immediately to uploads/clipper_jobs/<job_id>.json.
     """
     title = video_info.get("title", "")
     duration = video_info.get("duration", 0)
@@ -208,6 +288,9 @@ Return ONLY a valid JSON array of objects with no markdown formatting around it:
     models_to_try = [target_model] + [m for m in gemini_engine.FALLBACK_MODELS if m != target_model]
 
     raw_response = None
+    quota_error_msg = None
+    status = "ANALYZED"
+
     for model_name in models_to_try:
         try:
             logger.info(f"Attempting Gemini scene analysis with model: {model_name}")
@@ -221,11 +304,13 @@ Return ONLY a valid JSON array of objects with no markdown formatting around it:
                 logger.info(f"Successfully received Gemini response using {model_name}")
                 break
         except Exception as e:
-            logger.warning(f"Model {model_name} failed with error: {e}. Cascading...")
+            err_str = str(e)
+            logger.warning(f"Model {model_name} failed with error: {err_str}. Cascading...")
+            if any(w in err_str.lower() for w in ["429", "resource_exhausted", "quota", "rate limit"]):
+                quota_error_msg = f"Gemini API Quota Exceeded (429): {err_str}"
 
     scenes = []
     if raw_response:
-        # Strip potential markdown code blocks
         clean_json = raw_response
         if "```" in clean_json:
             clean_json = re.sub(r"^```(?:json)?", "", clean_json, flags=re.MULTILINE)
@@ -240,14 +325,38 @@ Return ONLY a valid JSON array of objects with no markdown formatting around it:
         except Exception as json_err:
             logger.error(f"Failed to parse Gemini JSON: {json_err}. Raw text:\n{raw_response[:500]}")
 
-    # Fallback algorithmic scene generation if Gemini API returned no valid scenes
-    if not scenes:
+    # If quota limit occurred and no raw response was returned
+    if not scenes and quota_error_msg:
+        logger.warning(f"Gemini quota limit encountered. Marking job as PAUSED_QUOTA_LIMIT.")
+        status = "PAUSED_QUOTA_LIMIT"
+        scenes = generate_algorithmic_scenes(title, duration, max_shorts, target_duration, language)
+    elif not scenes:
         logger.info("Using intelligent algorithmic chronological scene generator fallback...")
         scenes = generate_algorithmic_scenes(title, duration, max_shorts, target_duration, language)
 
     # Sanitize, enforce chronology, and validate bounds
     sanitized_scenes = sanitize_and_order_scenes(scenes, duration, target_duration, title)
-    return sanitized_scenes
+
+    # Save to persistent checkpoint file if job_id provided
+    if job_id:
+        existing_checkpoint = load_job_checkpoint(job_id) or {}
+        checkpoint_data = {
+            "job_id": job_id,
+            "url": youtube_url,
+            "video_info": video_info,
+            "options": {
+                "max_shorts": max_shorts,
+                "target_duration": target_duration,
+                "language": language
+            },
+            "status": status,
+            "scenes": sanitized_scenes,
+            "completed_shorts": existing_checkpoint.get("completed_shorts") or {},
+            "error": quota_error_msg
+        }
+        save_job_checkpoint(job_id, checkpoint_data)
+
+    return sanitized_scenes, status, quota_error_msg
 
 
 def generate_algorithmic_scenes(
@@ -692,23 +801,74 @@ def generate_short_thumbnail(video_path: str, thumbnail_path: str) -> bool:
 # =====================================================================
 # 7. HIGH-LEVEL ORCHESTRATION PIPELINE
 # =====================================================================
+def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: str = "Hindi") -> str:
+    """
+    Ensures that a scene has a captivating narrative script.
+    If empty, calls Gemini to write a high-tension 50-60 word recap script.
+    Gracefully detects 429 quota limits and raises an informative error.
+    """
+    script = (scene.get("script") or "").strip()
+    if script:
+        return script
+
+    part_num = scene.get("part", 1)
+    logger.info(f"Generating voiceover script for Part {part_num} via Gemini...")
+    client = gemini_engine.get_genai_client()
+    cfg = gemini_engine.get_gemini_config()
+    target_model = cfg.get("model") or gemini_engine.DEFAULT_MODEL
+    models_to_try = [target_model] + [m for m in gemini_engine.FALLBACK_MODELS if m != target_model]
+
+    prompt = (
+        f"You are a master YouTube Shorts viral storyteller.\n"
+        f"Write a dramatic, high-retention 50-60 word story recap voiceover script in {language} for Part {part_num} "
+        f"of '{video_title}' covering timestamps {scene.get('start_time')} to {scene.get('end_time')}.\n"
+        f"Only return the spoken script text in {language}, no markdown, no quotes."
+    )
+
+    for model_name in models_to_try:
+        try:
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config={"temperature": 0.4}
+            )
+            if resp and resp.text:
+                clean_script = resp.text.strip().replace('"', '').replace("'", "")
+                scene["script"] = clean_script
+                return clean_script
+        except Exception as me:
+            err_str = str(me)
+            logger.warning(f"Script model {model_name} failed: {err_str}")
+            if any(w in err_str.lower() for w in ["429", "resource_exhausted", "quota", "rate limit"]):
+                raise RuntimeError(f"Gemini API Quota Exceeded (429): {err_str}")
+
+    # Fallback algorithmic script
+    if language.lower().startswith("hi"):
+        fallback = f"फिल्म के पार्ट {part_num} में कहानी एक नया मोड़ लेती है। देखिए आगे क्या होता है और चैनल को सब्सक्राइब जरूर करें!"
+    else:
+        fallback = f"In Part {part_num} of this dramatic story, unexpected events unfold. Watch till the end and subscribe for more!"
+    scene["script"] = fallback
+    return fallback
+
+
 def process_single_short_pipeline(
     youtube_url: str,
     scene: Dict[str, Any],
-    language: str = "Hindi"
+    language: str = "Hindi",
+    video_title: str = "",
+    job_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Executes the end-to-end pipeline for a single chronological short:
     1. Downloads exact clip section via yt-dlp.
-    2. Generates neural voiceover from Gemini script.
+    2. Ensures storytelling script and generates neural voiceover.
     3. Analyzes actors' faces for optimal 9:16 vertical crop.
     4. Renders final vertical Short with ducked audio.
-    5. Extracts thumbnail and returns complete ready-to-upload object.
+    5. Extracts thumbnail, saves checkpoint, and returns complete ready-to-upload object.
     """
     part_num = scene.get("part", 1)
     start_time = scene.get("start_time", "00:00:00")
     end_time = scene.get("end_time", "00:00:50")
-    script = scene.get("script", "")
     title = scene.get("title", f"Part {part_num} #Shorts")
 
     unique_id = uuid.uuid4().hex[:8]
@@ -726,7 +886,8 @@ def process_single_short_pipeline(
     if not download_ok:
         raise RuntimeError(f"Failed to stream and download clip section {start_time}-{end_time}")
 
-    # Step 2: Generate Voiceover Audio
+    # Step 2: Ensure script exists (catching Gemini 429 if called) and generate Voiceover Audio
+    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
     vo_ok = False
     if script:
         vo_ok = generate_voiceover_audio(script, vo_path, language)
@@ -764,7 +925,7 @@ def process_single_short_pipeline(
         f"#Shorts #YouTubeShorts #MovieRecap #Cinema #Part{part_num}"
     )
 
-    return {
+    short_data = {
         "part": part_num,
         "filename": final_video_name,
         "video_url": f"/api/clipper/media/{final_video_name}",
@@ -780,3 +941,21 @@ def process_single_short_pipeline(
         "end_time": end_time,
         "status": "ready"
     }
+
+    # Save to persistent job checkpoint if job_id was provided
+    if job_id:
+        try:
+            ckpt = load_job_checkpoint(job_id)
+            if ckpt:
+                if "completed_shorts" not in ckpt or not isinstance(ckpt["completed_shorts"], dict):
+                    if isinstance(ckpt.get("completed_shorts"), list):
+                        ckpt["completed_shorts"] = {str(s.get("part", i+1)): s for i, s in enumerate(ckpt["completed_shorts"])}
+                    else:
+                        ckpt["completed_shorts"] = {}
+                ckpt["completed_shorts"][str(part_num)] = short_data
+                save_job_checkpoint(job_id, ckpt)
+        except Exception as se:
+            logger.warning(f"Could not persist short {part_num} to checkpoint {job_id}: {se}")
+
+    return short_data
+
