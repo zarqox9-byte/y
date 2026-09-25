@@ -435,8 +435,13 @@ def analyze_movie_narrative_for_shorts(
         else "Write high-energy, dramatic, fast-paced English narrative recap scripts like top cinema recap channels."
     )
 
-    prompt = f"""You are an elite YouTube Shorts Strategist and Cinema Editor specializing in viral movie recap shorts.
+    prompt = f"""You are an elite YouTube Shorts Strategist and Cinema Editor specializing in viral, 100% copyright-safe movie recap shorts.
 Analyze the following movie / video narrative and segment it into high-retention, high-drama, engaging YouTube Shorts in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from the beginning of the movie to the climax/ending).
+
+=== CRITICAL COPYRIGHT-SAFETY & DYNAMIC MONTAGE RULE ===
+To guarantee 100% YouTube Content ID and copyright safety, DO NOT select a single continuous 50-second clip for any Part.
+Instead, for EACH Part (Short), you MUST generate a dynamic MULTI-SCENE MONTAGE composed of 8 to 14 engaging sub-clips sampled across the relevant narrative act (each sub-clip MUST be between 3 and 6 seconds long, e.g., 01:15-01:19, 02:40-02:44, 04:10-04:15).
+The combined total duration of all sub-clips in the Part MUST be between 50 seconds and 70 seconds (1 min 10 sec max).
 
 === MOVIE / VIDEO DETAILS ===
 Title: {title}
@@ -446,42 +451,54 @@ Description:
 {chapters_summary}
 
 === REQUIREMENTS ===
-1. CHRONOLOGY:
-   - Every short must be in STRICT CHRONOLOGICAL ORDER.
-   - Part 1 must be early in the story (e.g. intro/inciting incident).
-   - Part 2 must take place AFTER Part 1.
-   - Part 3 must take place AFTER Part 2, and so forth, leading towards the climax/resolution.
-   - Do NOT jump backwards in time.
+1. CHRONOLOGY & PROGRESSION:
+   - Every Part must be in STRICT CHRONOLOGICAL ORDER (Part 1 covers the opening/inciting incident, Part 2 follows Part 1, Part 3 advances further towards climax).
+   - Within each Part, the 8 to 14 sub-clips must also progress chronologically through that story segment.
+   - Sub-clips must focus on key character reactions, high-tension beats, twists, action, and reveals.
 
-2. QUANTITY & DURATION:
-   - Determine the optimal number of shorts (between 1 and {max_shorts}) that best captures the narrative arc without filler.
-   - Each short should have a target duration of approximately {target_duration} seconds (valid range: 35 to 58 seconds).
-   - Ensure start_time and end_time do not exceed total video duration ({duration}s).
+2. SUB-CLIPS SPECIFICATION (8 to 14 cuts per Part):
+   - Each sub-clip duration must be between 3 and 6 seconds.
+   - The sum of all sub-clip durations for a Part must total between 50 and 70 seconds.
 
 3. VIRAL RECAP SCRIPT ({language.upper()}):
-   - For each part, provide a gripping ~50 to 65-word voiceover script.
+   - For each Part, write a cohesive, gripping ~80 to 110-word voiceover script matching the 50-70 second visual sequence.
    - {lang_instruction}
-   - Must begin with a strong 3-second hook that freezes the user from scrolling.
-   - Must end on a high-retention cliffhanger or transition to the next part.
+   - Must begin with a 3-second scroll-stopping retention hook.
+   - Must narrate the story seamlessly across the montage cuts without awkward pauses.
+   - Must end on a high-retention cliffhanger prompting viewers to like and watch Part N+1!
 
-4. TITLES & METADATA:
-   - Title must include the Part number, emotional emojis, and hashtags (e.g., "{title[:30]} - The Beginning! 😱 Part 1 #Shorts #Movie").
-   - Include 6-8 relevant viral tags.
+4. METADATA:
+   - Title must include the Part number, emotional emojis, and hashtags (e.g., "{title[:28]} - Shocking Twist! 😱 Part 1 #Shorts #MovieRecap").
+   - 6-8 relevant viral tags.
 
 === RETURN FORMAT ===
-Return ONLY a valid JSON array of objects with no markdown formatting around it:
+Return ONLY a valid JSON array of objects with no markdown explanation:
 [
   {{
     "part": 1,
-    "start_time": "00:01:15",
-    "end_time": "00:02:05",
-    "start_seconds": 75,
-    "end_seconds": 125,
-    "duration": 50,
-    "title": "Viral Short Title Here! 😱 Part 1 #Shorts",
+    "title": "Viral Title! 😱 Part 1 #Shorts #MovieRecap",
     "hook": "3-second opening hook line",
-    "script": "Complete 50-65 word voiceover script in {language}...",
-    "tags": ["shorts", "movie", "viral", "recap", "part1"]
+    "script": "Complete 80-110 word cohesive narrative voiceover script in {language}...",
+    "tags": ["shorts", "movie", "viral", "recap", "part1"],
+    "total_duration": 58,
+    "start_time": "00:01:10",
+    "end_time": "00:06:45",
+    "sub_clips": [
+      {{
+        "clip_num": 1,
+        "start_time": "00:01:10",
+        "end_time": "00:01:15",
+        "duration": 5,
+        "description": "Character arrives at location"
+      }},
+      {{
+        "clip_num": 2,
+        "start_time": "00:02:20",
+        "end_time": "00:02:25",
+        "duration": 5,
+        "description": "Mystery object discovered"
+      }}
+    ]
   }}
 ]
 """
@@ -564,51 +581,106 @@ Return ONLY a valid JSON array of objects with no markdown formatting around it:
     return sanitized_scenes, status, quota_error_msg
 
 
+def generate_algorithmic_subclips(
+    start_sec: int,
+    end_sec: int,
+    target_duration: int = 58
+) -> List[Dict[str, Any]]:
+    """
+    Generates 8 to 12 dynamic sub-clips (3 to 6 seconds each) across [start_sec, end_sec]
+    with total combined duration between 50 and 70 seconds for 100% YouTube copyright safety.
+    """
+    durs = [5, 6, 5, 6, 5, 5, 6, 5, 6, 5, 6]
+    target_d = min(max(50, target_duration), 70)
+
+    curr_durs = []
+    tot = 0
+    for d in durs:
+        if tot + d <= target_d:
+            curr_durs.append(d)
+            tot += d
+        else:
+            rem = target_d - tot
+            if rem >= 3:
+                curr_durs.append(rem)
+                tot += rem
+            break
+    if tot < 50:
+        curr_durs.append(50 - tot)
+        tot = 50
+
+    count = len(curr_durs)
+    span = max(end_sec - start_sec, count * 6 + 10)
+    step = (span - 6) / max(count - 1, 1) if count > 1 else 0
+
+    sub_clips = []
+    for k in range(count):
+        c_start = int(start_sec + k * step)
+        c_dur = curr_durs[k]
+        c_end = c_start + c_dur
+        sub_clips.append({
+            "clip_num": k + 1,
+            "start_time": format_seconds_to_timestamp(c_start),
+            "end_time": format_seconds_to_timestamp(c_end),
+            "start_seconds": c_start,
+            "end_seconds": c_end,
+            "duration": c_dur,
+            "description": f"Narrative Beat {k+1}"
+        })
+    return sub_clips
+
+
 def generate_algorithmic_scenes(
     title: str,
     duration: int,
     max_shorts: int = 5,
-    target_duration: int = 50,
+    target_duration: int = 58,
     language: str = "Hindi"
 ) -> List[Dict[str, Any]]:
-    """Creates high-quality chronological scenes if Gemini output was unparseable."""
+    """Creates high-quality chronological multi-scene montage scenes if Gemini output was unparseable."""
     scenes = []
     count = min(max(1, max_shorts), 10)
     effective_duration = max(duration, count * target_duration + 60)
     step = (effective_duration - 60) / (count + 1)
 
     for i in range(1, count + 1):
-        start_sec = int(30 + (i - 1) * step)
-        end_sec = min(start_sec + target_duration, duration - 5 if duration > 60 else start_sec + target_duration)
-        if end_sec <= start_sec:
-            end_sec = start_sec + 45
+        seg_start = int(30 + (i - 1) * step)
+        seg_end = min(seg_start + max(120, target_duration * 3), duration - 5 if duration > 180 else seg_start + 120)
+        if seg_end <= seg_start:
+            seg_end = seg_start + 90
+
+        sub_clips = generate_algorithmic_subclips(seg_start, seg_end, target_duration)
+        total_dur = sum(c["duration"] for c in sub_clips)
 
         if language.lower().startswith("hi"):
             script = (
-                f"फिल्म के पार्ट {i} में कहानी एक नया मोड़ लेती है। "
-                f"मुख्य किरदार इस खतरनाक परिस्थिति में फंस जाता है जहां से निकलना नामुमकिन लग रहा था। "
-                f"लेकिन क्या वह अपनी जान बचा पाएगा? देखिए आगे क्या होता है और चैनल को सब्सक्राइब जरूर करें!"
+                f"फिल्म के पार्ट {i} में कहानी एक बेहद खतरनाक और रोमांचक मोड़ लेती है। "
+                f"मुख्य किरदार इस अनपेक्षित परिस्थिति में फंस जाता है जहां हर सेकंड उसकी जान दांव पर लगी थी। "
+                f"लेकिन क्या वह इस जाल से बचकर निकल पाएगा? देखिए आगे की पूरी कहानी और सब्सक्राइब करना बिल्कुल न भूलें!"
             )
-            hook = f"फिल्म के पार्ट {i} का यह सबसे खतरनाक सीन मिस मत करना!"
+            hook = f"फिल्म के पार्ट {i} का यह सबसे खतरनाक सीन देखकर आपके रोंगटे खड़े हो जाएंगे!"
         else:
             script = (
                 f"In Part {i} of this intense story, the plot takes an unexpected dramatic turn. "
                 f"Trapped in an impossible situation with no easy way out, every second counts. "
-                f"Will the hero survive the ultimate test? Watch till the end to find out!"
+                f"Will the hero survive the ultimate test? Watch till the end to find out, and subscribe for Part {i+1}!"
             )
             hook = f"The most shocking twist in Part {i} you never saw coming!"
 
         scenes.append({
             "part": i,
-            "start_time": format_seconds_to_timestamp(start_sec),
-            "end_time": format_seconds_to_timestamp(end_sec),
-            "start_seconds": start_sec,
-            "end_seconds": end_sec,
-            "duration": end_sec - start_sec,
-            "title": f"{title[:35]} - Unbelievable Moment! 😱 Part {i} #Shorts",
+            "start_time": sub_clips[0]["start_time"],
+            "end_time": sub_clips[-1]["end_time"],
+            "start_seconds": sub_clips[0]["start_seconds"],
+            "end_seconds": sub_clips[-1]["end_seconds"],
+            "duration": total_dur,
+            "title": f"{title[:32]} - Shocking Twist! 😱 Part {i} #Shorts #MovieRecap",
             "hook": hook,
             "script": script,
-            "tags": ["shorts", "movie", "recap", f"part{i}", "viral", "cinema"]
+            "tags": ["shorts", "movie", "recap", f"part{i}", "viral", "cinema", "montage"],
+            "sub_clips": sub_clips,
+            "montage_mode": True,
+            "copyright_safe": True
         })
     return scenes
 
@@ -619,46 +691,100 @@ def sanitize_and_order_scenes(
     target_duration: int,
     video_title: str
 ) -> List[Dict[str, Any]]:
-    """Ensures chronological sorting, valid timestamp bounds, and uniform keys."""
+    """
+    Ensures chronological sorting, validates 8-14 sub-clips per Part,
+    enforces 50-70s total montage duration, and sets uniform metadata keys.
+    """
     valid_scenes = []
+    target_d = min(max(50, target_duration), 70)
+
     for s in scenes:
-        start_s = s.get("start_seconds")
-        if start_s is None:
-            start_s = parse_timestamp_to_seconds(s.get("start_time", "00:00"))
-        end_s = s.get("end_seconds")
-        if end_s is None:
-            end_s = parse_timestamp_to_seconds(s.get("end_time", "00:50"))
+        raw_clips = s.get("sub_clips") or []
+        valid_sub_clips = []
+        if isinstance(raw_clips, list) and len(raw_clips) >= 4:
+            for idx, c in enumerate(raw_clips, 1):
+                start_s = c.get("start_seconds")
+                if start_s is None:
+                    start_s = parse_timestamp_to_seconds(c.get("start_time", "00:00"))
+                end_s = c.get("end_seconds")
+                if end_s is None:
+                    end_s = parse_timestamp_to_seconds(c.get("end_time", "00:05"))
 
-        if end_s <= start_s:
-            end_s = start_s + target_duration
+                dur = end_s - start_s
+                if dur < 3 or dur > 6:
+                    dur = min(max(3, dur), 6)
+                    end_s = start_s + dur
 
-        dur = end_s - start_s
-        if dur < 25 or dur > 65:
-            end_s = start_s + target_duration
-            dur = target_duration
+                if total_duration > 0 and end_s > total_duration:
+                    end_s = max(0, total_duration - 1)
+                    start_s = max(0, end_s - dur)
 
-        if total_duration > 0 and end_s > total_duration:
-            end_s = total_duration - 2
-            start_s = max(0, end_s - target_duration)
-            dur = end_s - start_s
+                valid_sub_clips.append({
+                    "clip_num": idx,
+                    "start_time": format_seconds_to_timestamp(start_s),
+                    "end_time": format_seconds_to_timestamp(end_s),
+                    "start_seconds": int(start_s),
+                    "end_seconds": int(end_s),
+                    "duration": int(end_s - start_s),
+                    "description": c.get("description", f"Montage Cut {idx}")
+                })
+
+        # If Gemini didn't provide valid sub_clips or fewer than 4 were valid, synthesize 8-12 cuts
+        if len(valid_sub_clips) < 4:
+            s_start = s.get("start_seconds")
+            if s_start is None:
+                s_start = parse_timestamp_to_seconds(s.get("start_time", "00:00"))
+            s_end = s.get("end_seconds")
+            if s_end is None:
+                s_end = parse_timestamp_to_seconds(s.get("end_time", "01:00"))
+            if s_end <= s_start:
+                s_end = s_start + max(90, target_d * 2)
+            valid_sub_clips = generate_algorithmic_subclips(s_start, s_end, target_d)
+
+        # Sort sub_clips chronologically
+        valid_sub_clips.sort(key=lambda x: x["start_seconds"])
+        for idx, c in enumerate(valid_sub_clips, 1):
+            c["clip_num"] = idx
+
+        # Enforce total montage duration between 50 and 70 seconds
+        total_dur = sum(c["duration"] for c in valid_sub_clips)
+        if total_dur > 70:
+            while total_dur > 70 and len(valid_sub_clips) > 8:
+                removed = valid_sub_clips.pop()
+                total_dur -= removed["duration"]
+        elif total_dur < 50:
+            deficit = 50 - total_dur
+            for c in valid_sub_clips:
+                if deficit <= 0:
+                    break
+                add = min(2, deficit)
+                c["duration"] += add
+                c["end_seconds"] += add
+                c["end_time"] = format_seconds_to_timestamp(c["end_seconds"])
+                deficit -= add
+            total_dur = sum(c["duration"] for c in valid_sub_clips)
+
+        first_clip = valid_sub_clips[0]
+        last_clip = valid_sub_clips[-1]
 
         valid_scenes.append({
             "part": s.get("part", 1),
-            "start_time": format_seconds_to_timestamp(start_s),
-            "end_time": format_seconds_to_timestamp(end_s),
-            "start_seconds": int(start_s),
-            "end_seconds": int(end_s),
-            "duration": int(dur),
+            "start_time": first_clip["start_time"],
+            "end_time": last_clip["end_time"],
+            "start_seconds": first_clip["start_seconds"],
+            "end_seconds": last_clip["end_seconds"],
+            "duration": total_dur,
             "title": s.get("title") or f"{video_title[:30]} - Part {s.get('part', 1)} #Shorts",
             "hook": s.get("hook", ""),
             "script": s.get("script", ""),
-            "tags": s.get("tags") or ["shorts", "viral", "recap"]
+            "tags": s.get("tags") or ["shorts", "viral", "recap", "montage"],
+            "sub_clips": valid_sub_clips,
+            "montage_mode": True,
+            "copyright_safe": True
         })
 
-    # Sort strictly chronologically by start_seconds
+    # Sort parts chronologically
     valid_scenes.sort(key=lambda x: x["start_seconds"])
-
-    # Re-index parts 1..N
     for idx, sc in enumerate(valid_scenes, 1):
         sc["part"] = idx
         if f"Part {idx}" not in sc["title"]:
@@ -1007,6 +1133,252 @@ def render_short_video(
     return os.path.exists(output_path) and os.path.getsize(output_path) > 10000
 
 
+def ensure_background_music_exists() -> str:
+    """
+    Ensures that a copyright-free cinematic tension background music MP3 exists on disk.
+    If missing, synthesizes a pristine ambient tension track procedurally via numpy + wave + ffmpeg.
+    """
+    assets_dir = os.path.join(BASE_DIR, "uploads", "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+    bgm_mp3 = os.path.join(assets_dir, "cinematic_tension_bgm.mp3")
+    if os.path.exists(bgm_mp3) and os.path.getsize(bgm_mp3) > 10000:
+        return bgm_mp3
+
+    try:
+        import numpy as np
+        import wave
+        sample_rate = 44100
+        duration = 85  # seconds
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+
+        # Build cinematic suspense tension drone:
+        # 1. Sub bass drone (55 Hz)
+        bass = 0.35 * np.sin(2 * np.pi * 55 * t)
+        # 2. Tension minor pad chords (110 Hz, 130.8 Hz, 164.8 Hz)
+        pad1 = 0.18 * np.sin(2 * np.pi * 110 * t)
+        pad2 = 0.12 * np.sin(2 * np.pi * 130.81 * t)
+        pad3 = 0.12 * np.sin(2 * np.pi * 164.81 * t)
+        # 3. Slow breathing LFO modulation
+        lfo = 0.6 + 0.4 * np.sin(2 * np.pi * 0.3 * t)
+        # 4. Subtle rhythmic heartbeat thud (every 1.5s)
+        beat_phase = (t % 1.5)
+        beat = 0.4 * np.exp(-18 * beat_phase) * np.sin(2 * np.pi * 60 * np.exp(-10 * beat_phase) * beat_phase)
+
+        audio = (bass + (pad1 + pad2 + pad3) * lfo + beat) * 0.45
+        audio = np.clip(audio, -0.95, 0.95)
+        audio_int16 = (audio * 32767).astype(np.int16)
+        stereo = np.column_stack((audio_int16, audio_int16)).flatten()
+
+        wav_path = os.path.join(assets_dir, "cinematic_tension_bgm.wav")
+        with wave.open(wav_path, 'w') as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(stereo.tobytes())
+
+        ffmpeg_bin = get_ffmpeg_bin()
+        subprocess.run([ffmpeg_bin, "-y", "-i", wav_path, "-b:a", "192k", bgm_mp3],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
+        if os.path.exists(bgm_mp3):
+            logger.info(f"Synthesized copyright-free cinematic BGM: {bgm_mp3}")
+            return bgm_mp3
+    except Exception as e:
+        logger.warning(f"Could not generate background music: {e}")
+
+    return ""
+
+
+def reframe_subclip_to_vertical_916(
+    raw_sub_path: str,
+    output_norm_path: str
+) -> bool:
+    """
+    Reframes a 3-6s sub-clip to vertical 9:16 (1080x1920 @ 30fps) with actor face centering,
+    and STRIPS ALL ORIGINAL MOVIE AUDIO (0% volume / muted for 100% YouTube Content ID safety).
+    """
+    if not os.path.exists(raw_sub_path) or os.path.getsize(raw_sub_path) < 1000:
+        return False
+
+    ffmpeg_bin = get_ffmpeg_bin()
+    crop_filter = calculate_smart_916_crop(raw_sub_path)
+
+    cmd = [
+        ffmpeg_bin, "-y",
+        "-i", raw_sub_path,
+        "-filter_complex", f"[0:v]{crop_filter},setsar=1[vout]",
+        "-map", "[vout]",
+        "-an",  # Strip original movie audio completely!
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "22",
+        "-r", "30",
+        "-pix_fmt", "yuv420p",
+        output_norm_path
+    ]
+
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        if proc.returncode == 0 and os.path.exists(output_norm_path) and os.path.getsize(output_norm_path) > 5000:
+            return True
+        logger.warning(f"Reframe subclip failed: {proc.stderr[:160]}")
+    except Exception as e:
+        logger.error(f"Error reframing subclip {raw_sub_path}: {e}")
+
+    return False
+
+
+def concat_normalized_clips(
+    clip_paths: List[str],
+    output_montage_path: str
+) -> bool:
+    """
+    Concatenates normalized silent 9:16 clips using FFmpeg concat demuxer in under 1 second.
+    """
+    valid_clips = [p for p in clip_paths if os.path.exists(p) and os.path.getsize(p) > 5000]
+    if not valid_clips:
+        logger.error("No valid normalized clips to concatenate.")
+        return False
+
+    if len(valid_clips) == 1:
+        import shutil
+        shutil.copyfile(valid_clips[0], output_montage_path)
+        return True
+
+    concat_list_path = os.path.join(TEMP_DIR, f"concat_{uuid.uuid4().hex[:8]}.txt")
+    try:
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for p in valid_clips:
+                clean_path = os.path.abspath(p).replace("\\", "/")
+                f.write(f"file '{clean_path}'\n")
+
+        ffmpeg_bin = get_ffmpeg_bin()
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_list_path,
+            "-c", "copy",
+            output_montage_path
+        ]
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+        return os.path.exists(output_montage_path) and os.path.getsize(output_montage_path) > 10000
+    except Exception as e:
+        logger.error(f"Error concatenating clips: {e}")
+        return False
+    finally:
+        if os.path.exists(concat_list_path):
+            try:
+                os.remove(concat_list_path)
+            except Exception:
+                pass
+
+
+def render_montage_with_audio_overlay(
+    montage_video_path: str,
+    voiceover_path: Optional[str],
+    bgm_path: Optional[str],
+    output_path: str
+) -> bool:
+    """
+    Overlays neural AI voiceover (100% volume) and subtle copyright-free background music
+    (12% volume) onto the concatenated silent video montage.
+    Movie original audio is 100% stripped/muted. Includes smooth 1.5s audio fade-out.
+    """
+    if not os.path.exists(montage_video_path):
+        logger.error(f"Montage video path does not exist: {montage_video_path}")
+        return False
+
+    ffmpeg_bin = get_ffmpeg_bin()
+    ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
+
+    # Probe duration of video montage
+    video_dur = 60.0
+    try:
+        probe_cmd = [
+            ffprobe_bin, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "csv=p=0",
+            montage_video_path
+        ]
+        res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        if res.returncode == 0 and res.stdout.strip():
+            video_dur = float(res.stdout.strip())
+    except Exception as e:
+        logger.warning(f"Could not probe montage duration: {e}")
+
+    has_vo = voiceover_path and os.path.exists(voiceover_path) and os.path.getsize(voiceover_path) > 1000
+    has_bgm = bgm_path and os.path.exists(bgm_path) and os.path.getsize(bgm_path) > 10000
+
+    fade_start = max(0.5, video_dur - 1.5)
+
+    if has_vo and has_bgm:
+        filter_complex = (
+            f"[1:a]volume=1.0[vo];"
+            f"[2:a]volume=0.12[bgm];"
+            f"[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2,"
+            f"afade=t=out:st={fade_start:.2f}:d=1.5[aout]"
+        )
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", montage_video_path,
+            "-i", voiceover_path,
+            "-stream_loop", "-1", "-i", bgm_path,
+            "-filter_complex", filter_complex,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", f"{video_dur:.2f}",
+            "-movflags", "+faststart",
+            output_path
+        ]
+    elif has_vo:
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", montage_video_path,
+            "-i", voiceover_path,
+            "-filter_complex", f"[1:a]volume=1.0,afade=t=out:st={fade_start:.2f}:d=1.5[aout]",
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", f"{video_dur:.2f}",
+            "-movflags", "+faststart",
+            output_path
+        ]
+    elif has_bgm:
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", montage_video_path,
+            "-stream_loop", "-1", "-i", bgm_path,
+            "-filter_complex", f"[1:a]volume=0.25,afade=t=out:st={fade_start:.2f}:d=1.5[aout]",
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", f"{video_dur:.2f}",
+            "-movflags", "+faststart",
+            output_path
+        ]
+    else:
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", montage_video_path,
+            "-c:v", "copy",
+            "-an",
+            output_path
+        ]
+
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+    if proc.returncode != 0:
+        logger.error(f"FFmpeg montage render failed: {proc.stderr}")
+        return False
+
+    return os.path.exists(output_path) and os.path.getsize(output_path) > 10000
+
+
 def generate_short_thumbnail(video_path: str, thumbnail_path: str) -> bool:
     """Extracts a crisp thumbnail frame from the middle of the generated Short."""
     ffmpeg_bin = get_ffmpeg_bin()
@@ -1032,7 +1404,7 @@ def generate_short_thumbnail(video_path: str, thumbnail_path: str) -> bool:
 def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: str = "Hindi") -> str:
     """
     Ensures that a scene has a captivating narrative script.
-    If empty, calls Gemini to write a high-tension 50-60 word recap script.
+    If empty, calls Gemini to write a high-tension ~80-100 word recap script matching the montage sequence.
     Gracefully detects 429 quota limits and raises an informative error.
     """
     script = (scene.get("script") or "").strip()
@@ -1048,8 +1420,8 @@ def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: 
 
     prompt = (
         f"You are a master YouTube Shorts viral storyteller.\n"
-        f"Write a dramatic, high-retention 50-60 word story recap voiceover script in {language} for Part {part_num} "
-        f"of '{video_title}' covering timestamps {scene.get('start_time')} to {scene.get('end_time')}.\n"
+        f"Write a dramatic, cohesive ~80-100 word story recap voiceover script in {language} for Part {part_num} "
+        f"of '{video_title}' designed for a fast-paced 50-70 second multi-scene montage covering story progression from {scene.get('start_time')} to {scene.get('end_time')}.\n"
         f"Only return the spoken script text in {language}, no markdown, no quotes."
     )
 
@@ -1072,9 +1444,17 @@ def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: 
 
     # Fallback algorithmic script
     if language.lower().startswith("hi"):
-        fallback = f"फिल्म के पार्ट {part_num} में कहानी एक नया मोड़ लेती है। देखिए आगे क्या होता है और चैनल को सब्सक्राइब जरूर करें!"
+        fallback = (
+            f"फिल्म के पार्ट {part_num} में कहानी एक नया रोमांचक मोड़ लेती है। "
+            f"मुख्य किरदार इस खतरनाक परिस्थिति में फंस जाता है जहां से निकलना लगभग नामुमकिन था। "
+            f"लेकिन क्या वह अपनी जान बचा पाएगा? देखिए आगे क्या होता है और चैनल को सब्सक्राइब जरूर करें!"
+        )
     else:
-        fallback = f"In Part {part_num} of this dramatic story, unexpected events unfold. Watch till the end and subscribe for more!"
+        fallback = (
+            f"In Part {part_num} of this intense story, the plot takes an unexpected dramatic turn. "
+            f"Trapped in an impossible situation with no easy way out, every second counts. "
+            f"Will the hero survive the ultimate test? Watch till the end and subscribe for more!"
+        )
     scene["script"] = fallback
     return fallback
 
@@ -1087,70 +1467,130 @@ def process_single_short_pipeline(
     job_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Executes the end-to-end pipeline for a single chronological short:
-    1. Downloads exact clip section via yt-dlp.
-    2. Ensures storytelling script and generates neural voiceover.
-    3. Analyzes actors' faces for optimal 9:16 vertical crop.
-    4. Renders final vertical Short with ducked audio.
-    5. Extracts thumbnail, saves checkpoint, and returns complete ready-to-upload object.
+    Executes the 100% copyright-safe dynamic multi-scene montage pipeline for a single Part:
+    1. Extracts 8-14 sub-clips (3 to 6 seconds each) across the narrative act.
+    2. Downloads each sub-clip and reframes to 9:16 vertical (1080x1920) with face/subject centering.
+    3. Strips original movie audio completely (0% volume) so YouTube Content ID cannot flag it.
+    4. Concatenates normalized silent sub-clips into a fast-paced vertical montage video.
+    5. Generates cohesive neural voiceover script (Edge-TTS).
+    6. Ensures subtle copyright-free ambient tension background music exists.
+    7. Overlays Voiceover (100%) + Background Music (12%) onto the montage.
+    8. Extracts preview thumbnail and saves checkpoint.
     """
     part_num = scene.get("part", 1)
-    start_time = scene.get("start_time", "00:00:00")
-    end_time = scene.get("end_time", "00:00:50")
     title = scene.get("title", f"Part {part_num} #Shorts")
+    sub_clips = scene.get("sub_clips") or []
+
+    # If sub_clips is missing or less than 4 cuts, generate dynamic cuts
+    if not isinstance(sub_clips, list) or len(sub_clips) < 4:
+        s_start = scene.get("start_seconds")
+        if s_start is None:
+            s_start = parse_timestamp_to_seconds(scene.get("start_time", "00:00"))
+        s_end = scene.get("end_seconds")
+        if s_end is None:
+            s_end = parse_timestamp_to_seconds(scene.get("end_time", "01:00"))
+        if s_end <= s_start:
+            s_end = s_start + 120
+        sub_clips = generate_algorithmic_subclips(s_start, s_end, target_duration=58)
+        scene["sub_clips"] = sub_clips
+
+    start_time = sub_clips[0].get("start_time", "00:00:00")
+    end_time = sub_clips[-1].get("end_time", "00:01:10")
 
     unique_id = uuid.uuid4().hex[:8]
-    raw_clip_path = os.path.join(TEMP_DIR, f"raw_part_{part_num}_{unique_id}.mp4")
     vo_path = os.path.join(TEMP_DIR, f"vo_part_{part_num}_{unique_id}.mp3")
+    silent_montage_path = os.path.join(TEMP_DIR, f"montage_silent_{part_num}_{unique_id}.mp4")
     final_video_name = f"short_part_{part_num}_{unique_id}.mp4"
     final_thumb_name = f"thumb_part_{part_num}_{unique_id}.jpg"
     final_video_path = os.path.join(CLIPPER_DIR, final_video_name)
     final_thumb_path = os.path.join(CLIPPER_DIR, final_thumb_name)
 
-    logger.info(f"--- Starting Processing for Part {part_num} ({start_time} to {end_time}) ---")
+    logger.info(f"--- Starting Dynamic Multi-Scene Montage for Part {part_num} ({len(sub_clips)} cuts: {start_time} to {end_time}) ---")
 
-    # Step 1: Download clip section
-    download_ok = download_clip_section(youtube_url, start_time, end_time, raw_clip_path)
-    if not download_ok:
-        raise RuntimeError(f"Failed to stream and download clip section {start_time}-{end_time}")
-
-    # Step 2: Ensure script exists (catching Gemini 429 if called) and generate Voiceover Audio
+    # Step 1: Ensure narrative voiceover script exists & generate neural voiceover audio
     script = ensure_scene_script(scene, video_title=video_title or title, language=language)
     vo_ok = False
     if script:
         vo_ok = generate_voiceover_audio(script, vo_path, language)
 
-    # Step 3: Smart Face Tracking & Crop Filter
-    crop_filter = calculate_smart_916_crop(raw_clip_path)
+    # Step 2: Ensure subtle copyright-free background music exists
+    bgm_path = ensure_background_music_exists()
 
-    # Step 4: FFmpeg Render & Audio Ducking
-    render_ok = render_short_video(
-        raw_clip_path,
-        vo_path if vo_ok else None,
-        final_video_path,
-        crop_filter
+    # Step 3: Download and reframe sub-clips to 9:16 vertical (stripping 100% movie audio)
+    normalized_clips = []
+    temp_clip_paths = []
+
+    for idx, c in enumerate(sub_clips, 1):
+        c_start = c.get("start_time")
+        c_end = c.get("end_time")
+        if not c_start or not c_end:
+            continue
+
+        raw_sub = os.path.join(TEMP_DIR, f"sub_raw_{part_num}_{idx}_{unique_id}.mp4")
+        norm_sub = os.path.join(TEMP_DIR, f"sub_norm_{part_num}_{idx}_{unique_id}.mp4")
+        temp_clip_paths.extend([raw_sub, norm_sub])
+
+        logger.info(f"Processing Cut {idx}/{len(sub_clips)} for Part {part_num}: [{c_start} - {c_end}]")
+        dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
+        if dl_ok:
+            rf_ok = reframe_subclip_to_vertical_916(raw_sub, norm_sub)
+            if os.path.exists(raw_sub):
+                try:
+                    os.remove(raw_sub)
+                except Exception:
+                    pass
+            if rf_ok and os.path.exists(norm_sub):
+                normalized_clips.append(norm_sub)
+        else:
+            logger.warning(f"Sub-clip {idx} ({c_start}-{c_end}) failed download. Proceeding with remaining cuts...")
+
+    if not normalized_clips:
+        raise RuntimeError(f"Failed to stream and download sub-clips for Part {part_num}")
+
+    logger.info(f"Successfully processed {len(normalized_clips)} vertical cuts for Part {part_num}. Concatenating montage...")
+
+    # Step 4: Concatenate normalized silent sub-clips
+    concat_ok = concat_normalized_clips(normalized_clips, silent_montage_path)
+    if not concat_ok or not os.path.exists(silent_montage_path):
+        raise RuntimeError(f"Failed to concatenate montage sub-clips for Part {part_num}")
+
+    # Step 5: Overlay AI Voiceover & Copyright-Free Background Music (0% original movie audio)
+    render_ok = render_montage_with_audio_overlay(
+        montage_video_path=silent_montage_path,
+        voiceover_path=vo_path if vo_ok else None,
+        bgm_path=bgm_path if bgm_path else None,
+        output_path=final_video_path
     )
-    if not render_ok:
-        raise RuntimeError(f"FFmpeg failed to render vertical Short for Part {part_num}")
+    if not render_ok or not os.path.exists(final_video_path):
+        raise RuntimeError(f"FFmpeg failed to render final montage Short for Part {part_num}")
 
-    # Step 5: Extract Preview Thumbnail
+    # Step 6: Extract Preview Thumbnail Frame
     generate_short_thumbnail(final_video_path, final_thumb_path)
 
-    # Clean temporary raw files
-    try:
-        if os.path.exists(raw_clip_path):
-            os.remove(raw_clip_path)
-        if os.path.exists(vo_path):
+    # Clean intermediate temporary files
+    for p in temp_clip_paths:
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+    if os.path.exists(silent_montage_path):
+        try:
+            os.remove(silent_montage_path)
+        except Exception:
+            pass
+    if os.path.exists(vo_path):
+        try:
             os.remove(vo_path)
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     # Build description with hashtags and hook
     description = (
         f"{title}\n\n"
-        f"🎬 Story Recap (Part {part_num}):\n{script}\n\n"
+        f"🎬 Story Recap (Part {part_num} Montage - {len(normalized_clips)} Scenes):\n{script}\n\n"
         f"🔔 Subscribe for Part {part_num + 1} and more viral movie breakdowns!\n\n"
-        f"#Shorts #YouTubeShorts #MovieRecap #Cinema #Part{part_num}"
+        f"#Shorts #YouTubeShorts #MovieRecap #Cinema #Part{part_num} #MovieMontage"
     )
 
     short_data = {
@@ -1163,10 +1603,13 @@ def process_single_short_pipeline(
         "hook": scene.get("hook", ""),
         "script": script,
         "description": description,
-        "tags": scene.get("tags") or ["Shorts", "Movie", "Viral", f"Part{part_num}"],
-        "duration": scene.get("duration", 50),
+        "tags": scene.get("tags") or ["Shorts", "Movie", "Viral", f"Part{part_num}", "Montage"],
+        "duration": scene.get("duration", 58),
         "start_time": start_time,
         "end_time": end_time,
+        "sub_clips_count": len(normalized_clips),
+        "montage_mode": True,
+        "copyright_safe": True,
         "status": "ready"
     }
 

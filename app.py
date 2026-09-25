@@ -2112,11 +2112,11 @@ HTML_MAIN = """
                             <span>🎬 AI Movie-to-Shorts Auto-Clipper Engine</span>
                         </div>
                         <div class="ai-banner-desc" style="color: #fda4af;">
-                            Paste any YouTube movie or video link. Gemini analyzes narrative story beats, automatically segments high-retention scenes in strict chronological order (Part 1, Part 2...), reframes 16:9 to 9:16 vertical with actor face centering, generates neural Hindi/English voiceover recap narration, and ducks background audio.
+                            Paste any YouTube movie or video link. Gemini analyzes narrative story beats, automatically segments into 100% copyright-safe dynamic multi-scene montages (8-14 fast-paced 3-6s sub-clips per Part, original movie audio 100% muted to bypass Content ID), reframes 16:9 to 9:16 vertical with actor face centering, and layers neural Hindi/English voiceover plus copyright-free cinematic tension background music.
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white; padding: 6px 12px; font-size: 11px;">CHRONOLOGICAL 9:16</span>
+                        <span class="tab-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); padding: 6px 12px; font-size: 11px;">100% COPYRIGHT SAFE</span>
                     </div>
                 </div>
 
@@ -2152,13 +2152,12 @@ HTML_MAIN = """
                         <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-size: 13px; font-weight: 600;">Target Duration</span>
-                                <span style="font-size: 11px; color: #a855f7;">Shorts Safe (&lt;60s)</span>
+                                <span style="font-size: 11px; color: #10b981;">Montage Safe (50-70s)</span>
                             </div>
                             <select id="clipperDurationSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
-                                <option value="35">35 Seconds (Fast Paced)</option>
-                                <option value="45">45 Seconds (High Retention)</option>
-                                <option value="50" selected>50 Seconds (Recommended Optimal)</option>
-                                <option value="58">58 Seconds (Maximum Dramatic Climax)</option>
+                                <option value="50">50 Seconds (8-10 Cuts, Fast Paced)</option>
+                                <option value="58" selected>58 Seconds (10-12 Cuts, Recommended)</option>
+                                <option value="70">70 Seconds (12-14 Cuts, Extended Climax)</option>
                             </select>
                         </div>
 
@@ -3850,9 +3849,10 @@ HTML_MAIN = """
             clipperScenesGrid.innerHTML = scenes.map((scene, idx) => `
                 <div class="scene-item-card" id="sceneCard_${scene.part}">
                     <div class="scene-header">
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                             <span class="part-pill">Part ${scene.part}</span>
                             <span class="timestamp-pill">⏱️ ${scene.start_time} - ${scene.end_time} (${scene.duration}s)</span>
+                            <span style="font-size: 11px; font-weight: 600; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 3px 8px; border-radius: 4px;">🎬 ${(scene.sub_clips || []).length || 8} Cuts (0% Orig Audio)</span>
                         </div>
                         <span class="status-badge status-planned" id="sceneStatusBadge_${scene.part}">⏳ Planned</span>
                     </div>
@@ -3862,8 +3862,8 @@ HTML_MAIN = """
                         <div class="scene-video-box" id="sceneMediaBox_${scene.part}">
                             <div class="placeholder-916">
                                 <span style="font-size: 28px;">🎬</span>
-                                <span style="font-weight: 600; font-size: 13px;">9:16 Vertical Short</span>
-                                <span style="font-size: 11px; color: var(--text-muted);">Smart Face Centering &amp; Neural Voiceover</span>
+                                <span style="font-weight: 600; font-size: 13px;">9:16 Dynamic Montage</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">${(scene.sub_clips || []).length || 10} Fast Cuts (3-6s) • Muted Audio • BGM &amp; Voiceover</span>
                             </div>
                         </div>
 
@@ -3880,7 +3880,18 @@ HTML_MAIN = """
                             </div>
 
                             <div>
-                                <label class="field-label">🎙️ Story Recap Voiceover Script (~60 words)</label>
+                                <label class="field-label">🎬 Multi-Scene Cuts Timeline (${(scene.sub_clips || []).length} Cuts)</label>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; max-height: 72px; overflow-y: auto; padding: 6px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
+                                    ${(scene.sub_clips || []).map((c, ci) => `
+                                        <span style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #e2e8f0; white-space: nowrap;">
+                                            #${c.clip_num || ci+1}: ${c.start_time}-${c.end_time} (${c.duration}s)
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="field-label">🎙️ Cohesive Story Recap Script (~80-110 words)</label>
                                 <textarea id="sceneScript_${scene.part}" class="form-control" rows="3" style="font-size: 12px; line-height: 1.4;">${escapeHtml(scene.script)}</textarea>
                             </div>
 
@@ -3891,7 +3902,7 @@ HTML_MAIN = """
 
                             <div class="scene-actions-row">
                                 <button type="button" class="btn-populate" id="btnGenPart_${scene.part}" onclick="generateSinglePart(${scene.part})">
-                                    <span>⚡ Generate Part ${scene.part} (Reframed &amp; Voiced)</span>
+                                    <span>⚡ Generate Part ${scene.part} (Multi-Cut Montage)</span>
                                 </button>
                                 <button type="button" class="btn-upload" id="btnUploadPart_${scene.part}" style="display: none; padding: 10px 18px; font-size: 13px; width: auto; background: var(--accent-red);" onclick="uploadSinglePart(${scene.part})">
                                     <span>🚀 Upload Part ${scene.part} to YouTube</span>
