@@ -19,7 +19,13 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import gemini_engine
 
 app = Flask(__name__)
-app.secret_key = os.urandom(32)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "youtube_studio_pro_permanent_production_secret_2026")
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=86400 * 30
+)
 
 # Enable ProxyFix for reverse proxies (Render, Cloudflare, etc.)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -1601,7 +1607,7 @@ HTML_MAIN = """
             <!-- YouTube Channel Pill with Dropdown Trigger -->
             <div class="account-nav-wrap">
                 <div class="account-pill" id="userPill" title="Click to Switch Channel or Google Account">
-                    <img id="userAvatar" src="https://via.placeholder.com/64/333333/ffffff?text=YT" alt="avatar">
+                    <img id="userAvatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='18' fill='%23383838'/><circle cx='18' cy='14' r='7' fill='%23aaaaaa'/><path d='M6 31 C 6 22, 30 22, 30 31' fill='%23aaaaaa'/></svg>" alt="Channel Avatar" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'36\' height=\'36\' viewBox=\'0 0 36 36\'><circle cx=\'18\' cy=\'18\' r=\'18\' fill=\'%23383838\'/><circle cx=\'18\' cy=\'14\' r=\'7\' fill=\'%23aaaaaa\'/><path d=\'M6 31 C 6 22, 30 22, 30 31\' fill=\'%23aaaaaa\'/></svg>'">
                     <span id="userName">YouTube Creator</span>
                     <span style="font-size: 10px; color: var(--text-muted); margin-left: 2px;">▼</span>
                 </div>
@@ -1609,7 +1615,7 @@ HTML_MAIN = """
                 <!-- Account / Multi-Channel Switcher Dropdown -->
                 <div class="account-dropdown" id="accountDropdown">
                     <div class="dropdown-email-header">
-                        <img id="dropAvatar" class="dropdown-email-avatar" src="https://via.placeholder.com/64/333333/ffffff?text=YT" alt="avatar">
+                        <img id="dropAvatar" class="dropdown-email-avatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%23383838'/><circle cx='20' cy='15' r='8' fill='%23aaaaaa'/><path d='M7 35 C 7 25, 33 25, 33 35' fill='%23aaaaaa'/></svg>" alt="Channel Avatar">
                         <div class="dropdown-email-info">
                             <span id="dropChannelName" class="dropdown-email-name">Channel</span>
                             <span id="dropUserEmail" class="dropdown-email-addr">account@gmail.com</span>
@@ -1643,7 +1649,7 @@ HTML_MAIN = """
         <!-- Left Sidebar: Channel Overview & Quota -->
         <aside class="sidebar">
             <div class="card channel-profile">
-                <img id="channelAvatarLarge" class="channel-avatar" src="https://via.placeholder.com/128/333333/ffffff?text=YT" alt="Avatar">
+                <img id="channelAvatarLarge" class="channel-avatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90' viewBox='0 0 90 90'><circle cx='45' cy='45' r='45' fill='%23282828'/><circle cx='45' cy='34' r='18' fill='%23aaaaaa'/><path d='M15 76 C 15 54, 75 54, 75 76' fill='%23aaaaaa'/></svg>" alt="Channel Profile Picture" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'90\' height=\'90\' viewBox=\'0 0 90 90\'><circle cx=\'45\' cy=\'45\' r=\'45\' fill=\'%23282828\'/><circle cx=\'45\' cy=\'34\' r=\'18\' fill=\'%23aaaaaa\'/><path d=\'M15 76 C 15 54, 75 54, 75 76\' fill=\'%23aaaaaa\'/></svg>'">
                 <h3 id="channelTitle" class="channel-name">Channel</h3>
                 <div id="channelHandle" class="channel-handle">@channel</div>
                 
@@ -2851,26 +2857,47 @@ HTML_MAIN = """
         async function loadChannelInfo() {
             try {
                 const res = await fetch('/api/channel');
-                if (!res.ok) throw new Error("Failed to load channel details");
+                if (!res.ok) {
+                    console.warn("Failed to load channel details:", res.status);
+                    return;
+                }
                 const data = await res.json();
                 
-                document.getElementById('channelTitle').textContent = data.title;
-                document.getElementById('userName').textContent = data.title;
-                document.getElementById('channelHandle').textContent = data.customUrl || '@' + data.title.toLowerCase().replace(/\\s+/g, '');
-                if (data.avatar) {
-                    document.getElementById('channelAvatarLarge').src = data.avatar;
-                    document.getElementById('userAvatar').src = data.avatar;
+                if (data.title) {
+                    document.getElementById('channelTitle').textContent = data.title;
+                    document.getElementById('userName').textContent = data.title;
+                }
+                if (data.customUrl || data.title) {
+                    document.getElementById('channelHandle').textContent = data.customUrl || ('@' + data.title.toLowerCase().replace(/\\s+/g, ''));
+                }
+
+                // Render channel profile picture (snippet.thumbnails.default.url or medium/high)
+                const avatarUrl = data.thumbnail_url || data.avatar;
+                if (avatarUrl) {
+                    const avatarLarge = document.getElementById('channelAvatarLarge');
+                    if (avatarLarge) {
+                        avatarLarge.src = avatarUrl;
+                        avatarLarge.alt = data.title || "Channel Profile";
+                    }
+                    const userAvatar = document.getElementById('userAvatar');
+                    if (userAvatar) {
+                        userAvatar.src = avatarUrl;
+                        userAvatar.alt = data.title || "User Avatar";
+                    }
                     const dropAvatar = document.getElementById('dropAvatar');
-                    if (dropAvatar) dropAvatar.src = data.avatar;
+                    if (dropAvatar) {
+                        dropAvatar.src = avatarUrl;
+                        dropAvatar.alt = data.title || "Profile";
+                    }
                 }
                 const dropName = document.getElementById('dropChannelName');
-                if (dropName) dropName.textContent = data.title;
+                if (dropName && data.title) dropName.textContent = data.title;
                 const dropEmail = document.getElementById('dropUserEmail');
                 if (dropEmail && data.userEmail) dropEmail.textContent = data.userEmail;
 
-                document.getElementById('statSubscribers').textContent = Number(data.subscriberCount).toLocaleString();
-                document.getElementById('statViews').textContent = Number(data.viewCount).toLocaleString();
-                document.getElementById('statVideos').textContent = Number(data.videoCount).toLocaleString();
+                document.getElementById('statSubscribers').textContent = Number(data.subscriberCount || 0).toLocaleString();
+                document.getElementById('statViews').textContent = Number(data.viewCount || 0).toLocaleString();
+                document.getElementById('statVideos').textContent = Number(data.videoCount || 0).toLocaleString();
 
                 // Render channels & accounts in dropdown
                 const listEl = document.getElementById('dropdownChannelsList');
@@ -2897,11 +2924,13 @@ HTML_MAIN = """
                     }
 
                     if (data.allChannels && data.allChannels.length > 0) {
+                        const fallbackSvg = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%23383838'/><circle cx='16' cy='12' r='6' fill='%23aaaaaa'/><path d='M6 28 C 6 20, 26 20, 26 28' fill='%23aaaaaa'/></svg>";
                         html += data.allChannels.map(ch => {
                             const isActive = ch.id === data.id;
+                            const chImg = ch.thumbnail_url || ch.avatar || fallbackSvg;
                             return `
                                 <div class="dropdown-channel-item ${isActive ? 'active-channel' : ''}" onclick="onSwitchChannelClick('${ch.id}', ${isActive})">
-                                    <img src="${ch.avatar || 'https://via.placeholder.com/32/333333/ffffff?text=YT'}" alt="ch">
+                                    <img src="${chImg}" alt="${ch.title || 'Channel'}" onerror="this.src='${fallbackSvg}'">
                                     <div class="channel-item-details">
                                         <div class="channel-item-title">${ch.title}</div>
                                         <div class="channel-item-subs">${Number(ch.subscriberCount || 0).toLocaleString()} subs</div>
@@ -3328,16 +3357,25 @@ def oauth2callback():
         yt = build('youtube', 'v3', credentials=credentials)
         res = yt.channels().list(mine=True, part='snippet,statistics').execute()
         for ch in res.get('items', []):
+            snip = ch.get('snippet', {})
+            st = ch.get('statistics', {})
+            thumbs = snip.get('thumbnails', {})
+            avatar_url = thumbs.get('default', {}).get('url') or thumbs.get('medium', {}).get('url') or thumbs.get('high', {}).get('url') or ''
             channels_list.append({
                 'id': ch.get('id'),
-                'title': ch.get('snippet', {}).get('title', 'YouTube Creator'),
-                'avatar': ch.get('snippet', {}).get('thumbnails', {}).get('medium', {}).get('url', ''),
-                'subscriberCount': ch.get('statistics', {}).get('subscriberCount', '0')
+                'title': snip.get('title', 'YouTube Creator'),
+                'customUrl': snip.get('customUrl', ''),
+                'avatar': avatar_url,
+                'thumbnail_url': thumbs.get('default', {}).get('url', avatar_url),
+                'subscriberCount': st.get('subscriberCount', '0'),
+                'videoCount': st.get('videoCount', '0'),
+                'viewCount': st.get('viewCount', '0')
             })
     except Exception as ye:
         print(f"Channels fetch during oauth notice: {ye}")
 
     account_key = save_user_account(user_email, creds_dict, channels_list)
+    session.permanent = True
     session['active_account_key'] = account_key
     session['credentials'] = creds_dict
     session['user_email'] = user_email
@@ -3396,60 +3434,44 @@ def switch_channel(channel_id):
 @app.route('/api/channel')
 def channel_info():
     creds = get_stored_credentials()
+    default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="45" fill="%23282828"/><circle cx="45" cy="34" r="18" fill="%23aaaaaa"/><path d="M15 76 C 15 54, 75 54, 75 76" fill="%23aaaaaa"/></svg>'
+
     if not creds:
         return jsonify({
-            'id': 'demo_channel',
-            'title': 'Shoaib Gh (Studio)',
-            'customUrl': '@shoaibgh-studio',
-            'avatar': 'https://via.placeholder.com/128/ff0000/ffffff?text=SG',
-            'subscriberCount': 226,
-            'videoCount': 4,
-            'viewCount': 203,
-            'allChannels': [{
-                'id': 'demo_channel',
-                'title': 'Shoaib Gh (Studio)',
-                'avatar': 'https://via.placeholder.com/64/ff0000/ffffff?text=SG',
-                'subscriberCount': 226
-            }],
-            'userEmail': 'shoaibgh473@gmail.com',
-            'is_demo': True
+            'id': 'disconnected',
+            'title': 'Connect Channel',
+            'customUrl': '@connect',
+            'avatar': default_avatar,
+            'thumbnail_url': default_avatar,
+            'subscriberCount': 0,
+            'videoCount': 0,
+            'viewCount': 0,
+            'allChannels': [],
+            'allAccounts': [],
+            'userEmail': '',
+            'is_authenticated': False
         })
+
     try:
         youtube = build('youtube', 'v3', credentials=creds)
-        res = youtube.channels().list(mine=True, part='snippet,statistics,contentDetails').execute()
-        items = res.get('items', [])
-        if not items:
-            return jsonify({'error': 'No YouTube channel found for this Google account'}), 404
-
-        all_channels = []
-        for ch in items:
-            snip = ch.get('snippet', {})
-            st = ch.get('statistics', {})
-            all_channels.append({
-                'id': ch.get('id'),
-                'title': snip.get('title', 'YouTube Creator'),
-                'customUrl': snip.get('customUrl', ''),
-                'avatar': snip.get('thumbnails', {}).get('medium', {}).get('url', ''),
-                'subscriberCount': st.get('subscriberCount', '0'),
-                'videoCount': st.get('videoCount', '0'),
-                'viewCount': st.get('viewCount', '0')
-            })
-
         active_id = session.get('active_channel_id')
-        active_ch = None
-        if active_id:
-            for ch in items:
-                if ch.get('id') == active_id:
-                    active_ch = ch
-                    break
-        if not active_ch:
-            active_ch = items[0]
-            session['active_channel_id'] = active_ch.get('id')
+        items = []
 
-        snippet = active_ch.get('snippet', {})
-        stats = active_ch.get('statistics', {})
-        content_details = active_ch.get('contentDetails', {})
-        uploads_playlist = content_details.get('relatedPlaylists', {}).get('uploads', '')
+        # 1. Fetch channel details using youtube.channels().list(mine=True, part='snippet,statistics')
+        try:
+            res = youtube.channels().list(mine=True, part='snippet,statistics').execute()
+            items = res.get('items', [])
+        except Exception as e:
+            print(f"Error calling channels().list(mine=True): {e}")
+
+        # 2. If active_id specified and not found in mine, try id query
+        if active_id and not any(ch.get('id') == active_id for ch in items):
+            try:
+                id_res = youtube.channels().list(id=active_id, part='snippet,statistics').execute()
+                if id_res.get('items'):
+                    items = id_res.get('items') + items
+            except Exception as e:
+                print(f"Error querying channel by id {active_id}: {e}")
 
         user_email = session.get('user_email', '')
         if not user_email:
@@ -3474,20 +3496,88 @@ def channel_info():
                 'is_active': (k == current_key)
             })
 
+        if not items:
+            user_name = user_email.split('@')[0] if user_email else "YouTube User"
+            user_avatar = f"https://ui-avatars.com/api/?name={user_name}&background=ff0000&color=ffffff&size=128"
+            return jsonify({
+                'id': 'no_channel',
+                'title': user_name,
+                'customUrl': f"@{user_name.lower().replace(' ', '')}",
+                'avatar': user_avatar,
+                'thumbnail_url': user_avatar,
+                'subscriberCount': 0,
+                'videoCount': 0,
+                'viewCount': 0,
+                'userEmail': user_email,
+                'has_channel': False,
+                'allChannels': [],
+                'allAccounts': connected_accounts
+            })
+
+        # Match active channel or default to primary
+        active_ch = None
+        if active_id:
+            for ch in items:
+                if ch.get('id') == active_id:
+                    active_ch = ch
+                    break
+        if not active_ch:
+            active_ch = items[0]
+            session['active_channel_id'] = active_ch.get('id')
+
+        snippet = active_ch.get('snippet', {})
+        stats = active_ch.get('statistics', {})
+        thumbs = snippet.get('thumbnails', {})
+
+        # Extract avatar URLs with priority: default -> medium -> high
+        default_thumb = thumbs.get('default', {}).get('url', '')
+        medium_thumb = thumbs.get('medium', {}).get('url', '')
+        high_thumb = thumbs.get('high', {}).get('url', '')
+        channel_avatar = default_thumb or medium_thumb or high_thumb or default_avatar
+
+        # Build list of all channels
+        all_channels = []
+        for ch in items:
+            snip = ch.get('snippet', {})
+            st = ch.get('statistics', {})
+            t = snip.get('thumbnails', {})
+            c_avatar = t.get('default', {}).get('url') or t.get('medium', {}).get('url') or t.get('high', {}).get('url') or default_avatar
+            all_channels.append({
+                'id': ch.get('id'),
+                'title': snip.get('title', 'YouTube Creator'),
+                'customUrl': snip.get('customUrl', ''),
+                'avatar': c_avatar,
+                'thumbnail_url': t.get('default', {}).get('url', c_avatar),
+                'subscriberCount': st.get('subscriberCount', '0'),
+                'videoCount': st.get('videoCount', '0'),
+                'viewCount': st.get('viewCount', '0')
+            })
+
+        uploads_playlist = ''
+        try:
+            cd_res = youtube.channels().list(id=active_ch.get('id'), part='contentDetails').execute()
+            if cd_res.get('items'):
+                uploads_playlist = cd_res['items'][0].get('contentDetails', {}).get('relatedPlaylists', {}).get('uploads', '')
+        except Exception:
+            pass
+
         return jsonify({
             'id': active_ch.get('id'),
             'title': snippet.get('title', 'YouTube Creator'),
-            'customUrl': snippet.get('customUrl', ''),
-            'avatar': snippet.get('thumbnails', {}).get('medium', {}).get('url', ''),
+            'customUrl': snippet.get('customUrl') or ('@' + snippet.get('title', 'creator').lower().replace(' ', '')),
+            'avatar': channel_avatar,
+            'thumbnail_url': default_thumb or channel_avatar,
             'subscriberCount': stats.get('subscriberCount', '0'),
             'videoCount': stats.get('videoCount', '0'),
             'viewCount': stats.get('viewCount', '0'),
             'uploadsPlaylist': uploads_playlist,
             'userEmail': user_email,
+            'has_channel': True,
             'allChannels': all_channels,
             'allAccounts': connected_accounts
         })
     except Exception as e:
+        print(f"Error in /api/channel: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recent_videos')

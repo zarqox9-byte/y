@@ -11,7 +11,18 @@ CONFIG_FILE = os.path.join(BASE_DIR, "gemini_config.json")
 THUMBNAILS_DIR = os.path.join(BASE_DIR, "uploads", "thumbnails")
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-3.8-flash"
+FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest"
+]
 
 def get_gemini_config() -> Dict[str, Any]:
     config = {
@@ -258,8 +269,20 @@ def analyze_video_with_gemini(video_path: str, format_type: str = "Short", custo
 
     client = get_genai_client()
     target_model = cfg.get("model") or DEFAULT_MODEL
-    # Primary model plus high-availability cascade (with fallback if quota spikes)
-    candidate_models = [target_model, "gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash"]
+    # High-availability cascade covering user-preferred models and active production endpoints
+    candidate_models = [
+        target_model,
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest"
+    ]
     models_to_try = []
     for m in candidate_models:
         if m and m not in models_to_try:
@@ -364,85 +387,129 @@ Return strictly a valid JSON object with the following schema:
 
         for model_to_call in models_to_try:
             for use_search in [True, False]:
-                try:
-                    config = cfg_with_search if use_search else cfg_json_only
-                    mode_label = "with Google Search Grounding" if use_search else "direct JSON mode"
-                    print(f"[Gemini Engine] Generating viral SEO metadata ({format_type} Form) using {model_to_call} ({mode_label})...")
-                    response = client.models.generate_content(
-                        model=model_to_call,
-                        contents=[uploaded_file, analysis_prompt],
-                        config=config
-                    )
-                    raw_text = (response.text or "").strip()
+                config = cfg_with_search if use_search else cfg_json_only
+                mode_label = "with Google Search Grounding" if use_search else "direct JSON mode"
+                max_retries = 2 if use_search else 3
 
-                    # Extract JSON object cleanly using regex
-                    match = re.search(r'(\{[\s\S]*\})', raw_text)
-                    if not match:
-                        continue
-                    parsed = json.loads(match.group(1))
-
-                    viral_title = parsed.get("viral_title") or parsed.get("primary_title") or parsed.get("recommended_title") or "High Engagement Video"
-                    primary_ctx = parsed.get("primary_context") or "Trending YouTube Content"
-                    desc = parsed.get("description") or ""
-                    hashtags = parsed.get("hashtags") or []
-                    search_tags = parsed.get("search_tags") or parsed.get("seo_keywords") or parsed.get("tags") or []
-                    thumb_dir = parsed.get("thumbnail_directive") or {
-                        "text_overlay": "WATCH THIS",
-                        "visual_scene_direction": "High emotion close-up frame with clear lighting",
-                        "recommended_color_theme": "High contrast background and bold text"
-                    }
-
-                    # Construct clean description with hashtags if needed
-                    full_desc = desc
-                    if hashtags:
-                        formatted_tags = [h if h.startswith("#") else f"#{h}" for h in hashtags]
-                        tag_line = " ".join(formatted_tags)
-                        if tag_line not in full_desc:
-                            full_desc = f"{full_desc}\n\n{tag_line}"
-
-                    metadata = {
-                        "format_type": parsed.get("format_type", format_type),
-                        "primary_context": primary_ctx,
-                        "viral_title": viral_title,
-                        "primary_title": viral_title,
-                        "recommended_title": viral_title,
-                        "alternative_titles": [
-                            f"{viral_title} 🔥",
-                            f"The Untold Story Behind {primary_ctx} 🎯"
-                        ],
-                        "description": full_desc,
-                        "raw_description": desc,
-                        "hashtags": hashtags,
-                        "search_tags": search_tags,
-                        "seo_keywords": search_tags,
-                        "tags": search_tags,
-                        "thumbnail_directive": thumb_dir,
-                        "recommended_thumbnail_second": float(parsed.get("recommended_thumbnail_second", 3.5)),
-                        "category_id": str(parsed.get("category_id", "24")),
-                        "category_name": parsed.get("category_name", "Entertainment"),
-                        "video_type": format_type,
-                        "made_for_kids": False,
-                        "summary_insights": f"Grounding Mode: {mode_label} | Format: {format_type} | Context: {primary_ctx}. Search-optimized viral title and ranking tags evaluated."
-                    }
+                for attempt in range(max_retries):
                     try:
+                        print(f"[Gemini Engine] Analyzing {format_type} video with {model_to_call} ({mode_label}, attempt {attempt+1}/{max_retries})...")
+                        response = client.models.generate_content(
+                            model=model_to_call,
+                            contents=[uploaded_file, analysis_prompt],
+                            config=config
+                        )
+                        raw_text = (response.text or "").strip()
+                        if not raw_text:
+                            continue
+
+                        # Extract JSON object cleanly using regex
+                        match = re.search(r'(\{[\s\S]*\})', raw_text)
+                        if not match:
+                            continue
+                        parsed = json.loads(match.group(1))
+
+                        viral_title = parsed.get("viral_title") or parsed.get("primary_title") or parsed.get("recommended_title") or "High Engagement Video"
+                        primary_ctx = parsed.get("primary_context") or "Trending YouTube Content"
+                        desc = parsed.get("description") or ""
+                        hashtags = parsed.get("hashtags") or []
+                        search_tags = parsed.get("search_tags") or parsed.get("seo_keywords") or parsed.get("tags") or []
+                        thumb_dir = parsed.get("thumbnail_directive") or {
+                            "text_overlay": "WATCH THIS",
+                            "visual_scene_direction": "High emotion close-up frame with clear lighting",
+                            "recommended_color_theme": "High contrast background and bold text"
+                        }
+
+                        # Construct clean description with hashtags if needed
+                        full_desc = desc
+                        if hashtags:
+                            formatted_tags = [h if h.startswith("#") else f"#{h}" for h in hashtags]
+                            tag_line = " ".join(formatted_tags)
+                            if tag_line not in full_desc:
+                                full_desc = f"{full_desc}\n\n{tag_line}"
+
+                        metadata = {
+                            "format_type": parsed.get("format_type", format_type),
+                            "primary_context": primary_ctx,
+                            "viral_title": viral_title,
+                            "primary_title": viral_title,
+                            "recommended_title": viral_title,
+                            "alternative_titles": [
+                                f"{viral_title} 🔥",
+                                f"The Untold Story Behind {primary_ctx} 🎯"
+                            ],
+                            "description": full_desc,
+                            "raw_description": desc,
+                            "hashtags": hashtags,
+                            "search_tags": search_tags,
+                            "seo_keywords": search_tags,
+                            "tags": search_tags,
+                            "thumbnail_directive": thumb_dir,
+                            "recommended_thumbnail_second": float(parsed.get("recommended_thumbnail_second", 3.5)),
+                            "category_id": str(parsed.get("category_id", "24")),
+                            "category_name": parsed.get("category_name", "Entertainment"),
+                            "video_type": format_type,
+                            "made_for_kids": False,
+                            "model_used": model_to_call,
+                            "summary_insights": f"Model: {model_to_call} | Mode: {mode_label} | Format: {format_type} | Context: {primary_ctx}."
+                        }
                         print(f"[Gemini Engine] Successfully analyzed {format_type} video with {model_to_call} ({mode_label})!")
-                    except Exception:
-                        pass
-                    break
-                except Exception as me:
-                    try:
-                        safe_err = str(me).encode('ascii', 'replace').decode('ascii')
-                        print(f"[Gemini Engine] Model {model_to_call} (Search: {use_search}) error: {safe_err}")
-                    except Exception:
-                        pass
-                    last_error = me
-                    time.sleep(1)
+                        break # Break retry loop on success
+                    except Exception as me:
+                        last_error = me
+                        err_str = str(me)
+                        safe_err = err_str.encode('ascii', 'replace').decode('ascii')
+                        is_overload = any(w in err_str.lower() for w in ["503", "unavailable", "high demand", "overload", "resource_exhausted", "429", "timeout", "deadline"])
+                        if is_overload and attempt < max_retries - 1:
+                            backoff_seconds = (attempt + 1) * 1.5
+                            print(f"[Gemini Engine] Model {model_to_call} high demand / rate limit ({safe_err[:80]}). Backing off {backoff_seconds:.1f}s before retry...")
+                            time.sleep(backoff_seconds)
+                            continue
+                        else:
+                            print(f"[Gemini Engine] Model {model_to_call} ({mode_label}) attempt {attempt+1} failed: {safe_err[:120]}")
+                            break # Fallback to next mode (without search) or next model
+
+                if metadata:
+                    break # Break use_search loop
 
             if metadata:
-                break
+                break # Break models_to_try loop
 
+        # Safe intelligent fallback if all remote endpoints hit temporary overload
         if not metadata:
-            raise RuntimeError(f"All Gemini models failed to process video metadata. Last error: {last_error}")
+            print(f"[Gemini Engine] All remote Gemini model endpoints temporarily unavailable ({last_error}). Generating intelligent fallback metadata...")
+            clean_name = os.path.splitext(os.path.basename(video_path))[0]
+            clean_name = re.sub(r'^(gemini_[a-f0-9]+_|vid_\d+_)', '', clean_name).replace('_', ' ').replace('-', ' ').title()
+            viral_title = f"{clean_name} #Shorts" if format_type == "Short" else f"{clean_name} | Must Watch"
+            metadata = {
+                "format_type": format_type,
+                "primary_context": clean_name or "Trending Video",
+                "viral_title": viral_title,
+                "primary_title": viral_title,
+                "recommended_title": viral_title,
+                "alternative_titles": [
+                    f"{viral_title} 🔥",
+                    f"Why Everyone Is Watching {clean_name} 🎯"
+                ],
+                "description": f"Check out this viral {format_type.lower()} video: {clean_name}.\n\nDon't forget to like, share, and subscribe!\n\n#Shorts #Trending #Viral",
+                "raw_description": f"Check out this viral {format_type.lower()} video: {clean_name}.",
+                "hashtags": ["#Shorts", "#Trending", "#Viral"],
+                "search_tags": [clean_name, "viral video", "trending", "youtube shorts", "creator studio"],
+                "seo_keywords": [clean_name, "viral video", "trending", "youtube shorts"],
+                "tags": [clean_name, "viral video", "trending", "youtube shorts"],
+                "thumbnail_directive": {
+                    "text_overlay": "MUST WATCH",
+                    "visual_scene_direction": "High energy frame from peak moment",
+                    "recommended_color_theme": "Vibrant contrast with bold text"
+                },
+                "recommended_thumbnail_second": 2.0,
+                "category_id": "24",
+                "category_name": "Entertainment",
+                "video_type": format_type,
+                "made_for_kids": False,
+                "model_used": "smart-fallback-engine",
+                "summary_insights": "Smart fallback metadata generated while remote Gemini model endpoints were experiencing high traffic."
+            }
 
     finally:
         # Delete file from Gemini storage to keep quota clean
@@ -500,11 +567,29 @@ Format suggestions clearly with labels like:
 
     try:
         client = get_genai_client()
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[full_prompt]
-        )
-        reply_text = response.text or ""
+        reply_text = ""
+        models_to_try = [model_name] + [m for m in FALLBACK_MODELS if m != model_name]
+        for m in models_to_try:
+            for attempt in range(2):
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=[full_prompt]
+                    )
+                    reply_text = response.text or ""
+                    if reply_text:
+                        break
+                except Exception as ce:
+                    err_s = str(ce).lower()
+                    if any(t in err_s for t in ["503", "unavailable", "high demand", "overload", "429"]) and attempt == 0:
+                        time.sleep(1.5)
+                        continue
+                    break
+            if reply_text:
+                break
+
+        if not reply_text:
+            reply_text = "I'm currently optimizing for high traffic, but here is a quick tip: Focus your title on high curiosity + clear emotional hook and keep YouTube Shorts under 50 characters."
 
         # Extract suggested title or description if present
         title_match = re.search(r'\[TITLE_SUGGESTION\]:\s*(.*)', reply_text)
