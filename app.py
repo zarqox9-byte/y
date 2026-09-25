@@ -5107,6 +5107,77 @@ def api_clipper_diagnostics():
     return jsonify(diag)
 
 
+@app.route('/api/clipper/test_pipeline', methods=['GET', 'POST'])
+def api_clipper_test_pipeline():
+    import time
+    url = request.args.get('url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    report = {'url': url, 'steps': {}}
+    t_start = time.time()
+    
+    # 1. Test voiceover generation
+    t0 = time.time()
+    vo_path = os.path.join(clipper_engine.TEMP_DIR, f"test_vo_{uuid.uuid4().hex[:6]}.mp3")
+    try:
+        vo_ok = clipper_engine.generate_voiceover_audio("This is a quick test of neural voiceover narration.", vo_path, language="English")
+        report['steps']['voiceover'] = {
+            'success': vo_ok,
+            'time_sec': round(time.time() - t0, 2),
+            'size': os.path.getsize(vo_path) if os.path.exists(vo_path) else 0
+        }
+    except Exception as e:
+        report['steps']['voiceover'] = {'error': str(e), 'time_sec': round(time.time() - t0, 2)}
+        
+    # 2. Test BGM synthesis
+    t0 = time.time()
+    try:
+        bgm_path = clipper_engine.ensure_background_music_exists()
+        report['steps']['bgm'] = {
+            'path': bgm_path,
+            'time_sec': round(time.time() - t0, 2),
+            'size': os.path.getsize(bgm_path) if os.path.exists(bgm_path) else 0
+        }
+    except Exception as e:
+        report['steps']['bgm'] = {'error': str(e), 'time_sec': round(time.time() - t0, 2)}
+        
+    # 3. Test act segment download (20 seconds)
+    t0 = time.time()
+    act_path = os.path.join(clipper_engine.TEMP_DIR, f"test_act_{uuid.uuid4().hex[:6]}.mp4")
+    try:
+        act_ok = clipper_engine.download_clip_section(url, "00:00:10", "00:00:30", act_path)
+        report['steps']['act_download'] = {
+            'success': act_ok,
+            'time_sec': round(time.time() - t0, 2),
+            'size': os.path.getsize(act_path) if os.path.exists(act_path) else 0
+        }
+    except Exception as e:
+        report['steps']['act_download'] = {'error': str(e), 'time_sec': round(time.time() - t0, 2)}
+        
+    # 4. Test reframe to 9:16
+    if os.path.exists(act_path) and os.path.getsize(act_path) > 10000:
+        t0 = time.time()
+        norm_path = os.path.join(clipper_engine.TEMP_DIR, f"test_norm_{uuid.uuid4().hex[:6]}.mp4")
+        try:
+            rf_ok = clipper_engine.reframe_subclip_to_vertical_916(act_path, norm_path)
+            report['steps']['reframe_916'] = {
+                'success': rf_ok,
+                'time_sec': round(time.time() - t0, 2),
+                'size': os.path.getsize(norm_path) if os.path.exists(norm_path) else 0
+            }
+            if os.path.exists(norm_path):
+                os.remove(norm_path)
+        except Exception as e:
+            report['steps']['reframe_916'] = {'error': str(e), 'time_sec': round(time.time() - t0, 2)}
+            
+    # Clean up act segment and vo
+    if os.path.exists(act_path):
+        os.remove(act_path)
+    if os.path.exists(vo_path):
+        os.remove(vo_path)
+        
+    report['total_sec'] = round(time.time() - t_start, 2)
+    return jsonify(report)
+
+
 @app.route('/api/clipper/start_batch_job', methods=['POST'])
 def clipper_start_batch_job():
     data = request.get_json(force=True, silent=True) or {}
