@@ -468,6 +468,10 @@ Description:
 {chapters_summary}
 
 === REQUIREMENTS ===
+0. EXACT PARTS COUNT:
+   - You MUST plan and generate EXACTLY {max_shorts} chronological Parts (from Part 1 up to Part {max_shorts}).
+   - Do NOT return fewer or more than {max_shorts} Parts.
+
 1. CHRONOLOGY & PROGRESSION:
    - Every Part must be in STRICT CHRONOLOGICAL ORDER (Part 1 covers the opening/inciting incident, Part 2 follows Part 1, Part 3 advances further towards climax).
    - Within each Part, the 8 to 14 sub-clips must also progress chronologically through that story segment.
@@ -574,7 +578,7 @@ Return ONLY a valid JSON array of objects with no markdown explanation:
         scenes = generate_algorithmic_scenes(title, duration, max_shorts, target_duration, language)
 
     # Sanitize, enforce chronology, and validate bounds
-    sanitized_scenes = sanitize_and_order_scenes(scenes, duration, target_duration, title)
+    sanitized_scenes = sanitize_and_order_scenes(scenes, duration, target_duration, title, max_shorts=max_shorts, language=language)
 
     # Save to persistent checkpoint file if job_id provided
     if job_id:
@@ -656,7 +660,7 @@ def generate_algorithmic_scenes(
 ) -> List[Dict[str, Any]]:
     """Creates high-quality chronological multi-scene montage scenes if Gemini output was unparseable."""
     scenes = []
-    count = min(max(1, max_shorts), 10)
+    count = min(max(1, max_shorts), 20)
     effective_duration = max(duration, count * target_duration + 60)
     step = (effective_duration - 60) / (count + 1)
 
@@ -706,11 +710,13 @@ def sanitize_and_order_scenes(
     scenes: List[Dict[str, Any]],
     total_duration: int,
     target_duration: int,
-    video_title: str
+    video_title: str,
+    max_shorts: int = 5,
+    language: str = "Hindi"
 ) -> List[Dict[str, Any]]:
     """
     Ensures chronological sorting, validates 8-14 sub-clips per Part,
-    enforces 50-70s total montage duration, and sets uniform metadata keys.
+    enforces 50-70s total montage duration, and delivers EXACTLY `max_shorts` parts.
     """
     valid_scenes = []
     target_d = min(max(50, target_duration), 70)
@@ -746,7 +752,7 @@ def sanitize_and_order_scenes(
                     "description": c.get("description", f"Montage Cut {idx}")
                 })
 
-        # If Gemini didn't provide valid sub_clips or fewer than 4 were valid, synthesize 8-12 cuts
+        # If Gemini didn't provide valid sub_clips or fewer than 4 were valid, synthesize cuts
         if len(valid_sub_clips) < 4:
             s_start = s.get("start_seconds")
             if s_start is None:
@@ -799,6 +805,15 @@ def sanitize_and_order_scenes(
             "montage_mode": True,
             "copyright_safe": True
         })
+
+    # Enforce exact requested parts count (1 to 20)
+    target_count = min(max(1, max_shorts), 20)
+    valid_scenes = valid_scenes[:target_count]
+    if len(valid_scenes) < target_count:
+        fallback_all = generate_algorithmic_scenes(video_title, total_duration, max_shorts=target_count, target_duration=target_d, language=language)
+        for idx in range(len(valid_scenes), target_count):
+            if idx < len(fallback_all):
+                valid_scenes.append(fallback_all[idx])
 
     # Sort parts chronologically
     valid_scenes.sort(key=lambda x: x["start_seconds"])
@@ -1621,7 +1636,8 @@ def process_single_short_pipeline(
     scene: Dict[str, Any],
     language: str = "Hindi",
     video_title: str = "",
-    job_id: Optional[str] = None
+    job_id: Optional[str] = None,
+    progress_callback: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Executes the 100% copyright-safe dynamic multi-scene montage pipeline for a single Part:
@@ -1634,9 +1650,17 @@ def process_single_short_pipeline(
     7. Overlays Voiceover (100%) + Background Music (12%) onto the montage.
     8. Extracts preview thumbnail and saves checkpoint.
     """
+    def notify_progress(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+
     part_num = scene.get("part", 1)
     title = scene.get("title", f"Part {part_num} #Shorts")
     sub_clips = scene.get("sub_clips") or []
+    notify_progress(5, f"Starting dynamic montage pipeline for Part {part_num}...")
 
     # If sub_clips is missing or less than 4 cuts, generate dynamic cuts
     if not isinstance(sub_clips, list) or len(sub_clips) < 4:
@@ -1665,15 +1689,19 @@ def process_single_short_pipeline(
     logger.info(f"--- Starting Dynamic Multi-Scene Montage for Part {part_num} ({len(sub_clips)} cuts: {start_time} to {end_time}) ---")
 
     # Step 1: Ensure narrative voiceover script exists & generate neural voiceover audio
+    notify_progress(12, "Generating neural AI voiceover script...")
     script = ensure_scene_script(scene, video_title=video_title or title, language=language)
     vo_ok = False
     if script:
+        notify_progress(18, "Synthesizing neural voiceover narration (Edge-TTS)...")
         vo_ok = generate_voiceover_audio(script, vo_path, language)
 
     # Step 2: Ensure subtle copyright-free background music exists
+    notify_progress(25, "Synthesizing cinematic ambient background music...")
     bgm_path = ensure_background_music_exists()
 
     # Step 3: Download and reframe sub-clips to 9:16 vertical (stripping 100% movie audio)
+    notify_progress(30, "Downloading fast video stream segment...")
     normalized_clips = []
     temp_clip_paths = []
     ffmpeg_bin = get_ffmpeg_bin()
@@ -1689,6 +1717,7 @@ def process_single_short_pipeline(
         act_segment_path = None
 
     start_sec = parse_timestamp_to_seconds(start_time)
+    total_cuts = len(sub_clips)
     for idx, c in enumerate(sub_clips, 1):
         c_start = c.get("start_time")
         c_end = c.get("end_time")
@@ -1698,6 +1727,9 @@ def process_single_short_pipeline(
         raw_sub = os.path.join(TEMP_DIR, f"sub_raw_{part_num}_{idx}_{unique_id}.mp4")
         norm_sub = os.path.join(TEMP_DIR, f"sub_norm_{part_num}_{idx}_{unique_id}.mp4")
         temp_clip_paths.extend([raw_sub, norm_sub])
+
+        cut_pct = 35 + int(((idx - 1) / max(total_cuts, 1)) * 38)
+        notify_progress(cut_pct, f"Centering faces & 9:16 reframing (Cut {idx}/{total_cuts})...")
 
         logger.info(f"Processing Cut {idx}/{len(sub_clips)} for Part {part_num}: [{c_start} - {c_end}]")
         dl_ok = False
@@ -1742,11 +1774,13 @@ def process_single_short_pipeline(
     logger.info(f"Successfully processed {len(normalized_clips)} vertical cuts for Part {part_num}. Concatenating montage...")
 
     # Step 4: Concatenate normalized silent sub-clips
+    notify_progress(78, "Concatenating vertical sub-clips into fast-paced montage...")
     concat_ok = concat_normalized_clips(normalized_clips, silent_montage_path)
     if not concat_ok or not os.path.exists(silent_montage_path):
         raise RuntimeError(f"Failed to concatenate montage sub-clips for Part {part_num}")
 
     # Step 5: Overlay AI Voiceover & Copyright-Free Background Music (0% original movie audio)
+    notify_progress(88, "Merging voiceover narration & copyright-free BGM...")
     render_ok = render_montage_with_audio_overlay(
         montage_video_path=silent_montage_path,
         voiceover_path=vo_path if vo_ok else None,
@@ -1757,7 +1791,9 @@ def process_single_short_pipeline(
         raise RuntimeError(f"FFmpeg failed to render final montage Short for Part {part_num}")
 
     # Step 6: Extract Preview Thumbnail Frame
+    notify_progress(96, "Generating HD thumbnail preview...")
     generate_short_thumbnail(final_video_path, final_thumb_path)
+    notify_progress(100, f"Part {part_num} short ready!")
 
     # Clean intermediate temporary files
     for p in temp_clip_paths:

@@ -3956,19 +3956,25 @@ HTML_MAIN = """
             scene.tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
 
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Generating Short...';
+            btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> 5% Starting...';
             badge.className = 'status-badge';
             badge.style.background = 'rgba(255, 0, 85, 0.2)';
             badge.style.color = '#fda4af';
-            badge.textContent = '⚙️ Rendering...';
+            badge.textContent = '⚙️ 5%';
 
             mediaBox.innerHTML = `
                 <div class="placeholder-916">
                     <div class="spinner" style="border-top-color: #ff0055; width: 30px; height: 30px;"></div>
-                    <span style="font-size: 12px; margin-top: 8px;">Downloading clip section...</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">Tracking faces &amp; reframing to 9:16</span>
+                    <span id="partStepTitle_${partNum}" style="font-size: 12px; font-weight: 600; margin-top: 8px; color: #fff;">5% Initializing pipeline...</span>
+                    <span id="partStepDesc_${partNum}" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 0 10px;">Downloading cuts &amp; 9:16 face centering</span>
+                    <div style="width: 80%; height: 6px; background: rgba(255,255,255,0.12); border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                        <div id="partProgressBar_${partNum}" style="width: 5%; height: 100%; background: linear-gradient(90deg, #ff0055, #ff5e8e); transition: width 0.4s ease;"></div>
+                    </div>
                 </div>
             `;
+
+            const activeJobId = currentClipperJobId || 'job_' + Date.now();
+            currentClipperJobId = activeJobId;
 
             try {
                 const res = await fetch('/api/clipper/generate_short', {
@@ -3979,31 +3985,72 @@ HTML_MAIN = """
                         scene: scene,
                         language: clipperLanguageSelect.value || 'Hindi',
                         video_title: currentClipperVideoInfo.title || '',
-                        job_id: currentClipperJobId
+                        job_id: activeJobId
                     })
                 });
 
                 const data = await res.json();
                 if (!res.ok || !data.success) {
-                    if (res.status === 429 || data.is_quota_error) {
-                        clipperQuotaBanner.style.display = 'block';
-                        clipperQuotaBannerTitle.textContent = `Gemini Quota Exceeded at Part ${partNum} — Safely Paused`;
-                        clipperQuotaBannerDesc.innerHTML = `Progress saved. Update your Gemini API key in Settings or wait for quota reset, then click <strong>Resume Job</strong>.`;
-                        badge.className = 'status-badge';
-                        badge.style.background = 'rgba(245, 158, 11, 0.2)';
-                        badge.style.color = '#fbbf24';
-                        badge.textContent = '⚠️ Paused (Quota)';
-                        btn.disabled = false;
-                        btn.textContent = `▶️ Retry Part ${partNum}`;
-                        if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
-                        return;
-                    }
-                    throw new Error(data.error || 'Failed to render short');
+                    throw new Error(data.error || 'Failed to start short generation');
                 }
 
-                const shortObj = data.short;
-                completedClipperShorts[partNum] = shortObj;
-                markPartAsCompleted(partNum, shortObj);
+                // If already completed synchronously or from cache
+                if (data.status === 'completed' && data.short) {
+                    completedClipperShorts[partNum] = data.short;
+                    markPartAsCompleted(partNum, data.short);
+                    return;
+                }
+
+                // Poll status every 1.5 seconds
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const sRes = await fetch(`/api/clipper/status/${encodeURIComponent(activeJobId)}/${partNum}`);
+                        if (!sRes.ok) return;
+                        const sData = await sRes.json();
+
+                        const pct = sData.progress || 10;
+                        const stepMsg = sData.current_step || 'Processing...';
+                        const titleEl = document.getElementById(`partStepTitle_${partNum}`);
+                        const descEl = document.getElementById(`partStepDesc_${partNum}`);
+                        const barEl = document.getElementById(`partProgressBar_${partNum}`);
+
+                        if (titleEl) titleEl.textContent = `${pct}% Complete`;
+                        if (descEl) descEl.textContent = stepMsg;
+                        if (barEl) barEl.style.width = `${pct}%`;
+
+                        badge.textContent = `⚙️ ${pct}%`;
+                        btn.innerHTML = `<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> ${pct}% Rendering...`;
+
+                        if (sData.status === 'completed' && sData.short) {
+                            clearInterval(pollInterval);
+                            completedClipperShorts[partNum] = sData.short;
+                            markPartAsCompleted(partNum, sData.short);
+                        } else if (sData.status === 'PAUSED_QUOTA_LIMIT' || sData.is_quota_error) {
+                            clearInterval(pollInterval);
+                            clipperQuotaBanner.style.display = 'block';
+                            clipperQuotaBannerTitle.textContent = `Gemini Quota Exceeded at Part ${partNum} — Safely Paused`;
+                            clipperQuotaBannerDesc.innerHTML = `Progress saved. Update your Gemini API key in Settings or wait for quota reset, then click <strong>Resume Job</strong>.`;
+                            badge.className = 'status-badge';
+                            badge.style.background = 'rgba(245, 158, 11, 0.2)';
+                            badge.style.color = '#fbbf24';
+                            badge.textContent = '⚠️ Paused (Quota)';
+                            btn.disabled = false;
+                            btn.textContent = `▶️ Retry Part ${partNum}`;
+                            if (btnResumeBatchShorts) btnResumeBatchShorts.style.display = 'inline-flex';
+                        } else if (sData.status === 'error') {
+                            clearInterval(pollInterval);
+                            alert(`Error generating Part ${partNum}: ` + (sData.error || 'Failed to render short'));
+                            badge.className = 'status-badge';
+                            badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                            badge.style.color = '#f87171';
+                            badge.textContent = '❌ Failed';
+                            btn.disabled = false;
+                            btn.textContent = `⚡ Retry Part ${partNum}`;
+                        }
+                    } catch (pollErr) {
+                        console.warn('Status poll warning:', pollErr);
+                    }
+                }, 1500);
 
             } catch (err) {
                 console.error(`Part ${partNum} generation error:`, err);
@@ -5008,6 +5055,8 @@ def clipper_analyze():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+clipper_part_tasks = {}
+
 @app.route('/api/clipper/generate_short', methods=['POST'])
 def clipper_generate_short():
     data = request.get_json(force=True, silent=True) or {}
@@ -5015,42 +5064,140 @@ def clipper_generate_short():
     scene = data.get('scene') or {}
     language = (data.get('language') or 'Hindi').strip()
     video_title = (data.get('video_title') or '').strip()
-    job_id = (data.get('job_id') or '').strip()
+    job_id = (data.get('job_id') or '').strip() or str(uuid.uuid4())
+    part_num = int(scene.get('part', 1))
+    sync_mode = bool(data.get('sync', False))
 
     if not url or not scene:
         return jsonify({'success': False, 'error': 'URL and scene data are required'}), 400
 
-    try:
-        short_obj = clipper_engine.process_single_short_pipeline(
-            youtube_url=url,
-            scene=scene,
-            language=language,
-            video_title=video_title,
-            job_id=job_id if job_id else None
-        )
-        return jsonify({'success': True, 'short': short_obj, 'job_id': job_id})
-    except Exception as e:
-        import traceback
-        tb_str = traceback.format_exc()
-        err_msg = str(e)
-        print(f"Clipper generate short error: {err_msg}\n{tb_str}")
-        is_quota = any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit'])
-        if job_id and is_quota:
-            ckpt = clipper_engine.load_job_checkpoint(job_id)
-            if ckpt:
-                ckpt['status'] = 'PAUSED_QUOTA_LIMIT'
-                ckpt['error'] = f"Gemini Quota Exceeded (429): {err_msg}"
-                clipper_engine.save_job_checkpoint(job_id, ckpt)
-            if job_id in clipper_jobs:
-                clipper_jobs[job_id]['status'] = 'PAUSED_QUOTA_LIMIT'
-                clipper_jobs[job_id]['error'] = err_msg
+    task_key = f"{job_id}_{part_num}"
+
+    # 1. If already completed in disk checkpoint, return short immediately
+    ckpt = clipper_engine.load_job_checkpoint(job_id)
+    if ckpt and isinstance(ckpt.get('completed_shorts'), dict) and str(part_num) in ckpt['completed_shorts']:
+        completed_short = ckpt['completed_shorts'][str(part_num)]
+        clipper_part_tasks[task_key] = {
+            'status': 'completed',
+            'progress': 100,
+            'current_step': 'Complete!',
+            'short': completed_short,
+            'error': None
+        }
+        return jsonify({'success': True, 'status': 'completed', 'short': completed_short, 'job_id': job_id, 'part': part_num})
+
+    # 2. If already processing in background, return current status
+    if task_key in clipper_part_tasks and clipper_part_tasks[task_key].get('status') == 'processing':
         return jsonify({
-            'success': False,
-            'error': err_msg,
-            'traceback': tb_str,
-            'is_quota_error': is_quota,
-            'status': 'PAUSED_QUOTA_LIMIT' if is_quota else 'error'
-        }), 429 if is_quota else 500
+            'success': True,
+            'status': 'processing',
+            'progress': clipper_part_tasks[task_key].get('progress', 10),
+            'current_step': clipper_part_tasks[task_key].get('current_step', 'Processing...'),
+            'job_id': job_id,
+            'part': part_num,
+            'task_key': task_key
+        })
+
+    # 3. Synchronous mode (if explicitly requested by CLI/tests)
+    if sync_mode:
+        try:
+            short_obj = clipper_engine.process_single_short_pipeline(
+                youtube_url=url,
+                scene=scene,
+                language=language,
+                video_title=video_title,
+                job_id=job_id
+            )
+            clipper_part_tasks[task_key] = {
+                'status': 'completed',
+                'progress': 100,
+                'current_step': 'Complete!',
+                'short': short_obj,
+                'error': None
+            }
+            return jsonify({'success': True, 'status': 'completed', 'short': short_obj, 'job_id': job_id, 'part': part_num})
+        except Exception as e:
+            err_msg = str(e)
+            return jsonify({'success': False, 'error': err_msg}), 500
+
+    # 4. Asynchronous Background Mode (Default — prevents any Gunicorn timeout & browser freeze)
+    clipper_part_tasks[task_key] = {
+        'status': 'processing',
+        'progress': 5,
+        'current_step': f'Queued Part {part_num} for dynamic 9:16 montage generation...',
+        'short': None,
+        'error': None
+    }
+
+    def run_async_pipeline():
+        def progress_cb(pct, msg):
+            if task_key in clipper_part_tasks:
+                clipper_part_tasks[task_key]['progress'] = pct
+                clipper_part_tasks[task_key]['current_step'] = msg
+
+        try:
+            short_obj = clipper_engine.process_single_short_pipeline(
+                youtube_url=url,
+                scene=scene,
+                language=language,
+                video_title=video_title,
+                job_id=job_id,
+                progress_callback=progress_cb
+            )
+            clipper_part_tasks[task_key]['status'] = 'completed'
+            clipper_part_tasks[task_key]['progress'] = 100
+            clipper_part_tasks[task_key]['current_step'] = 'Complete!'
+            clipper_part_tasks[task_key]['short'] = short_obj
+        except Exception as e:
+            import traceback
+            tb_str = traceback.format_exc()
+            err_msg = str(e)
+            print(f"Async Part {part_num} error: {err_msg}\n{tb_str}")
+            is_quota = any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit'])
+            clipper_part_tasks[task_key]['status'] = 'PAUSED_QUOTA_LIMIT' if is_quota else 'error'
+            clipper_part_tasks[task_key]['error'] = err_msg
+            clipper_part_tasks[task_key]['is_quota_error'] = is_quota
+
+    import threading
+    t = threading.Thread(target=run_async_pipeline, daemon=True)
+    t.start()
+
+    return jsonify({
+        'success': True,
+        'status': 'started',
+        'job_id': job_id,
+        'part': part_num,
+        'task_key': task_key,
+        'message': f'Generation for Part {part_num} started in background'
+    }), 202
+
+
+@app.route('/api/clipper/status/<job_id>/<int:part_num>', methods=['GET'])
+def clipper_part_status(job_id, part_num):
+    task_key = f"{job_id}_{part_num}"
+
+    # Check active memory task
+    if task_key in clipper_part_tasks:
+        return jsonify(clipper_part_tasks[task_key])
+
+    # Check disk checkpoint
+    ckpt = clipper_engine.load_job_checkpoint(job_id)
+    if ckpt and isinstance(ckpt.get('completed_shorts'), dict) and str(part_num) in ckpt['completed_shorts']:
+        return jsonify({
+            'status': 'completed',
+            'progress': 100,
+            'current_step': 'Complete!',
+            'short': ckpt['completed_shorts'][str(part_num)],
+            'error': None
+        })
+
+    return jsonify({
+        'status': 'not_found',
+        'progress': 0,
+        'current_step': 'Not started',
+        'short': None,
+        'error': None
+    }), 404
 
 
 @app.route('/api/clipper/debug_logs', methods=['GET'])
