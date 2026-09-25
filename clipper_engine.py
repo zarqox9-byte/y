@@ -1660,7 +1660,19 @@ def process_single_short_pipeline(
     # Step 3: Download and reframe sub-clips to 9:16 vertical (stripping 100% movie audio)
     normalized_clips = []
     temp_clip_paths = []
+    ffmpeg_bin = get_ffmpeg_bin()
 
+    # Optimization: Download the act segment in ONE network request (~3s), then slice cuts locally in 0.1s
+    act_segment_path = os.path.join(TEMP_DIR, f"act_seg_{part_num}_{unique_id}.mp4")
+    temp_clip_paths.append(act_segment_path)
+    act_dl_ok = download_clip_section(youtube_url, start_time, end_time, act_segment_path)
+    if act_dl_ok and os.path.exists(act_segment_path) and os.path.getsize(act_segment_path) > 10000:
+        logger.info(f"Downloaded act segment for Part {part_num} in one pass: {act_segment_path} ({os.path.getsize(act_segment_path)} bytes)")
+    else:
+        logger.warning(f"Single-pass act segment download failed. Falling back to per-cut streaming.")
+        act_segment_path = None
+
+    start_sec = parse_timestamp_to_seconds(start_time)
     for idx, c in enumerate(sub_clips, 1):
         c_start = c.get("start_time")
         c_end = c.get("end_time")
@@ -1672,7 +1684,30 @@ def process_single_short_pipeline(
         temp_clip_paths.extend([raw_sub, norm_sub])
 
         logger.info(f"Processing Cut {idx}/{len(sub_clips)} for Part {part_num}: [{c_start} - {c_end}]")
-        dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
+        dl_ok = False
+
+        if act_segment_path and os.path.exists(act_segment_path):
+            rel_start = max(0, parse_timestamp_to_seconds(c_start) - start_sec)
+            dur = max(1, parse_timestamp_to_seconds(c_end) - parse_timestamp_to_seconds(c_start))
+            cmd_slice = [
+                ffmpeg_bin, "-y",
+                "-ss", str(rel_start),
+                "-t", str(dur),
+                "-i", act_segment_path,
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
+                raw_sub
+            ]
+            try:
+                subprocess.run(cmd_slice, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+                if os.path.exists(raw_sub) and os.path.getsize(raw_sub) > 5000:
+                    dl_ok = True
+            except Exception as se:
+                logger.warning(f"Local slice failed: {se}")
+
+        if not dl_ok:
+            dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
+
         if dl_ok:
             rf_ok = reframe_subclip_to_vertical_916(raw_sub, norm_sub)
             if os.path.exists(raw_sub):
