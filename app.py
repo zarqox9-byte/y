@@ -2172,6 +2172,18 @@ HTML_MAIN = """
                                 <option value="English">English (Christopher Movie Narrator)</option>
                             </select>
                         </div>
+
+                        <!-- Option 4: Pipeline Format Mode -->
+                        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 600;">Pipeline Format Mode</span>
+                                <span style="font-size: 11px; color: #38bdf8;">Unbundled 4-Step</span>
+                            </div>
+                            <select id="clipperFormatModeSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
+                                <option value="standard_first" selected>Standard Preview First (Instant ~15s, 1-Click 9:16 Convert)</option>
+                                <option value="auto_vertical">Auto-Convert to 9:16 Vertical (Auto Face-Centering)</option>
+                            </select>
+                        </div>
                     </div>
 
                     <!-- Action Buttons -->
@@ -3873,6 +3885,26 @@ HTML_MAIN = """
             return 'background: rgba(255, 255, 255, 0.08); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.15);';
         }
 
+        function updateSceneCutsGallery(partNum, cuts) {
+            const grid = document.getElementById(`sceneCutsGrid_${partNum}`);
+            if (!grid || !cuts || !cuts.length) return;
+            grid.innerHTML = cuts.map((c, ci) => `
+                <div style="display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 6px; ${getBeatStyle(c.beat)}">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 700; font-size: 11px;">${escapeHtml(c.beat || `Cut ${ci+1}`)}</span>
+                        <span style="font-size: 10px; opacity: 0.85;">⏱️ ${c.duration}s</span>
+                    </div>
+                    <div style="font-size: 10px; font-family: monospace; opacity: 0.9;">${c.start_time} - ${c.end_time}</div>
+                    <div style="font-size: 10px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</div>
+                    ${c.url ? `
+                        <a href="${c.url}" target="_blank" style="margin-top: 4px; font-size: 10px; color: #38bdf8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                            ▶️ Play Raw Cut
+                        </a>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
         function renderClipperScenesQueue(scenes) {
             clipperScenesGrid.innerHTML = scenes.map((scene, idx) => `
                 <div class="scene-item-card" id="sceneCard_${scene.part}">
@@ -3890,7 +3922,7 @@ HTML_MAIN = """
                         <div class="scene-video-box" id="sceneMediaBox_${scene.part}">
                             <div class="placeholder-916">
                                 <span style="font-size: 28px;">🎬</span>
-                                <span style="font-weight: 600; font-size: 13px;">9:16 Dynamic Montage</span>
+                                <span style="font-weight: 600; font-size: 13px;">Standard / Vertical Montage</span>
                                 <span style="font-size: 11px; color: var(--text-muted);">${(scene.sub_clips || []).length || 8} Fast Cuts (3-6s) • Muted Audio • BGM &amp; Voiceover</span>
                             </div>
                         </div>
@@ -3912,8 +3944,8 @@ HTML_MAIN = """
                                     <label class="field-label" style="margin: 0;">🎬 Smart Director Storyboard (${(scene.sub_clips || []).length} Cuts • 50-65s Total)</label>
                                     <span style="font-size: 11px; color: #10b981; font-weight: 600;">⚡ High-Speed Sliced (0% Movie Audio)</span>
                                 </div>
-                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 6px; max-height: 140px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                                    ${(scene.sub_clips || []).map((c, ci) => `
+                                <div id="sceneCutsGrid_${scene.part}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 6px; max-height: 140px; overflow-y: auto; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                    ${(scene.downloaded_cuts && scene.downloaded_cuts.length ? scene.downloaded_cuts : (scene.sub_clips || [])).map((c, ci) => `
                                         <div style="display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 6px; ${getBeatStyle(c.beat)}">
                                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                                 <span style="font-weight: 700; font-size: 11px;">${escapeHtml(c.beat || `Cut ${ci+1}`)}</span>
@@ -3921,6 +3953,11 @@ HTML_MAIN = """
                                             </div>
                                             <div style="font-size: 10px; font-family: monospace; opacity: 0.9;">${c.start_time} - ${c.end_time}</div>
                                             <div style="font-size: 10px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</div>
+                                            ${c.url ? `
+                                                <a href="${c.url}" target="_blank" style="margin-top: 4px; font-size: 10px; color: #38bdf8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                                                    ▶️ Play Raw Cut
+                                                </a>
+                                            ` : ''}
                                         </div>
                                     `).join('')}
                                 </div>
@@ -3938,7 +3975,10 @@ HTML_MAIN = """
 
                             <div class="scene-actions-row">
                                 <button type="button" class="btn-populate" id="btnGenPart_${scene.part}" onclick="generateSinglePart(${scene.part})">
-                                    <span>⚡ Generate Part ${scene.part} (Multi-Cut Montage)</span>
+                                    <span>⚡ Generate Part ${scene.part} (Recap Montage)</span>
+                                </button>
+                                <button type="button" class="btn-populate" id="btnConvertVertPart_${scene.part}" style="display: none; background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 8px 14px; font-size: 12px;" onclick="convertPartToVertical(${scene.part})">
+                                    <span>📱 Convert to 9:16 Vertical Short (Face-Centering)</span>
                                 </button>
                                 <button type="button" class="btn-upload" id="btnUploadPart_${scene.part}" style="display: none; padding: 10px 18px; font-size: 13px; width: auto; background: var(--accent-red);" onclick="uploadSinglePart(${scene.part})">
                                     <span>🚀 Upload Part ${scene.part} to YouTube</span>
@@ -3957,22 +3997,54 @@ HTML_MAIN = """
             const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
             const mediaBox = document.getElementById(`sceneMediaBox_${partNum}`);
             const btn = document.getElementById(`btnGenPart_${partNum}`);
+            const convertBtn = document.getElementById(`btnConvertVertPart_${partNum}`);
             const uploadBtn = document.getElementById(`btnUploadPart_${partNum}`);
+
+            const isVertical = shortObj.format === 'vertical_916' || shortObj.vertical_ready;
 
             if (badge) {
                 badge.className = 'status-badge status-ready';
-                badge.textContent = '✅ Ready to Upload';
-                badge.style.background = '';
-                badge.style.color = '';
+                if (isVertical) {
+                    badge.innerHTML = '✅ 9:16 Vertical Short Ready';
+                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    badge.style.color = '#34d399';
+                } else {
+                    badge.innerHTML = '🎬 16:9 Standard Preview Ready';
+                    badge.style.background = 'rgba(56, 189, 248, 0.2)';
+                    badge.style.color = '#38bdf8';
+                }
             }
+
             if (mediaBox && shortObj && shortObj.video_url) {
+                const vidStyle = isVertical 
+                    ? 'width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);'
+                    : 'width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
+
                 mediaBox.innerHTML = `
-                    <video src="${shortObj.video_url}" poster="${shortObj.thumbnail_url || ''}" controls playsinline preload="metadata" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></video>
+                    <div style="position: relative; width: 100%; height: 100%;">
+                        <video src="${shortObj.video_url}" poster="${shortObj.thumbnail_url || ''}" controls playsinline preload="metadata" style="${vidStyle}"></video>
+                        <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; color: #fff;">
+                            ${isVertical ? '📱 9:16 Vertical' : '🎬 16:9 Standard'}
+                        </div>
+                    </div>
                 `;
             }
+
             if (btn) btn.style.display = 'none';
+
+            if (convertBtn) {
+                convertBtn.style.display = isVertical ? 'none' : 'inline-flex';
+                convertBtn.disabled = false;
+                convertBtn.innerHTML = '<span>📱 Convert to 9:16 Vertical Short (Face-Centering)</span>';
+            }
+
+            if (shortObj.downloaded_cuts && shortObj.downloaded_cuts.length) {
+                updateSceneCutsGallery(partNum, shortObj.downloaded_cuts);
+            }
+
             if (uploadBtn) {
                 uploadBtn.style.display = 'inline-flex';
+                uploadBtn.innerHTML = `<span>🚀 Upload Part ${partNum} to YouTube</span>`;
                 let dlBtn = document.getElementById(`btnDlPart_${partNum}`);
                 if (!dlBtn && uploadBtn.parentNode) {
                     dlBtn = document.createElement('a');
@@ -3988,10 +4060,53 @@ HTML_MAIN = """
                     dlBtn.style.gap = '6px';
                     dlBtn.innerHTML = '📥 Download MP4';
                     uploadBtn.parentNode.insertBefore(dlBtn, uploadBtn.nextSibling);
+                } else if (dlBtn) {
+                    dlBtn.href = shortObj.video_url;
+                    dlBtn.download = shortObj.filename || `short_part_${partNum}.mp4`;
                 }
             }
             updateBatchUploadVisibility();
         }
+
+        // Convert Standard Short to 9:16 Vertical Short on Demand (Step 4)
+        window.convertPartToVertical = async function(partNum) {
+            const convertBtn = document.getElementById(`btnConvertVertPart_${partNum}`);
+            const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
+
+            if (convertBtn) {
+                convertBtn.disabled = true;
+                convertBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; display: inline-block;"></span> Reframing to 9:16 (~5s)...';
+            }
+            if (badge) {
+                badge.textContent = '⚙️ Converting 9:16...';
+                badge.style.background = 'rgba(99, 102, 241, 0.2)';
+                badge.style.color = '#a5b4fc';
+            }
+
+            try {
+                const res = await fetch('/api/clipper/convert_vertical', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: currentClipperJobId,
+                        part: partNum
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to convert to 9:16 vertical');
+                }
+
+                completedClipperShorts[partNum] = data.short;
+                markPartAsCompleted(partNum, data.short);
+            } catch (err) {
+                alert('Conversion error: ' + err.message);
+                if (convertBtn) {
+                    convertBtn.disabled = false;
+                    convertBtn.innerHTML = '<span>📱 Convert to 9:16 Vertical Short (Face-Centering)</span>';
+                }
+            }
+        };
 
         // Generate Single Part
         window.generateSinglePart = async function(partNum) {
@@ -4020,7 +4135,7 @@ HTML_MAIN = """
                 <div class="placeholder-916">
                     <div class="spinner" style="border-top-color: #ff0055; width: 30px; height: 30px;"></div>
                     <span id="partStepTitle_${partNum}" style="font-size: 12px; font-weight: 600; margin-top: 8px; color: #fff;">5% Initializing pipeline...</span>
-                    <span id="partStepDesc_${partNum}" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 0 10px;">Downloading cuts &amp; 9:16 face centering</span>
+                    <span id="partStepDesc_${partNum}" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 0 10px;">Downloading cuts &amp; voiceover sync</span>
                     <div style="width: 80%; height: 6px; background: rgba(255,255,255,0.12); border-radius: 4px; margin-top: 10px; overflow: hidden;">
                         <div id="partProgressBar_${partNum}" style="width: 5%; height: 100%; background: linear-gradient(90deg, #ff0055, #ff5e8e); transition: width 0.4s ease;"></div>
                     </div>
@@ -4029,6 +4144,8 @@ HTML_MAIN = """
 
             const activeJobId = currentClipperJobId || 'job_' + Date.now();
             currentClipperJobId = activeJobId;
+            const formatMode = (document.getElementById('clipperFormatModeSelect')?.value) || 'standard_first';
+            const autoVertical = formatMode === 'auto_vertical';
 
             try {
                 const res = await fetch('/api/clipper/generate_short', {
@@ -4039,7 +4156,8 @@ HTML_MAIN = """
                         scene: scene,
                         language: clipperLanguageSelect.value || 'Hindi',
                         video_title: currentClipperVideoInfo.title || '',
-                        job_id: activeJobId
+                        job_id: activeJobId,
+                        auto_vertical: autoVertical
                     })
                 });
 
@@ -4073,7 +4191,12 @@ HTML_MAIN = """
                         if (barEl) barEl.style.width = `${pct}%`;
 
                         badge.textContent = `⚙️ ${pct}%`;
-                        btn.innerHTML = `<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> ${pct}% Rendering...`;
+                        btn.innerHTML = `<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> ${pct}% Processing...`;
+
+                        // Update cuts gallery in real-time as cuts finish downloading
+                        if (sData.downloaded_cuts && sData.downloaded_cuts.length) {
+                            updateSceneCutsGallery(partNum, sData.downloaded_cuts);
+                        }
 
                         if (sData.status === 'completed' && sData.short) {
                             clearInterval(pollInterval);
@@ -5126,6 +5249,7 @@ def clipper_generate_short():
     job_id = (data.get('job_id') or '').strip() or str(uuid.uuid4())
     part_num = int(scene.get('part', 1))
     sync_mode = bool(data.get('sync', False))
+    auto_vertical = bool(data.get('auto_vertical', False))
 
     if not url or not scene:
         return jsonify({'success': False, 'error': 'URL and scene data are required'}), 400
@@ -5141,6 +5265,7 @@ def clipper_generate_short():
             'progress': 100,
             'current_step': 'Complete!',
             'short': completed_short,
+            'downloaded_cuts': completed_short.get('downloaded_cuts', []),
             'error': None
         }
         return jsonify({'success': True, 'status': 'completed', 'short': completed_short, 'job_id': job_id, 'part': part_num})
@@ -5152,6 +5277,7 @@ def clipper_generate_short():
             'status': 'processing',
             'progress': clipper_part_tasks[task_key].get('progress', 10),
             'current_step': clipper_part_tasks[task_key].get('current_step', 'Processing...'),
+            'downloaded_cuts': clipper_part_tasks[task_key].get('downloaded_cuts', []),
             'job_id': job_id,
             'part': part_num,
             'task_key': task_key
@@ -5165,13 +5291,15 @@ def clipper_generate_short():
                 scene=scene,
                 language=language,
                 video_title=video_title,
-                job_id=job_id
+                job_id=job_id,
+                auto_vertical=auto_vertical
             )
             clipper_part_tasks[task_key] = {
                 'status': 'completed',
                 'progress': 100,
                 'current_step': 'Complete!',
                 'short': short_obj,
+                'downloaded_cuts': short_obj.get('downloaded_cuts', []),
                 'error': None
             }
             return jsonify({'success': True, 'status': 'completed', 'short': short_obj, 'job_id': job_id, 'part': part_num})
@@ -5183,8 +5311,9 @@ def clipper_generate_short():
     clipper_part_tasks[task_key] = {
         'status': 'processing',
         'progress': 5,
-        'current_step': f'Queued Part {part_num} for dynamic 9:16 montage generation...',
+        'current_step': f'Queued Part {part_num} for targeted 4-step montage generation...',
         'short': None,
+        'downloaded_cuts': [],
         'error': None
     }
 
@@ -5193,6 +5322,8 @@ def clipper_generate_short():
             if task_key in clipper_part_tasks:
                 clipper_part_tasks[task_key]['progress'] = pct
                 clipper_part_tasks[task_key]['current_step'] = msg
+                if scene.get('downloaded_cuts'):
+                    clipper_part_tasks[task_key]['downloaded_cuts'] = scene['downloaded_cuts']
 
         try:
             short_obj = clipper_engine.process_single_short_pipeline(
@@ -5201,12 +5332,15 @@ def clipper_generate_short():
                 language=language,
                 video_title=video_title,
                 job_id=job_id,
-                progress_callback=progress_cb
+                progress_callback=progress_cb,
+                auto_vertical=auto_vertical
             )
             clipper_part_tasks[task_key]['status'] = 'completed'
             clipper_part_tasks[task_key]['progress'] = 100
             clipper_part_tasks[task_key]['current_step'] = 'Complete!'
             clipper_part_tasks[task_key]['short'] = short_obj
+            if scene.get('downloaded_cuts'):
+                clipper_part_tasks[task_key]['downloaded_cuts'] = scene['downloaded_cuts']
         except Exception as e:
             import traceback
             tb_str = traceback.format_exc()
@@ -5809,6 +5943,53 @@ def clipper_serve_media(filename):
     resp = send_from_directory(clipper_engine.CLIPPER_DIR, secure_filename(filename), conditional=True)
     resp.headers['Accept-Ranges'] = 'bytes'
     return resp
+
+
+@app.route('/api/clipper/cut/<path:filename>')
+def clipper_serve_cut(filename):
+    resp = send_from_directory(clipper_engine.CUTS_DIR, secure_filename(filename), conditional=True)
+    resp.headers['Accept-Ranges'] = 'bytes'
+    return resp
+
+
+@app.route('/api/clipper/convert_vertical', methods=['POST'])
+def clipper_convert_vertical():
+    data = request.get_json(force=True, silent=True) or {}
+    job_id = (data.get('job_id') or '').strip()
+    part_num = int(data.get('part', 1))
+
+    if not job_id:
+        return jsonify({'success': False, 'error': 'job_id is required'}), 400
+
+    ckpt = clipper_engine.load_job_checkpoint(job_id)
+    if not ckpt:
+        return jsonify({'success': False, 'error': f'Job {job_id} not found'}), 404
+
+    completed = ckpt.get('completed_shorts') or {}
+    part_data = completed.get(str(part_num))
+    if not part_data:
+        return jsonify({'success': False, 'error': f'Part {part_num} has not been generated yet'}), 400
+
+    standard_path = part_data.get('standard_filepath') or part_data.get('filepath')
+    if not standard_path or not os.path.exists(standard_path):
+        return jsonify({'success': False, 'error': f'Source video file not found on server'}), 404
+
+    task_key = f"{job_id}_{part_num}"
+    try:
+        vertical_short = clipper_engine.convert_recap_to_vertical_step4(
+            standard_video_path=standard_path,
+            job_id=job_id,
+            part_num=part_num
+        )
+        if task_key in clipper_part_tasks:
+            clipper_part_tasks[task_key]['short'] = vertical_short
+            clipper_part_tasks[task_key]['current_step'] = '9:16 Vertical Short ready!'
+        return jsonify({'success': True, 'short': vertical_short, 'part': part_num, 'job_id': job_id})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     print("="*60)

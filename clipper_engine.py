@@ -68,9 +68,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIPPER_DIR = os.path.join(BASE_DIR, "uploads", "clipper_shorts")
 TEMP_DIR = os.path.join(BASE_DIR, "uploads", "clipper_temp")
 JOBS_DIR = os.path.join(BASE_DIR, "uploads", "clipper_jobs")
+CUTS_DIR = os.path.join(BASE_DIR, "uploads", "clipper_cuts")
 os.makedirs(CLIPPER_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(JOBS_DIR, exist_ok=True)
+os.makedirs(CUTS_DIR, exist_ok=True)
 
 
 # =====================================================================
@@ -1008,12 +1010,14 @@ def download_clip_section(
     youtube_url: str,
     start_time: str,
     end_time: str,
-    output_path: str
+    output_path: str,
+    strip_audio: bool = True
 ) -> bool:
     """
     Downloads ONLY the exact start_time to end_time section directly to `output_path`.
     Uses direct stream URL extraction + FFmpeg fast cutting first (taking 1-3 seconds),
     with fallback to yt-dlp --download-sections if needed.
+    When strip_audio=True, removes original movie audio completely (-an) for 100% YouTube copyright safety.
     """
     out_dir = os.path.dirname(output_path)
     if out_dir:
@@ -1031,7 +1035,7 @@ def download_clip_section(
 
     # 1. Direct stream FFmpeg cutting (Super fast & immune to datacenter download limits)
     if direct_url:
-        # Attempt A: Stream copy (-c copy) with user-agent and reconnect options
+        # Attempt A: Stream copy with user-agent and reconnect options
         cmd_copy = [
             ffmpeg_bin, "-y",
             "-user_agent", ua,
@@ -1040,15 +1044,18 @@ def download_clip_section(
             "-reconnect_delay_max", "5",
             "-ss", start_time,
             "-i", direct_url,
-            "-t", str(dur),
-            "-c", "copy",
-            "-avoid_negative_ts", "make_zero",
-            output_path
+            "-t", str(dur)
         ]
+        if strip_audio:
+            cmd_copy.extend(["-c:v", "copy", "-an"])
+        else:
+            cmd_copy.extend(["-c", "copy"])
+        cmd_copy.extend(["-avoid_negative_ts", "make_zero", output_path])
+
         try:
             p_copy = subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=35)
             if p_copy.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
-                logger.info(f"Direct stream slice (copy) succeeded: {output_path} ({os.path.getsize(output_path)} bytes)")
+                logger.info(f"Direct stream slice (copy) succeeded: {output_path} ({os.path.getsize(output_path)} bytes, silent={strip_audio})")
                 return True
         except subprocess.TimeoutExpired:
             logger.warning(f"FFmpeg copy timed out for {start_time}-{end_time}")
@@ -1067,14 +1074,16 @@ def download_clip_section(
             "-t", str(dur),
             "-c:v", "libx264",
             "-preset", "ultrafast",
-            "-crf", "24",
-            "-an",
-            output_path
+            "-crf", "24"
         ]
+        if strip_audio:
+            cmd_trans.append("-an")
+        cmd_trans.append(output_path)
+
         try:
             p_trans = subprocess.run(cmd_trans, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=45)
             if p_trans.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
-                logger.info(f"Direct stream slice (transcode) succeeded: {output_path} ({os.path.getsize(output_path)} bytes)")
+                logger.info(f"Direct stream slice (transcode) succeeded: {output_path} ({os.path.getsize(output_path)} bytes, silent={strip_audio})")
                 return True
         except subprocess.TimeoutExpired:
             logger.warning(f"FFmpeg transcode timed out for {start_time}-{end_time}")
@@ -1132,9 +1141,22 @@ def download_clip_section(
                         actual_dl = os.path.join(dl_dir, f)
                         if os.path.exists(output_path):
                             os.remove(output_path)
-                        os.rename(actual_dl, output_path)
-                        logger.info(f"Downloaded section successfully with yt-dlp format '{fmt}': {output_path} ({os.path.getsize(output_path)} bytes)")
-                        return True
+                        if strip_audio:
+                            # Strip audio using fast ffmpeg copy
+                            strip_cmd = [ffmpeg_bin, "-y", "-i", actual_dl, "-c:v", "copy", "-an", output_path]
+                            sp = subprocess.run(strip_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                            if os.path.exists(actual_dl):
+                                try:
+                                    os.remove(actual_dl)
+                                except Exception:
+                                    pass
+                            if sp.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 5000:
+                                logger.info(f"Downloaded section with yt-dlp format '{fmt}' and stripped audio: {output_path}")
+                                return True
+                        else:
+                            os.rename(actual_dl, output_path)
+                            logger.info(f"Downloaded section successfully with yt-dlp format '{fmt}': {output_path} ({os.path.getsize(output_path)} bytes)")
+                            return True
             else:
                 last_error = proc.stderr
                 logger.warning(f"yt-dlp download failed with format '{fmt}': {proc.stderr[:160]}")
@@ -1729,24 +1751,119 @@ def ensure_scene_script(scene: Dict[str, Any], video_title: str = "", language: 
     return fallback
 
 
-def process_single_short_pipeline(
+def download_raw_cuts_step2(
     youtube_url: str,
+    sub_clips: List[Dict[str, Any]],
+    part_num: int = 1,
+    job_id: Optional[str] = None,
+    progress_callback: Optional[Any] = None
+) -> List[Dict[str, Any]]:
+    """
+    STEP 2: High-Speed Local Python Raw Cutter.
+    Downloads ONLY the exact 3-6s sub-clips directly to `uploads/clipper_cuts/`.
+    Strips original movie audio (-an) for 100% YouTube copyright safety.
+    Returns cut metadata with web URLs (/api/clipper/cut/<filename>) for immediate gallery display.
+    Target execution: under 20-30s total.
+    """
+    def notify_progress(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+
+    total_cuts = len(sub_clips)
+    notify_progress(15, f"Step 2: Slicing {total_cuts} raw cuts with 0% original audio...")
+    logger.info(f"Step 2: Downloading {total_cuts} targeted cuts for Part {part_num} to {CUTS_DIR}")
+
+    # Pre-resolve stream URL for maximum speed
+    direct_url = get_direct_stream_url(youtube_url)
+    if direct_url:
+        logger.info(f"Stream URL ready for Part {part_num} raw cuts slicing.")
+
+    unique_run_id = uuid.uuid4().hex[:6]
+    completed_cuts = {}
+    completed_count = 0
+    cuts_lock = threading.Lock()
+
+    def process_single_cut(cut_item: Tuple[int, Dict[str, Any]]) -> Tuple[int, Optional[Dict[str, Any]]]:
+        nonlocal completed_count
+        idx, c = cut_item
+        c_start = c.get("start_time")
+        c_end = c.get("end_time")
+        beat = c.get("beat", f"Beat {idx}")
+        dur = c.get("duration") or max(1, parse_timestamp_to_seconds(c_end) - parse_timestamp_to_seconds(c_start))
+        if not c_start or not c_end:
+            return idx, None
+
+        cut_filename = f"cut_p{part_num}_c{idx}_{unique_run_id}.mp4"
+        cut_path = os.path.join(CUTS_DIR, cut_filename)
+
+        logger.info(f"Targeted Slicing Cut {idx}/{total_cuts} {beat}: [{c_start} - {c_end}]")
+        dl_ok = download_clip_section(youtube_url, c_start, c_end, cut_path, strip_audio=True)
+        if dl_ok and os.path.exists(cut_path) and os.path.getsize(cut_path) > 5000:
+            with cuts_lock:
+                completed_count += 1
+                pct = 15 + int((completed_count / max(total_cuts, 1)) * 40)
+            notify_progress(pct, f"Cut {idx}/{total_cuts} {beat} downloaded (silent & safe)...")
+            record = {
+                "index": idx,
+                "start_time": c_start,
+                "end_time": c_end,
+                "duration": dur,
+                "beat": beat,
+                "description": c.get("description", ""),
+                "filename": cut_filename,
+                "filepath": cut_path,
+                "url": f"/api/clipper/cut/{cut_filename}",
+                "size": os.path.getsize(cut_path)
+            }
+            return idx, record
+
+        logger.warning(f"Targeted cut {idx} ({c_start}-{c_end}) failed.")
+        return idx, None
+
+    max_w = min(4, max(1, total_cuts))
+    with ThreadPoolExecutor(max_workers=max_w) as executor:
+        futures = {executor.submit(process_single_cut, (i, cut)): i for i, cut in enumerate(sub_clips, 1)}
+        for future in as_completed(futures):
+            try:
+                res_idx, res_rec = future.result()
+                if res_rec:
+                    completed_cuts[res_idx] = res_rec
+            except Exception as fe:
+                logger.warning(f"Cut task error: {fe}")
+
+    # Sequential retry for any missed cuts
+    if len(completed_cuts) < total_cuts:
+        for i, cut in enumerate(sub_clips, 1):
+            if i not in completed_cuts:
+                res_idx, res_rec = process_single_cut((i, cut))
+                if res_rec:
+                    completed_cuts[res_idx] = res_rec
+
+    ordered_cuts = [completed_cuts[k] for k in sorted(completed_cuts.keys()) if os.path.exists(completed_cuts[k]["filepath"])]
+    if not ordered_cuts:
+        raise RuntimeError(f"Failed to slice any cuts for Part {part_num}")
+
+    logger.info(f"Step 2 Complete: Downloaded {len(ordered_cuts)}/{total_cuts} silent cuts for Part {part_num}")
+    return ordered_cuts
+
+
+def assemble_standard_recap_step3(
     scene: Dict[str, Any],
+    downloaded_cuts: List[Dict[str, Any]],
     language: str = "Hindi",
     video_title: str = "",
     job_id: Optional[str] = None,
     progress_callback: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
-    Executes the 100% copyright-safe dynamic multi-scene montage pipeline for a single Part:
-    1. Extracts 8-14 sub-clips (3 to 6 seconds each) across the narrative act.
-    2. Downloads each sub-clip and reframes to 9:16 vertical (1080x1920) with face/subject centering.
-    3. Strips original movie audio completely (0% volume) so YouTube Content ID cannot flag it.
-    4. Concatenates normalized silent sub-clips into a fast-paced vertical montage video.
-    5. Generates cohesive neural voiceover script (Edge-TTS).
-    6. Ensures subtle copyright-free ambient tension background music exists.
-    7. Overlays Voiceover (100%) + Background Music (12%) onto the montage.
-    8. Extracts preview thumbnail and saves checkpoint.
+    STEP 3: Mute & Voiceover Sync (Standard 16:9 / Normal Cut Preview First).
+    - Concatenates the silent raw cuts in normal/standard aspect ratio.
+    - Generates cohesive Hindi voiceover via Edge-TTS matching Gemini's script.
+    - Mixes Voiceover (100%) + subtle BGM (12%) with audio fade out.
+    - Delivers standard preview first so video is 100% visible and playable right away (~15s total).
     """
     def notify_progress(pct: int, msg: str):
         if progress_callback:
@@ -1757,10 +1874,272 @@ def process_single_short_pipeline(
 
     part_num = scene.get("part", 1)
     title = scene.get("title", f"Part {part_num} #Shorts")
-    sub_clips = scene.get("sub_clips") or []
-    notify_progress(5, f"Starting dynamic montage pipeline for Part {part_num}...")
+    notify_progress(60, f"Step 3: Assembling standard cut preview for Part {part_num}...")
 
-    # If sub_clips is missing or less than 4 cuts, generate dynamic cuts
+    valid_cuts = [c for c in downloaded_cuts if os.path.exists(c["filepath"]) and os.path.getsize(c["filepath"]) > 5000]
+    if not valid_cuts:
+        raise RuntimeError(f"No valid downloaded cuts found to assemble Part {part_num}")
+
+    unique_id = uuid.uuid4().hex[:8]
+    concat_list_path = os.path.join(TEMP_DIR, f"concat_std_{part_num}_{unique_id}.txt")
+    silent_std_path = os.path.join(TEMP_DIR, f"montage_std_silent_{part_num}_{unique_id}.mp4")
+    vo_path = os.path.join(TEMP_DIR, f"vo_std_part_{part_num}_{unique_id}.mp3")
+    standard_video_name = f"recap_standard_part_{part_num}_{unique_id}.mp4"
+    standard_thumb_name = f"thumb_standard_part_{part_num}_{unique_id}.jpg"
+    standard_video_path = os.path.join(CLIPPER_DIR, standard_video_name)
+    standard_thumb_path = os.path.join(CLIPPER_DIR, standard_thumb_name)
+
+    # 1. Write concat list
+    try:
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for c in valid_cuts:
+                clean_path = os.path.abspath(c["filepath"]).replace("\\", "/")
+                f.write(f"file '{clean_path}'\n")
+
+        ffmpeg_bin = get_ffmpeg_bin()
+        # Attempt copy concat first
+        cmd_copy = [
+            ffmpeg_bin, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_list_path,
+            "-c", "copy",
+            "-an",
+            silent_std_path
+        ]
+        p_c = subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+        if not (p_c.returncode == 0 and os.path.exists(silent_std_path) and os.path.getsize(silent_std_path) > 10000):
+            # Fallback to fast ultrafast transcode concat
+            cmd_trans = [
+                ffmpeg_bin, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path,
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-crf", "22",
+                "-pix_fmt", "yuv420p",
+                "-an",
+                silent_std_path
+            ]
+            subprocess.run(cmd_trans, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+    finally:
+        if os.path.exists(concat_list_path):
+            try:
+                os.remove(concat_list_path)
+            except Exception:
+                pass
+
+    if not os.path.exists(silent_std_path) or os.path.getsize(silent_std_path) < 10000:
+        raise RuntimeError(f"Failed to concatenate standard cuts for Part {part_num}")
+
+    # 2. Voiceover & BGM mix
+    notify_progress(75, f"Step 3: Generating Hindi voiceover & tension BGM for Part {part_num}...")
+    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
+    vo_ok = False
+    if script:
+        vo_ok = generate_voiceover_audio(script, vo_path, language)
+    bgm_path = ensure_background_music_exists()
+
+    # 3. Audio overlay onto standard montage
+    notify_progress(85, "Step 3: Mixing voiceover + BGM onto standard video preview...")
+    render_ok = render_montage_with_audio_overlay(
+        montage_video_path=silent_std_path,
+        voiceover_path=vo_path if vo_ok else None,
+        bgm_path=bgm_path if bgm_path else None,
+        output_path=standard_video_path
+    )
+    if not render_ok or not os.path.exists(standard_video_path):
+        raise RuntimeError(f"FFmpeg failed to render standard recap for Part {part_num}")
+
+    # 4. HD Thumbnail
+    notify_progress(95, "Generating standard preview thumbnail...")
+    generate_short_thumbnail(standard_video_path, standard_thumb_path)
+    notify_progress(100, f"Part {part_num} standard cut preview ready!")
+
+    # Clean intermediate temp files
+    if os.path.exists(silent_std_path):
+        try:
+            os.remove(silent_std_path)
+        except Exception:
+            pass
+    if os.path.exists(vo_path):
+        try:
+            os.remove(vo_path)
+        except Exception:
+            pass
+
+    start_time = valid_cuts[0]["start_time"]
+    end_time = valid_cuts[-1]["end_time"]
+
+    description = (
+        f"{title}\n\n"
+        f"🎬 Story Recap (Part {part_num} Montage - {len(valid_cuts)} Scenes):\n{script}\n\n"
+        f"🔔 Subscribe for Part {part_num + 1} and more viral movie breakdowns!\n\n"
+        f"#Shorts #YouTubeShorts #MovieRecap #Cinema #Part{part_num} #MovieMontage"
+    )
+
+    short_data = {
+        "part": part_num,
+        "format": "standard",
+        "filename": standard_video_name,
+        "video_url": f"/api/clipper/media/{standard_video_name}",
+        "thumbnail_url": f"/api/clipper/media/{standard_thumb_name}",
+        "filepath": standard_video_path,
+        "standard_filepath": standard_video_path,
+        "standard_video_url": f"/api/clipper/media/{standard_video_name}",
+        "title": title,
+        "hook": scene.get("hook", ""),
+        "script": script,
+        "description": description,
+        "tags": scene.get("tags") or ["Shorts", "Movie", "Viral", f"Part{part_num}", "MovieRecap"],
+        "duration": scene.get("duration", 58),
+        "start_time": start_time,
+        "end_time": end_time,
+        "sub_clips_count": len(valid_cuts),
+        "downloaded_cuts": downloaded_cuts,
+        "copyright_safe": True,
+        "can_convert_vertical": True,
+        "status": "ready"
+    }
+
+    if job_id:
+        try:
+            ckpt = load_job_checkpoint(job_id)
+            if ckpt:
+                if "completed_shorts" not in ckpt or not isinstance(ckpt["completed_shorts"], dict):
+                    ckpt["completed_shorts"] = {}
+                ckpt["completed_shorts"][str(part_num)] = short_data
+                save_job_checkpoint(job_id, ckpt)
+        except Exception as se:
+            logger.warning(f"Could not persist short {part_num} to checkpoint {job_id}: {se}")
+
+    return short_data
+
+
+def convert_recap_to_vertical_step4(
+    standard_video_path: str,
+    output_vertical_path: Optional[str] = None,
+    job_id: Optional[str] = None,
+    part_num: Optional[int] = None,
+    progress_callback: Optional[Any] = None
+) -> Dict[str, Any]:
+    """
+    STEP 4: Separate 9:16 Vertical / Face-Tracking On Demand.
+    Takes the completed standard recap video (which already has mixed audio: VO + BGM).
+    Reframes to 9:16 vertical 1080x1920 using OpenCV face detection to center the actors.
+    Copies audio directly (-c:a copy), completing in ~4-8 seconds.
+    """
+    def notify_progress(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+
+    if not os.path.exists(standard_video_path) or os.path.getsize(standard_video_path) < 10000:
+        raise ValueError(f"Standard video file does not exist or is invalid: {standard_video_path}")
+
+    notify_progress(10, "Step 4: Analyzing frames with OpenCV face detection...")
+    crop_filter = calculate_smart_916_crop(standard_video_path)
+
+    unique_id = uuid.uuid4().hex[:8]
+    p_num = part_num if part_num is not None else 1
+    vertical_video_name = f"short_part_{p_num}_{unique_id}.mp4"
+    vertical_thumb_name = f"thumb_part_{p_num}_{unique_id}.jpg"
+    if not output_vertical_path:
+        output_vertical_path = os.path.join(CLIPPER_DIR, vertical_video_name)
+    else:
+        vertical_video_name = os.path.basename(output_vertical_path)
+
+    vertical_thumb_path = os.path.join(CLIPPER_DIR, vertical_thumb_name)
+
+    notify_progress(35, "Step 4: Reframing to 9:16 vertical (1080x1920) with actor centering...")
+    ffmpeg_bin = get_ffmpeg_bin()
+    cmd = [
+        ffmpeg_bin, "-y",
+        "-i", standard_video_path,
+        "-filter_complex", f"[0:v]{crop_filter},setsar=1[vout]",
+        "-map", "[vout]",
+        "-map", "0:a?",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "23",
+        "-r", "30",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        output_vertical_path
+    ]
+
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+    if proc.returncode != 0 or not os.path.exists(output_vertical_path) or os.path.getsize(output_vertical_path) < 10000:
+        raise RuntimeError(f"FFmpeg failed to convert to 9:16 vertical: {proc.stderr[:200]}")
+
+    notify_progress(85, "Step 4: Generating vertical HD thumbnail...")
+    generate_short_thumbnail(output_vertical_path, vertical_thumb_path)
+    notify_progress(100, f"Part {p_num} 9:16 Vertical Short ready!")
+
+    # Load existing short data from checkpoint if available
+    short_data = {}
+    if job_id and part_num:
+        ckpt = load_job_checkpoint(job_id)
+        if ckpt and "completed_shorts" in ckpt and str(part_num) in ckpt["completed_shorts"]:
+            short_data = dict(ckpt["completed_shorts"][str(part_num)])
+
+    short_data.update({
+        "part": p_num,
+        "format": "vertical_916",
+        "filename": vertical_video_name,
+        "video_url": f"/api/clipper/media/{vertical_video_name}",
+        "thumbnail_url": f"/api/clipper/media/{vertical_thumb_name}",
+        "filepath": output_vertical_path,
+        "standard_filepath": standard_video_path,
+        "standard_video_url": f"/api/clipper/media/{os.path.basename(standard_video_path)}",
+        "vertical_ready": True,
+        "status": "ready"
+    })
+
+    if job_id:
+        try:
+            ckpt = load_job_checkpoint(job_id)
+            if ckpt:
+                if "completed_shorts" not in ckpt or not isinstance(ckpt["completed_shorts"], dict):
+                    ckpt["completed_shorts"] = {}
+                ckpt["completed_shorts"][str(p_num)] = short_data
+                save_job_checkpoint(job_id, ckpt)
+        except Exception as se:
+            logger.warning(f"Could not persist vertical short {p_num} to checkpoint {job_id}: {se}")
+
+    return short_data
+
+
+def process_single_short_pipeline(
+    youtube_url: str,
+    scene: Dict[str, Any],
+    language: str = "Hindi",
+    video_title: str = "",
+    job_id: Optional[str] = None,
+    progress_callback: Optional[Any] = None,
+    auto_vertical: bool = False
+) -> Dict[str, Any]:
+    """
+    Unified 4-Step Pipeline:
+    Step 1: Direct Gemini Storyboard & Script (already provided in scene).
+    Step 2: High-Speed Local Python Raw Cutter (downloads 3-6s cuts with 0% movie audio to uploads/clipper_cuts/).
+    Step 3: Mute & Voiceover Sync (assembles standard 16:9 recap with Edge-TTS Hindi voiceover + BGM first in ~15s).
+    Step 4: Separate 9:16 Vertical / Face-Tracking On Demand (if auto_vertical=True or on user demand in ~5s).
+    """
+    def notify_progress(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+
+    part_num = scene.get("part", 1)
+    sub_clips = scene.get("sub_clips") or []
+
+    # If sub_clips missing, generate algorithmic cuts
     if not isinstance(sub_clips, list) or len(sub_clips) < 4:
         s_start = scene.get("start_seconds")
         if s_start is None:
@@ -1773,192 +2152,36 @@ def process_single_short_pipeline(
         sub_clips = generate_algorithmic_subclips(s_start, s_end, target_duration=58)
         scene["sub_clips"] = sub_clips
 
-    start_time = sub_clips[0].get("start_time", "00:00:00")
-    end_time = sub_clips[-1].get("end_time", "00:01:10")
-
-    unique_id = uuid.uuid4().hex[:8]
-    vo_path = os.path.join(TEMP_DIR, f"vo_part_{part_num}_{unique_id}.mp3")
-    silent_montage_path = os.path.join(TEMP_DIR, f"montage_silent_{part_num}_{unique_id}.mp4")
-    final_video_name = f"short_part_{part_num}_{unique_id}.mp4"
-    final_thumb_name = f"thumb_part_{part_num}_{unique_id}.jpg"
-    final_video_path = os.path.join(CLIPPER_DIR, final_video_name)
-    final_thumb_path = os.path.join(CLIPPER_DIR, final_thumb_name)
-
-    logger.info(f"--- Starting Dynamic Multi-Scene Montage for Part {part_num} ({len(sub_clips)} cuts: {start_time} to {end_time}) ---")
-
-    # Step 1: Pre-resolve stream URL (10%)
-    notify_progress(10, f"Pre-resolving stream URL for Part {part_num}...")
-    direct_url = get_direct_stream_url(youtube_url)
-    if direct_url:
-        logger.info(f"Direct stream URL pre-resolved successfully for Part {part_num}.")
-    else:
-        logger.warning(f"Could not pre-resolve direct stream URL; will use resilient fallback cutters.")
-
-    # Step 2: High-Speed Targeted Sub-Clip Slicing & 9:16 Reframing (15% -> 75%)
-    total_cuts = len(sub_clips)
-    notify_progress(15, f"Extracting {total_cuts} targeted 3-6s cuts with 0% original audio...")
-    logger.info(f"Downloading {total_cuts} targeted cuts for Part {part_num} (no bulky act downloads)...")
-
-    normalized_clips = []
-    temp_clip_paths = []
-    cut_results = {}
-    completed_cuts_count = 0
-    cuts_lock = threading.Lock()
-
-    def process_single_cut(cut_item: Tuple[int, Dict[str, Any]]) -> Tuple[int, Optional[str]]:
-        nonlocal completed_cuts_count
-        idx, c = cut_item
-        c_start = c.get("start_time")
-        c_end = c.get("end_time")
-        beat = c.get("beat", f"Beat {idx}")
-        if not c_start or not c_end:
-            return idx, None
-
-        raw_sub = os.path.join(TEMP_DIR, f"sub_raw_{part_num}_{idx}_{unique_id}.mp4")
-        norm_sub = os.path.join(TEMP_DIR, f"sub_norm_{part_num}_{idx}_{unique_id}.mp4")
-        with cuts_lock:
-            temp_clip_paths.extend([raw_sub, norm_sub])
-
-        logger.info(f"Targeted Slicing Cut {idx}/{total_cuts} {beat}: [{c_start} - {c_end}]")
-        dl_ok = download_clip_section(youtube_url, c_start, c_end, raw_sub)
-        if dl_ok and os.path.exists(raw_sub) and os.path.getsize(raw_sub) > 5000:
-            rf_ok = reframe_subclip_to_vertical_916(raw_sub, norm_sub)
-            if os.path.exists(raw_sub):
-                try:
-                    os.remove(raw_sub)
-                except Exception:
-                    pass
-            if rf_ok and os.path.exists(norm_sub) and os.path.getsize(norm_sub) > 5000:
-                with cuts_lock:
-                    completed_cuts_count += 1
-                    pct = 15 + int((completed_cuts_count / max(total_cuts, 1)) * 60)
-                notify_progress(pct, f"Cut {idx}/{total_cuts} {beat} centered in 9:16 ({pct}%)...")
-                logger.info(f"✓ Cut {idx}/{total_cuts} {beat} ready: {norm_sub} ({os.path.getsize(norm_sub)} bytes)")
-                return idx, norm_sub
-
-        logger.warning(f"Targeted cut {idx} ({c_start}-{c_end}) failed.")
-        return idx, None
-
-    # Run subclip cuts with ThreadPoolExecutor (3 workers)
-    max_w = min(3, max(1, total_cuts))
-    with ThreadPoolExecutor(max_workers=max_w) as executor:
-        futures = {executor.submit(process_single_cut, (i, cut)): i for i, cut in enumerate(sub_clips, 1)}
-        for future in as_completed(futures):
-            try:
-                res_idx, res_path = future.result()
-                if res_path:
-                    cut_results[res_idx] = res_path
-            except Exception as fe:
-                logger.warning(f"Cut task error: {fe}")
-
-    # Assemble in chronological cut order
-    for i in range(1, total_cuts + 1):
-        if i in cut_results and os.path.exists(cut_results[i]):
-            normalized_clips.append(cut_results[i])
-
-    # If too few cuts succeeded, retry missing cuts sequentially
-    if len(normalized_clips) < 2:
-        logger.warning(f"Only {len(normalized_clips)} cuts succeeded in parallel. Retrying failed cuts sequentially...")
-        for i, cut in enumerate(sub_clips, 1):
-            if i not in cut_results:
-                res_idx, res_path = process_single_cut((i, cut))
-                if res_path and os.path.exists(res_path):
-                    cut_results[res_idx] = res_path
-        normalized_clips = [cut_results[k] for k in sorted(cut_results.keys()) if os.path.exists(cut_results[k])]
-
-    if not normalized_clips:
-        raise RuntimeError(f"Failed to stream and download targeted sub-clips for Part {part_num}")
-
-    logger.info(f"Successfully processed {len(normalized_clips)} vertical cuts for Part {part_num}. Concatenating montage...")
-
-    # Step 4: Concatenate normalized silent sub-clips (80%)
-    notify_progress(80, "Concatenating vertical sub-clips into fast-paced montage...")
-    concat_ok = concat_normalized_clips(normalized_clips, silent_montage_path)
-    if not concat_ok or not os.path.exists(silent_montage_path):
-        raise RuntimeError(f"Failed to concatenate montage sub-clips for Part {part_num}")
-
-    # Step 5: Generating Edge-TTS Neural Voiceover & BGM mix (85%)
-    notify_progress(85, "Generating Edge-TTS Neural Voiceover & BGM mix...")
-    script = ensure_scene_script(scene, video_title=video_title or title, language=language)
-    vo_ok = False
-    if script:
-        vo_ok = generate_voiceover_audio(script, vo_path, language)
-    bgm_path = ensure_background_music_exists()
-
-    render_ok = render_montage_with_audio_overlay(
-        montage_video_path=silent_montage_path,
-        voiceover_path=vo_path if vo_ok else None,
-        bgm_path=bgm_path if bgm_path else None,
-        output_path=final_video_path
+    # Step 2: Download raw cuts (15% -> 55%)
+    downloaded_cuts = download_raw_cuts_step2(
+        youtube_url=youtube_url,
+        sub_clips=sub_clips,
+        part_num=part_num,
+        job_id=job_id,
+        progress_callback=progress_callback
     )
-    if not render_ok or not os.path.exists(final_video_path):
-        raise RuntimeError(f"FFmpeg failed to render final montage Short for Part {part_num}")
+    scene["downloaded_cuts"] = downloaded_cuts
 
-    # Step 6: Extract Preview Thumbnail Frame (95%)
-    notify_progress(95, "Generating HD thumbnail preview...")
-    generate_short_thumbnail(final_video_path, final_thumb_path)
-    notify_progress(100, f"Part {part_num} short ready!")
-
-    # Clean intermediate temporary files
-    for p in temp_clip_paths:
-        if os.path.exists(p):
-            try:
-                os.remove(p)
-            except Exception:
-                pass
-    if os.path.exists(silent_montage_path):
-        try:
-            os.remove(silent_montage_path)
-        except Exception:
-            pass
-    if os.path.exists(vo_path):
-        try:
-            os.remove(vo_path)
-        except Exception:
-            pass
-
-    # Build description with hashtags and hook
-    description = (
-        f"{title}\n\n"
-        f"🎬 Story Recap (Part {part_num} Montage - {len(normalized_clips)} Scenes):\n{script}\n\n"
-        f"🔔 Subscribe for Part {part_num + 1} and more viral movie breakdowns!\n\n"
-        f"#Shorts #YouTubeShorts #MovieRecap #Cinema #Part{part_num} #MovieMontage"
+    # Step 3: Assemble standard recap preview (55% -> 85%)
+    standard_short = assemble_standard_recap_step3(
+        scene=scene,
+        downloaded_cuts=downloaded_cuts,
+        language=language,
+        video_title=video_title,
+        job_id=job_id,
+        progress_callback=progress_callback
     )
 
-    short_data = {
-        "part": part_num,
-        "filename": final_video_name,
-        "video_url": f"/api/clipper/media/{final_video_name}",
-        "thumbnail_url": f"/api/clipper/media/{final_thumb_name}",
-        "filepath": final_video_path,
-        "title": title,
-        "hook": scene.get("hook", ""),
-        "script": script,
-        "description": description,
-        "tags": scene.get("tags") or ["Shorts", "Movie", "Viral", f"Part{part_num}", "Montage"],
-        "duration": scene.get("duration", 58),
-        "start_time": start_time,
-        "end_time": end_time,
-        "sub_clips_count": len(normalized_clips),
-        "montage_mode": True,
-        "copyright_safe": True,
-        "status": "ready"
-    }
+    if not auto_vertical:
+        notify_progress(100, f"Part {part_num} standard recap ready!")
+        return standard_short
 
-    # Save to persistent job checkpoint if job_id was provided
-    if job_id:
-        try:
-            ckpt = load_job_checkpoint(job_id)
-            if ckpt:
-                if "completed_shorts" not in ckpt or not isinstance(ckpt["completed_shorts"], dict):
-                    if isinstance(ckpt.get("completed_shorts"), list):
-                        ckpt["completed_shorts"] = {str(s.get("part", i+1)): s for i, s in enumerate(ckpt["completed_shorts"])}
-                    else:
-                        ckpt["completed_shorts"] = {}
-                ckpt["completed_shorts"][str(part_num)] = short_data
-                save_job_checkpoint(job_id, ckpt)
-        except Exception as se:
-            logger.warning(f"Could not persist short {part_num} to checkpoint {job_id}: {se}")
-
-    return short_data
+    # Step 4: Convert to 9:16 vertical on demand (85% -> 100%)
+    vertical_short = convert_recap_to_vertical_step4(
+        standard_video_path=standard_short["filepath"],
+        job_id=job_id,
+        part_num=part_num,
+        progress_callback=progress_callback
+    )
+    return vertical_short
 
