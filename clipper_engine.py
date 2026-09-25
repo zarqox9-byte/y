@@ -20,7 +20,21 @@ import time
 import asyncio
 import logging
 import subprocess
+import shutil
 from typing import Dict, Any, List, Optional, Tuple
+
+def get_ffmpeg_bin() -> str:
+    """Returns absolute path to ffmpeg binary, with imageio_ffmpeg fallback."""
+    bin_path = shutil.which("ffmpeg")
+    if bin_path:
+        return bin_path
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    return "ffmpeg"
+
 
 logger = logging.getLogger("clipper_engine")
 logger.setLevel(logging.INFO)
@@ -144,50 +158,241 @@ def parse_timestamp_to_seconds(ts: str) -> int:
 
 
 # =====================================================================
-# 1. YOUTUBE METADATA & CHAPTERS EXTRACTION
+# 1. YOUTUBE METADATA & CHAPTERS EXTRACTION (WITH DUAL-FALLBACK)
 # =====================================================================
-def extract_youtube_info(youtube_url: str) -> Dict[str, Any]:
+def extract_video_id(url: str) -> Optional[str]:
+    """Extracts 11-character YouTube video ID from various URL formats."""
+    patterns = [
+        r'(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})',
+        r'^[A-Za-z0-9_-]{11}$'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, str(url).strip())
+        if match:
+            return match.group(1) if match.groups() else str(url).strip()
+    return None
+
+
+def parse_iso8601_duration(duration_str: str) -> int:
+    """Parses ISO 8601 duration string (e.g. PT1H2M30S, PT45S) into integer seconds."""
+    match = re.match(r'P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?', duration_str or '')
+    if not match:
+        return 0
+    days = int(match.group(1) or 0)
+    hours = int(match.group(2) or 0)
+    minutes = int(match.group(3) or 0)
+    seconds = int(match.group(4) or 0)
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
+def extract_chapters_from_description(desc: str, total_duration: int = 0) -> List[Dict[str, Any]]:
+    """Extracts timestamped chapter markers from description text if yt-dlp did not provide them."""
+    chapters = []
+    lines = (desc or "").splitlines()
+    pattern = re.compile(r'(?:^|\s)(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s+[-–—]?\s*)(.+)')
+    for line in lines:
+        m = pattern.search(line.strip())
+        if m:
+            h = int(m.group(1)) if m.group(1) else 0
+            minutes = int(m.group(2))
+            sec = int(m.group(3))
+            ch_title = m.group(4).strip()
+            start_time = h * 3600 + minutes * 60 + sec
+            chapters.append({'start_time': start_time, 'title': ch_title})
+
+    # Calculate end times
+    for i in range(len(chapters)):
+        if i < len(chapters) - 1:
+            chapters[i]['end_time'] = chapters[i+1]['start_time']
+        else:
+            chapters[i]['end_time'] = total_duration if total_duration > chapters[i]['start_time'] else chapters[i]['start_time'] + 60
+    return chapters
+
+
+def get_youtube_data_api_client(credentials=None):
     """
-    Extracts video metadata, duration, description, chapters, and thumbnails
-    using yt-dlp without downloading the video.
+    Creates an authenticated YouTube Data API v3 service.
+    First checks provided credentials, then token.json, then accounts store.
     """
     try:
-        import yt_dlp
+        from googleapiclient.discovery import build
+        from google.oauth2.credentials import Credentials
     except ImportError:
-        raise RuntimeError("yt-dlp is not installed. Please install it with `pip install yt-dlp`.")
+        logger.warning("google-api-python-client or google-auth not installed.")
+        return None
 
-    ydl_opts = {
-        'skip_download': True,
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False
-    }
+    creds = credentials
+    if not creds:
+        # Check token.json in BASE_DIR
+        token_path = os.path.join(BASE_DIR, "token.json")
+        if os.path.exists(token_path):
+            try:
+                with open(token_path, "r", encoding="utf-8") as f:
+                    token_data = json.load(f)
+                creds = Credentials(**token_data)
+            except Exception as e:
+                logger.warning(f"Could not load token.json: {e}")
 
-    logger.info(f"Extracting video metadata for: {youtube_url}")
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
+    if not creds:
+        # Check accounts.json in uploads or base directory
+        for acc_path in [os.path.join(BASE_DIR, "accounts.json"), os.path.join(BASE_DIR, "uploads", "accounts.json")]:
+            if os.path.exists(acc_path):
+                try:
+                    with open(acc_path, "r", encoding="utf-8") as f:
+                        acc_data = json.load(f)
+                    if acc_data and isinstance(acc_data, dict):
+                        first_account = next(iter(acc_data.values()))
+                        if "credentials" in first_account:
+                            creds = Credentials(**first_account["credentials"])
+                            break
+                except Exception as e:
+                    logger.warning(f"Could not load {acc_path}: {e}")
 
-    title = info.get('title', 'Unknown Title')
-    duration = info.get('duration', 0)
-    description = info.get('description', '')
-    chapters = info.get('chapters') or []
-    thumbnail = info.get('thumbnail') or ''
-    channel = info.get('uploader') or info.get('channel') or ''
+    # Check YOUTUBE_TOKEN_JSON environment variable (used on Render)
+    if not creds and os.environ.get("YOUTUBE_TOKEN_JSON"):
+        try:
+            token_data = json.loads(os.environ["YOUTUBE_TOKEN_JSON"])
+            creds = Credentials(**token_data)
+        except Exception as e:
+            logger.warning(f"Could not load YOUTUBE_TOKEN_JSON env: {e}")
 
-    # Clean description snippet
-    clean_desc = (description[:2000] if description else "").strip()
+    # Refresh credentials if expired
+    if creds and hasattr(creds, 'expired') and creds.expired and hasattr(creds, 'refresh_token') and creds.refresh_token:
+        try:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+            logger.info("Successfully refreshed expired OAuth credentials for YouTube Data API v3.")
+        except Exception as ref_err:
+            logger.warning(f"Failed to refresh credentials: {ref_err}")
 
-    logger.info(f"Metadata extracted: '{title}' ({format_seconds_to_timestamp(duration)}), Chapters: {len(chapters)}")
-    return {
-        "url": youtube_url,
-        "title": title,
-        "duration": duration,
-        "duration_str": format_seconds_to_timestamp(duration),
-        "description": clean_desc,
-        "chapters": chapters,
-        "thumbnail": thumbnail,
-        "channel": channel
-    }
+    if creds:
+        try:
+            return build("youtube", "v3", credentials=creds)
+        except Exception as e:
+            logger.warning(f"Failed to build YouTube service from credentials: {e}")
+
+    # Fallback to YOUTUBE_API_KEY developerKey if available
+    yt_api_key = os.environ.get("YOUTUBE_API_KEY")
+    if yt_api_key:
+        try:
+            return build("youtube", "v3", developerKey=yt_api_key)
+        except Exception as e:
+            logger.warning(f"Failed to build YouTube service with YOUTUBE_API_KEY: {e}")
+
+    return None
+
+
+def extract_youtube_info(youtube_url: str, credentials=None) -> Dict[str, Any]:
+    """
+    Extracts video metadata, duration, description, chapters, and thumbnails.
+    1. Primary: Uses yt-dlp configured with multiple web/embed clients to bypass datacenter bot blocks.
+    2. Fallback: If yt-dlp hits a bot warning or error, immediately uses official YouTube Data API v3.
+    """
+    info = None
+    yt_dlp_err = None
+
+    # Step 1: Attempt extraction via yt-dlp with anti-bot extractor arguments
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web_creator', 'web_embedded', 'mweb', 'android'],
+                    'player_skip': ['webpage', 'configs']
+                }
+            },
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            'compat_opts': ['no-youtube-unavailable-videos'],
+        }
+
+        logger.info(f"Extracting video metadata via yt-dlp for: {youtube_url}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+    except Exception as e:
+        yt_dlp_err = e
+        logger.warning(f"yt-dlp extraction encountered issue: {e}. Falling back to official YouTube Data API v3...")
+
+    if info and isinstance(info, dict):
+        title = info.get('title', 'Unknown Title')
+        duration = int(info.get('duration') or 0)
+        description = info.get('description', '')
+        chapters = info.get('chapters') or []
+        thumbnail = info.get('thumbnail') or ''
+        channel = info.get('uploader') or info.get('channel') or ''
+        clean_desc = (description[:2000] if description else "").strip()
+
+        logger.info(f"Metadata extracted via yt-dlp: '{title}' ({format_seconds_to_timestamp(duration)}), Chapters: {len(chapters)}")
+        return {
+            "url": youtube_url,
+            "title": title,
+            "duration": duration,
+            "duration_str": format_seconds_to_timestamp(duration),
+            "description": clean_desc,
+            "chapters": chapters,
+            "thumbnail": thumbnail,
+            "channel": channel
+        }
+
+    # Step 2: Dual-Fallback to Official YouTube Data API v3 (Zero Bot Block)
+    video_id = extract_video_id(youtube_url)
+    if not video_id:
+        raise RuntimeError(f"Could not extract video ID from '{youtube_url}' and yt-dlp failed: {yt_dlp_err}")
+
+    logger.info(f"Executing YouTube Data API v3 fallback for video ID: {video_id}")
+    yt_service = get_youtube_data_api_client(credentials=credentials)
+    if not yt_service:
+        raise RuntimeError(f"yt-dlp failed ({yt_dlp_err}) and YouTube Data API v3 client could not authenticate.")
+
+    try:
+        response = yt_service.videos().list(id=video_id, part='snippet,contentDetails').execute()
+        items = response.get('items', [])
+        if not items:
+            raise RuntimeError(f"YouTube Data API v3 returned no video matching ID: {video_id}")
+
+        item = items[0]
+        snippet = item.get('snippet', {})
+        content_details = item.get('contentDetails', {})
+
+        title = snippet.get('title', 'YouTube Video')
+        description = snippet.get('description', '')
+        channel = snippet.get('channelTitle', '')
+        duration = parse_iso8601_duration(content_details.get('duration', ''))
+
+        # Get best thumbnail
+        thumbs = snippet.get('thumbnails', {})
+        thumbnail = (
+            thumbs.get('maxres', {}).get('url') or
+            thumbs.get('standard', {}).get('url') or
+            thumbs.get('high', {}).get('url') or
+            thumbs.get('medium', {}).get('url') or
+            thumbs.get('default', {}).get('url') or
+            f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        )
+
+        chapters = extract_chapters_from_description(description, duration)
+        clean_desc = (description[:2000] if description else "").strip()
+
+        logger.info(f"Successfully extracted metadata via YouTube Data API v3: '{title}' ({format_seconds_to_timestamp(duration)})")
+        return {
+            "url": youtube_url,
+            "title": title,
+            "duration": duration,
+            "duration_str": format_seconds_to_timestamp(duration),
+            "description": clean_desc,
+            "chapters": chapters,
+            "thumbnail": thumbnail,
+            "channel": channel
+        }
+    except Exception as api_err:
+        logger.error(f"YouTube Data API v3 fallback failed: {api_err}")
+        raise RuntimeError(f"Failed to extract video info: yt-dlp error ({yt_dlp_err}), API error ({api_err})")
 
 
 # =====================================================================
@@ -474,7 +679,7 @@ def download_clip_section(
     """
     Downloads ONLY the exact start_time to end_time section of the YouTube video
     directly to `output_path` using yt-dlp's --download-sections argument.
-    Avoids downloading the full movie.
+    Configures anti-bot extractor arguments, custom headers, and fallback stream formats.
     """
     try:
         import yt_dlp
@@ -484,38 +689,58 @@ def download_clip_section(
     section_arg = f"*{start_time}-{end_time}"
     logger.info(f"Downloading stream chunk: {section_arg} for {youtube_url}")
 
-    # Temporary template
     temp_template = os.path.splitext(output_path)[0] + "_dl.%(ext)s"
 
-    cmd = [
+    # Anti-bot options to bypass datacenter IP restrictions
+    base_args = [
         sys.executable, "-m", "yt_dlp",
         "--download-sections", section_arg,
         "--force-keyframes-at-cuts",
-        "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+        "--extractor-args", "youtube:player_client=web_creator,web_embedded,mweb,android;player_skip=webpage,configs",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--compat-options", "no-youtube-unavailable-videos",
+        "--http-chunk-size", "10485760",
         "--merge-output-format", "mp4",
         "-o", temp_template,
         "--quiet", "--no-warnings",
-        youtube_url
     ]
 
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
-    if proc.returncode != 0:
-        logger.error(f"yt-dlp section download failed: {proc.stderr}")
-        return False
+    # Format cascades to bypass throttling and bot detection
+    format_attempts = [
+        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "best[height<=1080][ext=mp4]/bestvideo[height<=720]+bestaudio/best",
+        "best/18"
+    ]
 
-    # Find the resulting file
     dl_dir = os.path.dirname(output_path)
     base_stem = os.path.splitext(os.path.basename(temp_template))[0].replace(".%(ext)s", "")
-    for f in os.listdir(dl_dir):
-        if f.startswith(base_stem) and f.endswith(".mp4"):
-            actual_dl = os.path.join(dl_dir, f)
-            if os.path.exists(output_path):
-                os.remove(output_path)
-            os.rename(actual_dl, output_path)
-            logger.info(f"Downloaded section successfully: {output_path} ({os.path.getsize(output_path)} bytes)")
-            return True
 
-    logger.error("Downloaded file could not be located after yt-dlp execution.")
+    last_error = ""
+    for fmt in format_attempts:
+        cmd = base_args + ["-f", fmt, youtube_url]
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+            if proc.returncode == 0:
+                for f in os.listdir(dl_dir):
+                    if f.startswith(base_stem) and f.endswith(".mp4"):
+                        actual_dl = os.path.join(dl_dir, f)
+                        if os.path.exists(output_path):
+                            os.remove(output_path)
+                        os.rename(actual_dl, output_path)
+                        logger.info(f"Downloaded section successfully with format '{fmt}': {output_path} ({os.path.getsize(output_path)} bytes)")
+                        return True
+            else:
+                last_error = proc.stderr
+                logger.warning(f"yt-dlp download failed with format '{fmt}': {proc.stderr[:160]}. Trying next format...")
+        except subprocess.TimeoutExpired:
+            last_error = "Timeout after 180s waiting for stream chunk"
+            logger.warning(last_error)
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"Download attempt error: {e}")
+
+    logger.error(f"All yt-dlp stream download formats failed for {section_arg}: {last_error}")
     return False
 
 
@@ -704,12 +929,14 @@ def render_short_video(
     - H.264 high-profile video and AAC audio with +faststart for instant mobile playback.
     """
     logger.info(f"Rendering final short: {output_path}")
+    ffmpeg_bin = get_ffmpeg_bin()
+    ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
     has_vo = voiceover_path and os.path.exists(voiceover_path) and os.path.getsize(voiceover_path) > 1000
 
     if has_vo:
         # Check if raw clip has an audio stream
         probe_audio = [
-            "ffprobe", "-v", "error",
+            ffprobe_bin, "-v", "error",
             "-select_streams", "a:0",
             "-show_entries", "stream=codec_type",
             "-of", "csv=p=0",
@@ -732,7 +959,7 @@ def render_short_video(
                 f"[bg][vo]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
             cmd = [
-                "ffmpeg", "-y",
+                ffmpeg_bin, "-y",
                 "-i", raw_clip_path,
                 "-i", voiceover_path,
                 "-filter_complex", filter_complex,
@@ -746,7 +973,7 @@ def render_short_video(
         else:
             # Original clip has no audio: use voiceover audio directly
             cmd = [
-                "ffmpeg", "-y",
+                ffmpeg_bin, "-y",
                 "-i", raw_clip_path,
                 "-i", voiceover_path,
                 "-filter_complex", f"[0:v]{crop_filter}[vout]",
@@ -761,7 +988,7 @@ def render_short_video(
     else:
         # No voiceover: keep original audio with vertical crop
         cmd = [
-            "ffmpeg", "-y",
+            ffmpeg_bin, "-y",
             "-i", raw_clip_path,
             "-filter_complex", f"[0:v]{crop_filter}[vout]",
             "-map", "[vout]",
@@ -782,8 +1009,9 @@ def render_short_video(
 
 def generate_short_thumbnail(video_path: str, thumbnail_path: str) -> bool:
     """Extracts a crisp thumbnail frame from the middle of the generated Short."""
+    ffmpeg_bin = get_ffmpeg_bin()
     cmd = [
-        "ffmpeg", "-y",
+        ffmpeg_bin, "-y",
         "-ss", "00:00:03",
         "-i", video_path,
         "-vframes", "1",

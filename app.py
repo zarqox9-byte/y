@@ -4960,7 +4960,8 @@ def clipper_analyze():
         return jsonify({'success': False, 'error': 'YouTube URL is required'}), 400
 
     try:
-        video_info = clipper_engine.extract_youtube_info(url)
+        creds = get_stored_credentials()
+        video_info = clipper_engine.extract_youtube_info(url, credentials=creds)
         scenes, status, quota_error = clipper_engine.analyze_movie_narrative_for_shorts(
             youtube_url=url,
             video_info=video_info,
