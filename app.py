@@ -17,6 +17,9 @@ import google.auth.transport.requests
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import gemini_engine
+import clipper_engine
+
+clipper_jobs = {}
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "youtube_studio_pro_permanent_production_secret_2026")
@@ -1583,6 +1586,130 @@ HTML_MAIN = """
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* AI Movie-to-Shorts Auto-Clipper Styles */
+        .clipper-card {
+            background: #171321;
+            border: 1px solid rgba(255, 0, 85, 0.3);
+            border-radius: var(--card-radius);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .scene-item-card {
+            background: #15111e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .scene-item-card:hover {
+            border-color: rgba(255, 0, 85, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .scene-header {
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .part-pill {
+            background: linear-gradient(135deg, #ff0055, #9333ea);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .timestamp-pill {
+            background: #231c30;
+            color: #d8b4fe;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        .status-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .status-planned {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid #444;
+        }
+        .status-ready {
+            background: rgba(43, 166, 64, 0.2);
+            color: #4ade80;
+            border: 1px solid #2ba640;
+        }
+        .status-uploaded {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid #3b82f6;
+        }
+        .scene-body {
+            padding: 18px;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .scene-body { grid-template-columns: 1fr; }
+        }
+        .scene-video-box {
+            width: 100%;
+            aspect-ratio: 9/16;
+            max-height: 350px;
+            background: #0d0a14;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .scene-video-box video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .placeholder-916 {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 16px;
+        }
+        .scene-meta-box {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .field-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .scene-actions-row {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 10px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
@@ -1706,6 +1833,11 @@ HTML_MAIN = """
                     <span>✨</span>
                     <span>Gemini AI Studio Copilot</span>
                     <span class="tab-badge badge-ai">PRO MULTIMODAL</span>
+                </button>
+                <button class="mode-tab" id="tabClipperMode">
+                    <span>🎬</span>
+                    <span>YouTube URL to Shorts</span>
+                    <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">AUTO-CLIPPER</span>
                 </button>
                 <button class="mode-tab" id="tabManualMode">
                     <span>🛠️</span>
@@ -1965,7 +2097,156 @@ HTML_MAIN = """
             </div>
 
             <!-- ============================================== -->
-            <!-- 2. STANDARD MANUAL STUDIO FORM PANEL           -->
+            <!-- 2. AI MOVIE-TO-SHORTS AUTO-CLIPPER ENGINE      -->
+            <!-- ============================================== -->
+            <div class="card" id="clipperSection" style="display: none;">
+                <!-- Clipper Hero Header -->
+                <div class="ai-banner" style="background: linear-gradient(135deg, rgba(255, 0, 85, 0.12), rgba(30, 10, 40, 0.6)); border-color: rgba(255, 0, 85, 0.4);">
+                    <div class="ai-banner-left">
+                        <div class="ai-banner-title" style="color: #ffe4e6;">
+                            <span>🎬 AI Movie-to-Shorts Auto-Clipper Engine</span>
+                        </div>
+                        <div class="ai-banner-desc" style="color: #fda4af;">
+                            Paste any YouTube movie or video link. Gemini analyzes narrative story beats, automatically segments high-retention scenes in strict chronological order (Part 1, Part 2...), reframes 16:9 to 9:16 vertical with actor face centering, generates neural Hindi/English voiceover recap narration, and ducks background audio.
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white; padding: 6px 12px; font-size: 11px;">CHRONOLOGICAL 9:16</span>
+                    </div>
+                </div>
+
+                <!-- URL Input Section -->
+                <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                    <label style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+                        🎥 YouTube Video / Movie URL
+                    </label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="url" id="clipperUrlInput" placeholder="Paste YouTube Link (e.g. https://www.youtube.com/watch?v=... or https://youtu.be/...)" class="form-control" style="flex: 1; font-size: 14px; padding: 12px 16px;">
+                        <button type="button" class="btn-populate" id="btnPasteUrl" style="padding: 0 18px; font-size: 13px;">
+                            📋 Paste
+                        </button>
+                    </div>
+
+                    <!-- Options Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 18px;">
+                        <!-- Option 1: Max Shorts Count -->
+                        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 600;">Max Shorts Count</span>
+                                <span id="clipperMaxShortsBadge" style="font-size: 12px; font-weight: 700; color: #fda4af; background: rgba(255,0,85,0.15); padding: 2px 8px; border-radius: 6px;">5 Parts (AI Optimal)</span>
+                            </div>
+                            <input type="range" id="clipperMaxShortsSlider" min="1" max="20" value="5" style="width: 100%; accent-color: #ff0055;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                                <span>1 Part</span>
+                                <span>10 Parts</span>
+                                <span>20 Parts</span>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Target Duration -->
+                        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 600;">Target Duration</span>
+                                <span style="font-size: 11px; color: #a855f7;">Shorts Safe (&lt;60s)</span>
+                            </div>
+                            <select id="clipperDurationSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
+                                <option value="35">35 Seconds (Fast Paced)</option>
+                                <option value="45">45 Seconds (High Retention)</option>
+                                <option value="50" selected>50 Seconds (Recommended Optimal)</option>
+                                <option value="58">58 Seconds (Maximum Dramatic Climax)</option>
+                            </select>
+                        </div>
+
+                        <!-- Option 3: Voiceover Language -->
+                        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 600;">Voiceover Language</span>
+                                <span style="font-size: 11px; color: #2ba640;">Neural TTS Active</span>
+                            </div>
+                            <select id="clipperLanguageSelect" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;">
+                                <option value="Hindi" selected>Hindi (हिन्दी - Madhur Viral Voice)</option>
+                                <option value="English">English (Christopher Movie Narrator)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <button type="button" class="btn-upload" id="btnAnalyzeClipper" style="margin-top: 20px; background: linear-gradient(135deg, #ff0055, #9333ea);">
+                        <span id="clipperBtnIcon">🚀</span>
+                        <span id="clipperBtnText">Analyze Narrative &amp; Plan Chronological Shorts</span>
+                    </button>
+                </div>
+
+                <!-- Live Analysis Progress Indicator -->
+                <div id="clipperAnalysisProgress" style="display: none; background: #1a1020; border: 1px solid #ff0055; border-radius: 8px; padding: 18px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="spinner" style="border-top-color: #ff0055;"></div>
+                        <div>
+                            <div id="clipperProgressStep" style="font-weight: 600; font-size: 14px; color: #ffe4e6;">Extracting YouTube video streams and chapters...</div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Gemini is analyzing dramatic turning points and writing chronological storytelling scripts...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Metadata Preview Box (Shown after analysis) -->
+                <div id="clipperMovieMetaCard" style="display: none; background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <img id="clipperMovieThumb" src="" alt="Thumbnail" style="width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px;">
+                        <div style="flex: 1;">
+                            <h4 id="clipperMovieTitle" style="margin: 0 0 6px 0; font-size: 15px; font-weight: 600;">Movie Title</h4>
+                            <div style="display: flex; gap: 12px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap;">
+                                <span id="clipperMovieDuration">⏱️ Duration: 00:00:00</span>
+                                <span id="clipperMovieChannel">👤 Channel</span>
+                                <span id="clipperMoviePartsCount" style="color: #ff0055; font-weight: 700;">🎬 5 Chronological Shorts Planned</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Batch Operations Bar -->
+                <div id="clipperBatchBar" style="display: none; justify-content: space-between; align-items: center; background: #1e122b; border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: #f3e8ff;">Ready to Generate Vertical Shorts</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">Downloads exact clips (no full download), tracks faces, reframes 9:16, and records voiceover.</div>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button type="button" class="btn-populate" id="btnGenerateAllShorts" style="background: linear-gradient(135deg, #a855f7, #ec4899); border: none;">
+                            ⚡ Generate All Parts Sequentially
+                        </button>
+                        <button type="button" class="btn-upload" id="btnUploadAllShorts" style="display: none; padding: 10px 18px; font-size: 13px; width: auto; background: var(--accent-red);">
+                            🚀 Upload All Parts to YouTube
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Batch Progress Bar (While generating parts) -->
+                <div id="clipperBatchProgressCard" style="display: none; background: #161224; border: 1px solid #a855f7; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 8px;">
+                        <span id="clipperBatchStepText">Processing Shorts...</span>
+                        <span id="clipperBatchPercentText" style="color: #a855f7;">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #2a2238; border-radius: 4px; overflow: hidden;">
+                        <div id="clipperBatchProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff0055, #a855f7); transition: width 0.4s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Chronological Queue / Scenes Container -->
+                <div id="clipperQueueContainer" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                        <h3 style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0;">
+                            <span>📋 Chronological Parts Queue</span>
+                            <span id="clipperQueueBadge" style="font-size: 11px; background: #2a1b38; color: #c084fc; padding: 2px 8px; border-radius: 10px;">0 Parts</span>
+                        </h3>
+                        <span style="font-size: 12px; color: var(--text-muted);">Strict Story Timeline Order (Part 1 ➔ Part N)</span>
+                    </div>
+                    <div id="clipperScenesGrid" style="display: flex; flex-direction: column; gap: 16px;">
+                        <!-- Populated dynamically with scene cards -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- 3. STANDARD MANUAL STUDIO FORM PANEL           -->
             <!-- ============================================== -->
             <div class="card" id="manualStudioSection" style="display: none;">
                 <div class="workspace-header">
@@ -2235,23 +2516,25 @@ HTML_MAIN = """
 
         // Tab Switching
         const tabGeminiMode = document.getElementById('tabGeminiMode');
+        const tabClipperMode = document.getElementById('tabClipperMode');
         const tabManualMode = document.getElementById('tabManualMode');
         const geminiStudioSection = document.getElementById('geminiStudioSection');
+        const clipperSection = document.getElementById('clipperSection');
         const manualStudioSection = document.getElementById('manualStudioSection');
 
-        tabGeminiMode.addEventListener('click', () => {
-            tabGeminiMode.className = 'mode-tab active-ai';
-            tabManualMode.className = 'mode-tab';
-            geminiStudioSection.style.display = 'block';
-            manualStudioSection.style.display = 'none';
-        });
+        function switchWorkspaceTab(activeTab) {
+            tabGeminiMode.className = 'mode-tab' + (activeTab === 'gemini' ? ' active-ai' : '');
+            tabClipperMode.className = 'mode-tab' + (activeTab === 'clipper' ? ' active-ai' : '');
+            tabManualMode.className = 'mode-tab' + (activeTab === 'manual' ? ' active-manual' : '');
 
-        tabManualMode.addEventListener('click', () => {
-            tabManualMode.className = 'mode-tab active-manual';
-            tabGeminiMode.className = 'mode-tab';
-            manualStudioSection.style.display = 'block';
-            geminiStudioSection.style.display = 'none';
-        });
+            geminiStudioSection.style.display = (activeTab === 'gemini') ? 'block' : 'none';
+            clipperSection.style.display = (activeTab === 'clipper') ? 'block' : 'none';
+            manualStudioSection.style.display = (activeTab === 'manual') ? 'block' : 'none';
+        }
+
+        tabGeminiMode.addEventListener('click', () => switchWorkspaceTab('gemini'));
+        tabClipperMode.addEventListener('click', () => switchWorkspaceTab('clipper'));
+        tabManualMode.addEventListener('click', () => switchWorkspaceTab('manual'));
 
         // Gemini Key Modal
         const geminiNavPill = document.getElementById('geminiNavPill');
@@ -3138,6 +3421,419 @@ HTML_MAIN = """
             }, 1000);
         }
 
+        // ==============================================================
+        // AI MOVIE-TO-SHORTS AUTO-CLIPPER ENGINE JAVASCRIPT CONTROLLER
+        // ==============================================================
+        let currentClipperVideoInfo = null;
+        let currentClipperScenes = [];
+        let completedClipperShorts = {}; // keyed by part number
+
+        const clipperUrlInput = document.getElementById('clipperUrlInput');
+        const btnPasteUrl = document.getElementById('btnPasteUrl');
+        const clipperMaxShortsSlider = document.getElementById('clipperMaxShortsSlider');
+        const clipperMaxShortsBadge = document.getElementById('clipperMaxShortsBadge');
+        const clipperDurationSelect = document.getElementById('clipperDurationSelect');
+        const clipperLanguageSelect = document.getElementById('clipperLanguageSelect');
+        const btnAnalyzeClipper = document.getElementById('btnAnalyzeClipper');
+        const clipperBtnText = document.getElementById('clipperBtnText');
+        const clipperBtnIcon = document.getElementById('clipperBtnIcon');
+        const clipperAnalysisProgress = document.getElementById('clipperAnalysisProgress');
+        const clipperProgressStep = document.getElementById('clipperProgressStep');
+
+        const clipperMovieMetaCard = document.getElementById('clipperMovieMetaCard');
+        const clipperMovieThumb = document.getElementById('clipperMovieThumb');
+        const clipperMovieTitle = document.getElementById('clipperMovieTitle');
+        const clipperMovieDuration = document.getElementById('clipperMovieDuration');
+        const clipperMovieChannel = document.getElementById('clipperMovieChannel');
+        const clipperMoviePartsCount = document.getElementById('clipperMoviePartsCount');
+
+        const clipperBatchBar = document.getElementById('clipperBatchBar');
+        const btnGenerateAllShorts = document.getElementById('btnGenerateAllShorts');
+        const btnUploadAllShorts = document.getElementById('btnUploadAllShorts');
+        const clipperBatchProgressCard = document.getElementById('clipperBatchProgressCard');
+        const clipperBatchStepText = document.getElementById('clipperBatchStepText');
+        const clipperBatchPercentText = document.getElementById('clipperBatchPercentText');
+        const clipperBatchProgressBar = document.getElementById('clipperBatchProgressBar');
+
+        const clipperQueueContainer = document.getElementById('clipperQueueContainer');
+        const clipperQueueBadge = document.getElementById('clipperQueueBadge');
+        const clipperScenesGrid = document.getElementById('clipperScenesGrid');
+
+        // Slider value badge listener
+        if (clipperMaxShortsSlider && clipperMaxShortsBadge) {
+            clipperMaxShortsSlider.addEventListener('input', (e) => {
+                const val = e.target.value;
+                clipperMaxShortsBadge.textContent = `${val} Parts (AI Optimal)`;
+            });
+        }
+
+        // Paste URL button listener
+        if (btnPasteUrl && clipperUrlInput) {
+            btnPasteUrl.addEventListener('click', async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text && (text.includes('youtube.com') || text.includes('youtu.be'))) {
+                        clipperUrlInput.value = text.trim();
+                    } else if (text) {
+                        clipperUrlInput.value = text.trim();
+                    }
+                } catch (e) {
+                    alert('Please paste the YouTube URL directly into the input box.');
+                }
+            });
+        }
+
+        // Analyze & Plan Chronological Shorts
+        if (btnAnalyzeClipper) {
+            btnAnalyzeClipper.addEventListener('click', async () => {
+                const url = clipperUrlInput.value.trim();
+                if (!url) {
+                    alert('Please enter a valid YouTube video or movie URL.');
+                    clipperUrlInput.focus();
+                    return;
+                }
+
+                btnAnalyzeClipper.disabled = true;
+                clipperBtnIcon.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span>';
+                clipperBtnText.textContent = 'Analyzing Narrative Arc with Gemini...';
+                clipperAnalysisProgress.style.display = 'block';
+                clipperProgressStep.textContent = 'Extracting video stream details and chapter markers...';
+
+                // Reset state
+                clipperMovieMetaCard.style.display = 'none';
+                clipperBatchBar.style.display = 'none';
+                clipperQueueContainer.style.display = 'none';
+                currentClipperScenes = [];
+                completedClipperShorts = {};
+
+                try {
+                    const maxShorts = parseInt(clipperMaxShortsSlider.value) || 5;
+                    const targetDuration = parseInt(clipperDurationSelect.value) || 50;
+                    const language = clipperLanguageSelect.value || 'Hindi';
+
+                    setTimeout(() => {
+                        if (clipperProgressStep) {
+                            clipperProgressStep.textContent = `Gemini is discovering key dramatic moments in chronological order (${language})...`;
+                        }
+                    }, 2500);
+
+                    const res = await fetch('/api/clipper/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            url: url,
+                            max_shorts: maxShorts,
+                            target_duration: targetDuration,
+                            language: language
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                        throw new Error(data.error || 'Failed to analyze video');
+                    }
+
+                    currentClipperVideoInfo = data.video_info;
+                    currentClipperScenes = data.scenes || [];
+
+                    // Render Movie Metadata Box
+                    clipperMovieThumb.src = currentClipperVideoInfo.thumbnail || '';
+                    clipperMovieTitle.textContent = currentClipperVideoInfo.title || 'Movie';
+                    clipperMovieDuration.textContent = `⏱️ Duration: ${currentClipperVideoInfo.duration_str}`;
+                    clipperMovieChannel.textContent = `👤 Channel: ${currentClipperVideoInfo.channel || 'YouTube'}`;
+                    clipperMoviePartsCount.textContent = `🎬 ${currentClipperScenes.length} Chronological Shorts Planned`;
+                    clipperMovieMetaCard.style.display = 'block';
+
+                    // Render Scenes Queue
+                    renderClipperScenesQueue(currentClipperScenes);
+                    clipperBatchBar.style.display = 'flex';
+                    clipperQueueContainer.style.display = 'block';
+                    clipperQueueBadge.textContent = `${currentClipperScenes.length} Parts`;
+
+                } catch (err) {
+                    console.error('Clipper analysis error:', err);
+                    alert('Error analyzing video: ' + err.message);
+                } finally {
+                    btnAnalyzeClipper.disabled = false;
+                    clipperBtnIcon.textContent = '🚀';
+                    clipperBtnText.textContent = 'Analyze Narrative & Plan Chronological Shorts';
+                    clipperAnalysisProgress.style.display = 'none';
+                }
+            });
+        }
+
+        function renderClipperScenesQueue(scenes) {
+            clipperScenesGrid.innerHTML = scenes.map((scene, idx) => `
+                <div class="scene-item-card" id="sceneCard_${scene.part}">
+                    <div class="scene-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="part-pill">Part ${scene.part}</span>
+                            <span class="timestamp-pill">⏱️ ${scene.start_time} - ${scene.end_time} (${scene.duration}s)</span>
+                        </div>
+                        <span class="status-badge status-planned" id="sceneStatusBadge_${scene.part}">⏳ Planned</span>
+                    </div>
+
+                    <div class="scene-body">
+                        <!-- Video Media Box -->
+                        <div class="scene-video-box" id="sceneMediaBox_${scene.part}">
+                            <div class="placeholder-916">
+                                <span style="font-size: 28px;">🎬</span>
+                                <span style="font-weight: 600; font-size: 13px;">9:16 Vertical Short</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">Smart Face Centering &amp; Neural Voiceover</span>
+                            </div>
+                        </div>
+
+                        <!-- Metadata Box -->
+                        <div class="scene-meta-box">
+                            <div>
+                                <label class="field-label">Short Title (Viral Title + Part Tag)</label>
+                                <input type="text" id="sceneTitle_${scene.part}" value="${escapeHtml(scene.title)}" class="form-control" style="font-size: 13px; font-weight: 600;">
+                            </div>
+
+                            <div>
+                                <label class="field-label">🔥 3-Second Retention Hook</label>
+                                <input type="text" id="sceneHook_${scene.part}" value="${escapeHtml(scene.hook)}" class="form-control" style="font-size: 12px; color: #ffedd5; background: rgba(255,100,0,0.08); border-color: rgba(255,100,0,0.3);">
+                            </div>
+
+                            <div>
+                                <label class="field-label">🎙️ Story Recap Voiceover Script (~60 words)</label>
+                                <textarea id="sceneScript_${scene.part}" class="form-control" rows="3" style="font-size: 12px; line-height: 1.4;">${escapeHtml(scene.script)}</textarea>
+                            </div>
+
+                            <div>
+                                <label class="field-label">🏷️ Tags</label>
+                                <input type="text" id="sceneTags_${scene.part}" value="${(scene.tags || []).join(', ')}" class="form-control" style="font-size: 12px;">
+                            </div>
+
+                            <div class="scene-actions-row">
+                                <button type="button" class="btn-populate" id="btnGenPart_${scene.part}" onclick="generateSinglePart(${scene.part})">
+                                    <span>⚡ Generate Part ${scene.part} (Reframed &amp; Voiced)</span>
+                                </button>
+                                <button type="button" class="btn-upload" id="btnUploadPart_${scene.part}" style="display: none; padding: 10px 18px; font-size: 13px; width: auto; background: var(--accent-red);" onclick="uploadSinglePart(${scene.part})">
+                                    <span>🚀 Upload Part ${scene.part} to YouTube</span>
+                                </button>
+                                <a id="btnWatchPart_${scene.part}" href="#" target="_blank" class="btn-link btn-link-primary" style="display: none; padding: 10px 16px; font-size: 13px;">
+                                    <span>Watch on YouTube &#8599;</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Generate Single Part
+        window.generateSinglePart = async function(partNum) {
+            const btn = document.getElementById(`btnGenPart_${partNum}`);
+            const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
+            const mediaBox = document.getElementById(`sceneMediaBox_${partNum}`);
+            const uploadBtn = document.getElementById(`btnUploadPart_${partNum}`);
+
+            const scene = currentClipperScenes.find(s => s.part === partNum);
+            if (!scene) return;
+
+            // Update scene object with any edits the user made on the UI
+            scene.title = document.getElementById(`sceneTitle_${partNum}`).value.trim();
+            scene.hook = document.getElementById(`sceneHook_${partNum}`).value.trim();
+            scene.script = document.getElementById(`sceneScript_${partNum}`).value.trim();
+            const tagsInput = document.getElementById(`sceneTags_${partNum}`).value.trim();
+            scene.tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Generating Short...';
+            badge.className = 'status-badge';
+            badge.style.background = 'rgba(255, 0, 85, 0.2)';
+            badge.style.color = '#fda4af';
+            badge.textContent = '⚙️ Rendering...';
+
+            mediaBox.innerHTML = `
+                <div class="placeholder-916">
+                    <div class="spinner" style="border-top-color: #ff0055; width: 30px; height: 30px;"></div>
+                    <span style="font-size: 12px; margin-top: 8px;">Downloading clip section...</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">Tracking faces &amp; reframing to 9:16</span>
+                </div>
+            `;
+
+            try {
+                const res = await fetch('/api/clipper/generate_short', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: currentClipperVideoInfo.url,
+                        scene: scene,
+                        language: clipperLanguageSelect.value || 'Hindi'
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to render short');
+                }
+
+                const shortObj = data.short;
+                completedClipperShorts[partNum] = shortObj;
+
+                // Render video player into media box
+                mediaBox.innerHTML = `
+                    <video src="${shortObj.video_url}" controls playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>
+                `;
+
+                badge.className = 'status-badge status-ready';
+                badge.textContent = '✅ Ready to Upload';
+
+                btn.style.display = 'none';
+                uploadBtn.style.display = 'inline-flex';
+
+                // Check if all parts completed to show batch upload button
+                updateBatchUploadVisibility();
+
+            } catch (err) {
+                console.error(`Part ${partNum} generation error:`, err);
+                alert(`Error generating Part ${partNum}: ` + err.message);
+                badge.className = 'status-badge';
+                badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                badge.style.color = '#f87171';
+                badge.textContent = '❌ Failed';
+                btn.disabled = false;
+                btn.textContent = `⚡ Retry Part ${partNum}`;
+            }
+        };
+
+        // Upload Single Part to YouTube
+        window.uploadSinglePart = async function(partNum) {
+            const shortObj = completedClipperShorts[partNum];
+            if (!shortObj) {
+                alert('Please generate the short first before uploading.');
+                return;
+            }
+
+            const uploadBtn = document.getElementById(`btnUploadPart_${partNum}`);
+            const badge = document.getElementById(`sceneStatusBadge_${partNum}`);
+            const watchBtn = document.getElementById(`btnWatchPart_${partNum}`);
+
+            const title = document.getElementById(`sceneTitle_${partNum}`).value.trim();
+            const script = document.getElementById(`sceneScript_${partNum}`).value.trim();
+            const tags = document.getElementById(`sceneTags_${partNum}`).value.trim();
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Uploading to YouTube...';
+            badge.textContent = '🚀 Uploading...';
+
+            try {
+                const res = await fetch('/api/clipper/upload_short', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: shortObj.filename,
+                        title: title,
+                        script: script,
+                        tags: tags,
+                        privacy: 'public',
+                        made_for_kids: false,
+                        category_id: '24'
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    throw new Error(data.error || 'Failed to start upload');
+                }
+
+                // Poll task
+                const taskId = data.task_id;
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/upload_status/${taskId}`);
+                        const statusData = await statusRes.json();
+                        if (statusData.status === 'uploading') {
+                            badge.textContent = `🚀 Uploading ${Math.round((statusData.progress || 0) * 100)}%`;
+                        } else if (statusData.status === 'completed') {
+                            clearInterval(pollInterval);
+                            badge.className = 'status-badge status-uploaded';
+                            badge.textContent = '🎉 Uploaded Live';
+                            uploadBtn.style.display = 'none';
+                            watchBtn.href = `https://youtu.be/${statusData.video_id}`;
+                            watchBtn.style.display = 'inline-flex';
+                            loadRecentVideos();
+                        } else if (statusData.status === 'error') {
+                            clearInterval(pollInterval);
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = `🚀 Upload Part ${partNum}`;
+                            badge.textContent = '❌ Upload Error';
+                            alert('YouTube upload error: ' + (statusData.error || 'Unknown error'));
+                        }
+                    } catch (e) {
+                        console.error('Status poll error', e);
+                    }
+                }, 1200);
+
+            } catch (err) {
+                console.error(`Part ${partNum} upload error:`, err);
+                alert(`Error uploading Part ${partNum}: ` + err.message);
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = `🚀 Upload Part ${partNum} to YouTube`;
+            }
+        };
+
+        function updateBatchUploadVisibility() {
+            const total = currentClipperScenes.length;
+            const completed = Object.keys(completedClipperShorts).length;
+            if (total > 0 && completed === total) {
+                btnUploadAllShorts.style.display = 'inline-flex';
+                btnUploadAllShorts.textContent = `🚀 One-Click Upload All ${total} Parts to YouTube`;
+            }
+        }
+
+        // Batch Generate All Parts Sequentially
+        if (btnGenerateAllShorts) {
+            btnGenerateAllShorts.addEventListener('click', async () => {
+                if (!currentClipperScenes || currentClipperScenes.length === 0) return;
+
+                btnGenerateAllShorts.disabled = true;
+                btnGenerateAllShorts.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Generating All Parts...';
+                clipperBatchProgressCard.style.display = 'block';
+
+                const total = currentClipperScenes.length;
+                for (let i = 0; i < total; i++) {
+                    const scene = currentClipperScenes[i];
+                    clipperBatchStepText.textContent = `Rendering Part ${scene.part} of ${total}: downloading section, tracking faces, mixing voiceover...`;
+                    clipperBatchPercentText.textContent = `${Math.round((i / total) * 100)}%`;
+                    clipperBatchProgressBar.style.width = `${Math.round((i / total) * 100)}%`;
+
+                    if (!completedClipperShorts[scene.part]) {
+                        await generateSinglePart(scene.part);
+                    }
+                }
+
+                clipperBatchStepText.textContent = `All ${total} Chronological Shorts successfully generated & reframed!`;
+                clipperBatchPercentText.textContent = '100%';
+                clipperBatchProgressBar.style.width = '100%';
+                btnGenerateAllShorts.disabled = false;
+                btnGenerateAllShorts.textContent = '⚡ Re-Generate All Parts';
+                updateBatchUploadVisibility();
+            });
+        }
+
+        // Batch Upload All Parts Sequentially
+        if (btnUploadAllShorts) {
+            btnUploadAllShorts.addEventListener('click', async () => {
+                if (!confirm(`Are you sure you want to sequentially upload all ${currentClipperScenes.length} parts to your connected YouTube channel?`)) {
+                    return;
+                }
+
+                btnUploadAllShorts.disabled = true;
+                btnUploadAllShorts.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Uploading All Parts...';
+
+                for (const scene of currentClipperScenes) {
+                    if (completedClipperShorts[scene.part]) {
+                        await uploadSinglePart(scene.part);
+                        // Brief pause between uploads
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                }
+            });
+        }
+
         // Initialize on page load
         loadChannelInfo();
         loadRecentVideos();
@@ -3842,6 +4538,190 @@ def upload_status(task_id):
     if not task:
         return jsonify({'error': 'Task not found'}), 404
     return jsonify(task)
+
+# ==============================================================
+# AI MOVIE-TO-SHORTS AUTO-CLIPPER ENGINE BACKEND ROUTES
+# ==============================================================
+
+@app.route('/api/clipper/analyze', methods=['POST'])
+def clipper_analyze():
+    data = request.get_json(force=True, silent=True) or {}
+    url = (data.get('url') or '').strip()
+    max_shorts = int(data.get('max_shorts') or 5)
+    target_duration = int(data.get('target_duration') or 50)
+    language = (data.get('language') or 'Hindi').strip()
+
+    if not url:
+        return jsonify({'success': False, 'error': 'YouTube URL is required'}), 400
+
+    try:
+        video_info = clipper_engine.extract_youtube_info(url)
+        scenes = clipper_engine.analyze_movie_narrative_for_shorts(
+            youtube_url=url,
+            video_info=video_info,
+            max_shorts=max_shorts,
+            target_duration=target_duration,
+            language=language
+        )
+        return jsonify({
+            'success': True,
+            'video_info': video_info,
+            'scenes': scenes
+        })
+    except Exception as e:
+        print(f"Clipper analysis error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/clipper/generate_short', methods=['POST'])
+def clipper_generate_short():
+    data = request.get_json(force=True, silent=True) or {}
+    url = (data.get('url') or '').strip()
+    scene = data.get('scene') or {}
+    language = (data.get('language') or 'Hindi').strip()
+
+    if not url or not scene:
+        return jsonify({'success': False, 'error': 'URL and scene data are required'}), 400
+
+    try:
+        short_obj = clipper_engine.process_single_short_pipeline(
+            youtube_url=url,
+            scene=scene,
+            language=language
+        )
+        return jsonify({'success': True, 'short': short_obj})
+    except Exception as e:
+        print(f"Clipper generate short error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/clipper/start_batch_job', methods=['POST'])
+def clipper_start_batch_job():
+    data = request.get_json(force=True, silent=True) or {}
+    url = (data.get('url') or '').strip()
+    scenes = data.get('scenes') or []
+    language = (data.get('language') or 'Hindi').strip()
+
+    if not url or not scenes:
+        return jsonify({'success': False, 'error': 'URL and scenes are required'}), 400
+
+    job_id = str(uuid.uuid4())
+    clipper_jobs[job_id] = {
+        'status': 'processing',
+        'progress': 0,
+        'current_step': f'Queued {len(scenes)} chronological shorts...',
+        'completed_shorts': [],
+        'total_parts': len(scenes),
+        'error': None
+    }
+
+    def run_batch_clipping():
+        total = len(scenes)
+        for idx, scene in enumerate(scenes):
+            part = scene.get('part', idx + 1)
+            clipper_jobs[job_id]['current_step'] = f"Processing Part {part} of {total}: downloading clip section, reframing 9:16 with face centering, and generating voiceover..."
+            clipper_jobs[job_id]['progress'] = int((idx / total) * 100)
+            try:
+                short_obj = clipper_engine.process_single_short_pipeline(
+                    youtube_url=url,
+                    scene=scene,
+                    language=language
+                )
+                clipper_jobs[job_id]['completed_shorts'].append(short_obj)
+            except Exception as e:
+                print(f"Error processing Part {part} in batch: {e}")
+        clipper_jobs[job_id]['status'] = 'completed'
+        clipper_jobs[job_id]['progress'] = 100
+        clipper_jobs[job_id]['current_step'] = f'Successfully generated all {total} chronological Shorts!'
+
+    th = threading.Thread(target=run_batch_clipping)
+    th.daemon = True
+    th.start()
+
+    return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/clipper/job_status/<job_id>')
+def clipper_job_status(job_id):
+    job = clipper_jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify(job)
+
+
+@app.route('/api/clipper/upload_short', methods=['POST'])
+def clipper_upload_short():
+    creds = get_stored_credentials()
+    if not creds:
+        return jsonify({'error': 'Unauthorized. Please connect your YouTube channel first.'}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    filename = data.get('filename', '').strip()
+    title = data.get('title', 'YouTube Short #Shorts').strip()
+    script = data.get('script', '').strip()
+    raw_tags = data.get('tags', '')
+    privacy = data.get('privacy', 'public').strip()
+    made_for_kids = bool(data.get('made_for_kids', False))
+    category_id = data.get('category_id', '24')
+
+    if not filename:
+        return jsonify({'error': 'Filename is required'}), 400
+
+    source_path = os.path.join(clipper_engine.CLIPPER_DIR, secure_filename(filename))
+    if not os.path.exists(source_path):
+        return jsonify({'error': 'Short video file not found'}), 404
+
+    task_id = str(uuid.uuid4())
+    target_upload_path = os.path.join(UPLOAD_FOLDER, f"upload_{task_id}_{secure_filename(filename)}")
+    shutil.copyfile(source_path, target_upload_path)
+
+    thumb_name = filename.replace("short_", "thumb_").replace(".mp4", ".jpg")
+    source_thumb = os.path.join(clipper_engine.CLIPPER_DIR, thumb_name)
+    target_thumb_path = None
+    if os.path.exists(source_thumb):
+        target_thumb_path = os.path.join(UPLOAD_FOLDER, f"thumb_{task_id}_{thumb_name}")
+        shutil.copyfile(source_thumb, target_thumb_path)
+
+    tags = [t.strip() for t in raw_tags.split(',') if t.strip()] if isinstance(raw_tags, str) else (raw_tags or [])
+    if 'Shorts' not in tags:
+        tags.append('Shorts')
+
+    description = (
+        f"{title}\n\n"
+        f"🎬 Story Recap:\n{script}\n\n"
+        f"🔔 Subscribe to the channel for more viral breakdowns!\n\n"
+        f"#Shorts #YouTubeShorts #Viral"
+    )
+
+    upload_tasks[task_id] = {
+        'status': 'uploading',
+        'progress': 0.0,
+        'video_id': None,
+        'error': None
+    }
+
+    creds_dict = {
+        'token': creds.token,
+        'refresh_token': creds.refresh_token,
+        'token_uri': creds.token_uri,
+        'client_id': creds.client_id,
+        'client_secret': creds.client_secret,
+        'scopes': creds.scopes
+    }
+
+    thread = threading.Thread(
+        target=execute_youtube_upload,
+        args=(task_id, creds_dict, target_upload_path, target_thumb_path, title, description, tags, privacy, category_id, made_for_kids)
+    )
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'task_id': task_id})
+
+
+@app.route('/api/clipper/media/<path:filename>')
+def clipper_serve_media(filename):
+    return send_from_directory(clipper_engine.CLIPPER_DIR, secure_filename(filename))
 
 if __name__ == '__main__':
     print("="*60)
