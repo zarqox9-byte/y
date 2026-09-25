@@ -5030,8 +5030,10 @@ def clipper_generate_short():
         )
         return jsonify({'success': True, 'short': short_obj, 'job_id': job_id})
     except Exception as e:
+        import traceback
+        tb_str = traceback.format_exc()
         err_msg = str(e)
-        print(f"Clipper generate short error: {err_msg}")
+        print(f"Clipper generate short error: {err_msg}\n{tb_str}")
         is_quota = any(w in err_msg.lower() for w in ['429', 'resource_exhausted', 'quota', 'rate limit'])
         if job_id and is_quota:
             ckpt = clipper_engine.load_job_checkpoint(job_id)
@@ -5045,6 +5047,7 @@ def clipper_generate_short():
         return jsonify({
             'success': False,
             'error': err_msg,
+            'traceback': tb_str,
             'is_quota_error': is_quota,
             'status': 'PAUSED_QUOTA_LIMIT' if is_quota else 'error'
         }), 429 if is_quota else 500

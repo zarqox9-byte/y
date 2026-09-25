@@ -21,6 +21,7 @@ import asyncio
 import logging
 import subprocess
 import shutil
+import urllib.request
 from typing import Dict, Any, List, Optional, Tuple
 
 def get_ffmpeg_bin() -> str:
@@ -794,8 +795,100 @@ def sanitize_and_order_scenes(
 
 
 # =====================================================================
-# 3. STREAMING CHUNKING VIA YT-DLP
+# 3. DIRECT STREAM RESOLUTION & RESILIENT CHUNK DOWNLOAD
 # =====================================================================
+_STREAM_URL_CACHE: Dict[str, Dict[str, Any]] = {}
+
+def get_youtube_video_id(url: str) -> Optional[str]:
+    """Extracts the 11-character YouTube video ID from various URL formats."""
+    patterns = [
+        r"(?:v=|\/embed\/|\/watch\?v=|\/shorts\/|^)([0-9A-Za-z_-]{11})(?:[\&\?\/]|$)",
+        r"youtu\.be\/([0-9A-Za-z_-]{11})"
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, url)
+        if m:
+            return m.group(1)
+    return None
+
+
+def get_direct_stream_url(youtube_url: str) -> Optional[str]:
+    """
+    Extracts a direct playable MP4 video stream URL using:
+    1. In-memory cache (15-min TTL)
+    2. yt-dlp -g with anti-bot clients (android, ios, mweb)
+    3. Piped CDN API fallback (bypasses datacenter IP blocks completely)
+    """
+    global _STREAM_URL_CACHE
+    vid = get_youtube_video_id(youtube_url) or youtube_url
+    now = time.time()
+
+    # 1. Check cache
+    if vid in _STREAM_URL_CACHE:
+        entry = _STREAM_URL_CACHE[vid]
+        if now < entry.get("expires_at", 0):
+            logger.info(f"Using cached direct stream URL for video {vid}")
+            return entry.get("url")
+        else:
+            try:
+                del _STREAM_URL_CACHE[vid]
+            except Exception:
+                pass
+
+    # 2. Try yt-dlp -g with android,ios,mweb clients
+    try:
+        cmd = [
+            sys.executable, "-m", "yt_dlp",
+            "-g",
+            "-f", "best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best",
+            "--extractor-args", "youtube:player_client=android,ios,mweb",
+            "--socket-timeout", "20",
+            "--retries", "3",
+            youtube_url
+        ]
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+        if proc.returncode == 0 and proc.stdout.strip():
+            lines = [l.strip() for l in proc.stdout.strip().split("\n") if l.strip().startswith("http")]
+            if lines:
+                direct_url = lines[0]
+                _STREAM_URL_CACHE[vid] = {"url": direct_url, "expires_at": now + 900}
+                logger.info(f"Retrieved direct stream URL via yt-dlp for video {vid}")
+                return direct_url
+    except Exception as e:
+        logger.warning(f"yt-dlp -g failed for {vid}: {e}")
+
+    # 3. Piped CDN API Fallback (Zero Bot Challenge on Datacenter IPs)
+    if vid and len(vid) == 11:
+        piped_instances = [
+            f"https://api.piped.private.coffee/streams/{vid}",
+            f"https://pipedapi.kavin.rocks/streams/{vid}",
+            f"https://piped-api.lunar.icu/streams/{vid}",
+            f"https://pipedapi.tokhmi.xyz/streams/{vid}"
+        ]
+        for api_url in piped_instances:
+            try:
+                req = urllib.request.Request(
+                    api_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                )
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        streams = data.get("videoStreams", [])
+                        mp4_streams = [s for s in streams if (s.get("format") == "MPEG_4" or "mp4" in s.get("mimeType", "")) and s.get("url")]
+                        if mp4_streams:
+                            mp4_streams.sort(key=lambda x: x.get("quality", "360p"), reverse=True)
+                            chosen_url = mp4_streams[0]["url"]
+                            _STREAM_URL_CACHE[vid] = {"url": chosen_url, "expires_at": now + 900}
+                            logger.info(f"Retrieved stream URL from Piped CDN ({api_url}) for video {vid}")
+                            return chosen_url
+            except Exception as pe:
+                logger.debug(f"Piped instance {api_url} failed: {pe}")
+
+    logger.error(f"Failed to extract direct stream URL for {youtube_url}")
+    return None
+
+
 def download_clip_section(
     youtube_url: str,
     start_time: str,
@@ -803,39 +896,96 @@ def download_clip_section(
     output_path: str
 ) -> bool:
     """
-    Downloads ONLY the exact start_time to end_time section of the YouTube video
-    directly to `output_path` using yt-dlp's --download-sections argument.
-    Configures anti-bot extractor arguments, custom headers, and fallback stream formats.
+    Downloads ONLY the exact start_time to end_time section directly to `output_path`.
+    Uses direct stream URL extraction + FFmpeg fast cutting first (taking 1-3 seconds),
+    with fallback to yt-dlp --download-sections if needed.
     """
-    try:
-        import yt_dlp
-    except ImportError:
-        raise RuntimeError("yt-dlp is not installed.")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    if os.path.exists(output_path):
+        try:
+            os.remove(output_path)
+        except Exception:
+            pass
 
+    ffmpeg_bin = get_ffmpeg_bin()
+    direct_url = get_direct_stream_url(youtube_url)
+
+    # 1. Direct stream FFmpeg cutting (Super fast & immune to datacenter download limits)
+    if direct_url:
+        # Attempt A: Stream copy (-c copy)
+        cmd_copy = [
+            ffmpeg_bin, "-y",
+            "-ss", start_time,
+            "-to", end_time,
+            "-i", direct_url,
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            output_path
+        ]
+        try:
+            p_copy = subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=35)
+            if p_copy.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
+                logger.info(f"Direct stream slice (copy) succeeded: {output_path} ({os.path.getsize(output_path)} bytes)")
+                return True
+        except subprocess.TimeoutExpired:
+            logger.warning(f"FFmpeg copy timed out for {start_time}-{end_time}")
+        except Exception as e:
+            logger.warning(f"FFmpeg copy error: {e}")
+
+        # Attempt B: Ultrafast transcode slice if copy boundary was not on keyframe
+        cmd_trans = [
+            ffmpeg_bin, "-y",
+            "-ss", start_time,
+            "-to", end_time,
+            "-i", direct_url,
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "24",
+            "-an",
+            output_path
+        ]
+        try:
+            p_trans = subprocess.run(cmd_trans, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=45)
+            if p_trans.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 10000:
+                logger.info(f"Direct stream slice (transcode) succeeded: {output_path} ({os.path.getsize(output_path)} bytes)")
+                return True
+        except subprocess.TimeoutExpired:
+            logger.warning(f"FFmpeg transcode timed out for {start_time}-{end_time}")
+        except Exception as e:
+            logger.warning(f"FFmpeg transcode error: {e}")
+
+    # 2. Invalidate cache in case URL expired or connection failed
+    vid = get_youtube_video_id(youtube_url) or youtube_url
+    if vid in _STREAM_URL_CACHE:
+        try:
+            del _STREAM_URL_CACHE[vid]
+        except Exception:
+            pass
+
+    # 3. Fallback to yt-dlp --download-sections
     section_arg = f"*{start_time}-{end_time}"
-    logger.info(f"Downloading stream chunk: {section_arg} for {youtube_url}")
-
+    logger.info(f"Falling back to yt-dlp download-sections: {section_arg} for {youtube_url}")
     temp_template = os.path.splitext(output_path)[0] + "_dl.%(ext)s"
 
-    # Anti-bot options to bypass datacenter IP restrictions
     base_args = [
         sys.executable, "-m", "yt_dlp",
         "--download-sections", section_arg,
         "--force-keyframes-at-cuts",
-        "--extractor-args", "youtube:player_client=web_creator,web_embedded,mweb,android;player_skip=webpage,configs",
+        "--extractor-args", "youtube:player_client=android,ios,mweb",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "--add-header", "Accept-Language:en-US,en;q=0.9",
         "--compat-options", "no-youtube-unavailable-videos",
+        "--socket-timeout", "30",
+        "--retries", "5",
+        "--fragment-retries", "5",
         "--http-chunk-size", "10485760",
         "--merge-output-format", "mp4",
         "-o", temp_template,
         "--quiet", "--no-warnings",
     ]
 
-    # Format cascades to bypass throttling and bot detection
     format_attempts = [
-        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "best[height<=1080][ext=mp4]/bestvideo[height<=720]+bestaudio/best",
+        "best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best",
         "best/18"
     ]
 
@@ -846,7 +996,7 @@ def download_clip_section(
     for fmt in format_attempts:
         cmd = base_args + ["-f", fmt, youtube_url]
         try:
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
             if proc.returncode == 0:
                 for f in os.listdir(dl_dir):
                     if f.startswith(base_stem) and f.endswith(".mp4"):
@@ -854,19 +1004,16 @@ def download_clip_section(
                         if os.path.exists(output_path):
                             os.remove(output_path)
                         os.rename(actual_dl, output_path)
-                        logger.info(f"Downloaded section successfully with format '{fmt}': {output_path} ({os.path.getsize(output_path)} bytes)")
+                        logger.info(f"Downloaded section successfully with yt-dlp format '{fmt}': {output_path} ({os.path.getsize(output_path)} bytes)")
                         return True
             else:
                 last_error = proc.stderr
-                logger.warning(f"yt-dlp download failed with format '{fmt}': {proc.stderr[:160]}. Trying next format...")
-        except subprocess.TimeoutExpired:
-            last_error = "Timeout after 180s waiting for stream chunk"
-            logger.warning(last_error)
+                logger.warning(f"yt-dlp download failed with format '{fmt}': {proc.stderr[:160]}")
         except Exception as e:
             last_error = str(e)
             logger.warning(f"Download attempt error: {e}")
 
-    logger.error(f"All yt-dlp stream download formats failed for {section_arg}: {last_error}")
+    logger.error(f"All stream download methods failed for {section_arg}: {last_error}")
     return False
 
 
