@@ -40,6 +40,13 @@ app.config.update(
 # Enable ProxyFix for reverse proxies (Render, Cloudflare, etc.)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 # Allow HTTP and relaxed scope matching for local testing
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
@@ -245,6 +252,9 @@ HTML_MAIN = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>YouTube Creator Studio Pro + Gemini AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -3268,10 +3278,16 @@ HTML_MAIN = """
         let tempVideoServerFilename = null;
         let clientExtractedFrames = [];
 
-        // Force-strip any invisible blocking backdrops/overlays and enforce touch responsiveness
+        // Registry of detached modal elements so they can be hard-removed from root DOM when closed
+        window._detachedModals = window._detachedModals || {};
+
+        // Force-strip and hard-remove any invisible blocking backdrops/overlays from root DOM
         window.forceClearBlockingOverlays = function() {
             try {
-                document.querySelectorAll('.modal-overlay, #geminiModalOverlay, #chatDrawerBackdrop').forEach(el => {
+                document.querySelectorAll('.modal-overlay, #geminiModalOverlay, #clipperJobsModalOverlay, #chatDrawerBackdrop, #chatDrawer').forEach(el => {
+                    if (el.id) {
+                        window._detachedModals[el.id] = el;
+                    }
                     if (!el.classList.contains('active') && !el.classList.contains('open')) {
                         el.style.setProperty('display', 'none', 'important');
                         el.style.setProperty('pointer-events', 'none', 'important');
@@ -3280,6 +3296,9 @@ HTML_MAIN = """
                         el.style.setProperty('z-index', '-99999', 'important');
                         el.style.setProperty('width', '0', 'important');
                         el.style.setProperty('height', '0', 'important');
+                        if (el.parentNode) {
+                            el.parentNode.removeChild(el);
+                        }
                     }
                 });
                 document.querySelectorAll('.mode-tab, button, input, select, textarea, .form-control, .btn-upload, .btn-populate').forEach(el => {
@@ -3355,7 +3374,8 @@ HTML_MAIN = """
         const geminiNavPill = document.getElementById('geminiNavPill');
         const geminiDot = document.getElementById('geminiDot');
         const geminiStatusLabel = document.getElementById('geminiStatusLabel');
-        const geminiModalOverlay = document.getElementById('geminiModalOverlay');
+        const geminiModalOverlay = document.getElementById('geminiModalOverlay') || window._detachedModals['geminiModalOverlay'];
+        if (geminiModalOverlay) window._detachedModals['geminiModalOverlay'] = geminiModalOverlay;
         const btnOpenKeyModal = document.getElementById('btnOpenKeyModal');
         const btnCloseKeyModal = document.getElementById('btnCloseKeyModal');
         const btnSaveGeminiKey = document.getElementById('btnSaveGeminiKey');
@@ -3368,13 +3388,19 @@ HTML_MAIN = """
         const btnRefreshKeyPool = document.getElementById('btnRefreshKeyPool');
 
         function openKeyModal() {
-            if (geminiModalOverlay) {
-                geminiModalOverlay.classList.add('active');
-                geminiModalOverlay.style.display = 'flex';
-                geminiModalOverlay.style.pointerEvents = 'auto';
-                geminiModalOverlay.style.opacity = '1';
-                geminiModalOverlay.style.visibility = 'visible';
-                geminiModalOverlay.style.zIndex = '9999';
+            const modalEl = geminiModalOverlay || window._detachedModals['geminiModalOverlay'];
+            if (modalEl) {
+                if (!document.body.contains(modalEl)) {
+                    document.body.appendChild(modalEl);
+                }
+                modalEl.classList.add('active');
+                modalEl.style.display = 'flex';
+                modalEl.style.pointerEvents = 'auto';
+                modalEl.style.opacity = '1';
+                modalEl.style.visibility = 'visible';
+                modalEl.style.width = '100vw';
+                modalEl.style.height = '100vh';
+                modalEl.style.zIndex = '999999';
                 if (modalActiveChannelTitle) {
                     modalActiveChannelTitle.textContent = window.currentActiveChannelTitle || 'Active Channel';
                 }
@@ -3383,13 +3409,17 @@ HTML_MAIN = """
         }
 
         function closeKeyModal() {
-            if (geminiModalOverlay) {
-                geminiModalOverlay.classList.remove('active');
-                geminiModalOverlay.style.display = 'none';
-                geminiModalOverlay.style.pointerEvents = 'none';
-                geminiModalOverlay.style.opacity = '0';
-                geminiModalOverlay.style.visibility = 'hidden';
-                geminiModalOverlay.style.zIndex = '-100';
+            const modalEl = geminiModalOverlay || window._detachedModals['geminiModalOverlay'];
+            if (modalEl) {
+                modalEl.classList.remove('active');
+                modalEl.style.display = 'none';
+                modalEl.style.pointerEvents = 'none';
+                modalEl.style.opacity = '0';
+                modalEl.style.visibility = 'hidden';
+                modalEl.style.zIndex = '-99999';
+                if (modalEl.parentNode) {
+                    modalEl.parentNode.removeChild(modalEl);
+                }
             }
         }
 
@@ -4007,41 +4037,52 @@ HTML_MAIN = """
 
         // Chat Drawer Toggle
         const chatFabBtn = document.getElementById('chatFabBtn');
-        const chatDrawer = document.getElementById('chatDrawer');
+        const chatDrawer = document.getElementById('chatDrawer') || window._detachedModals['chatDrawer'];
+        if (chatDrawer) window._detachedModals['chatDrawer'] = chatDrawer;
         const btnCloseChat = document.getElementById('btnCloseChat');
         const chatInput = document.getElementById('chatInput');
         const btnSendChat = document.getElementById('btnSendChat');
         const chatMessages = document.getElementById('chatMessages');
 
+        function closeChatDrawerHard() {
+            const drawerEl = chatDrawer || window._detachedModals['chatDrawer'];
+            if (drawerEl) {
+                drawerEl.classList.remove('open');
+                drawerEl.style.display = 'none';
+                drawerEl.style.pointerEvents = 'none';
+                drawerEl.style.opacity = '0';
+                drawerEl.style.visibility = 'hidden';
+                drawerEl.style.zIndex = '-99999';
+                if (drawerEl.parentNode) {
+                    drawerEl.parentNode.removeChild(drawerEl);
+                }
+            }
+        }
+
         if (chatFabBtn && chatDrawer) {
             chatFabBtn.addEventListener('click', () => {
-                const willOpen = !chatDrawer.classList.contains('open');
+                const drawerEl = chatDrawer || window._detachedModals['chatDrawer'];
+                if (!drawerEl) return;
+                const willOpen = !drawerEl.classList.contains('open');
                 if (willOpen) {
-                    chatDrawer.classList.add('open');
-                    chatDrawer.style.display = 'flex';
-                    chatDrawer.style.pointerEvents = 'auto';
-                    chatDrawer.style.opacity = '1';
-                    chatDrawer.style.visibility = 'visible';
-                    chatDrawer.style.zIndex = '1001';
+                    if (!document.body.contains(drawerEl)) {
+                        document.body.appendChild(drawerEl);
+                    }
+                    drawerEl.classList.add('open');
+                    drawerEl.style.display = 'flex';
+                    drawerEl.style.pointerEvents = 'auto';
+                    drawerEl.style.opacity = '1';
+                    drawerEl.style.visibility = 'visible';
+                    drawerEl.style.width = '380px';
+                    drawerEl.style.height = 'calc(100vh - 64px)';
+                    drawerEl.style.zIndex = '1001';
                 } else {
-                    chatDrawer.classList.remove('open');
-                    chatDrawer.style.display = 'none';
-                    chatDrawer.style.pointerEvents = 'none';
-                    chatDrawer.style.opacity = '0';
-                    chatDrawer.style.visibility = 'hidden';
-                    chatDrawer.style.zIndex = '-100';
+                    closeChatDrawerHard();
                 }
             });
         }
         if (btnCloseChat && chatDrawer) {
-            btnCloseChat.addEventListener('click', () => {
-                chatDrawer.classList.remove('open');
-                chatDrawer.style.display = 'none';
-                chatDrawer.style.pointerEvents = 'none';
-                chatDrawer.style.opacity = '0';
-                chatDrawer.style.visibility = 'hidden';
-                chatDrawer.style.zIndex = '-100';
-            });
+            btnCloseChat.addEventListener('click', closeChatDrawerHard);
         }
 
         async function sendChatMessage(text) {
@@ -4617,7 +4658,8 @@ HTML_MAIN = """
         const btnResumeBatchShorts = document.getElementById('btnResumeBatchShorts');
 
         // Saved jobs modal elements
-        const clipperJobsModalOverlay = document.getElementById('clipperJobsModalOverlay');
+        const clipperJobsModalOverlay = document.getElementById('clipperJobsModalOverlay') || window._detachedModals['clipperJobsModalOverlay'];
+        if (clipperJobsModalOverlay) window._detachedModals['clipperJobsModalOverlay'] = clipperJobsModalOverlay;
         const btnCloseJobsModal = document.getElementById('btnCloseJobsModal');
         const clipperJobsListContainer = document.getElementById('clipperJobsListContainer');
 
@@ -4671,24 +4713,36 @@ HTML_MAIN = """
 
         // Saved Jobs Modal Open / Close
         const hideJobsModal = () => {
-            if (clipperJobsModalOverlay) {
-                clipperJobsModalOverlay.classList.remove('active');
-                clipperJobsModalOverlay.style.display = 'none';
-                clipperJobsModalOverlay.style.pointerEvents = 'none';
-                clipperJobsModalOverlay.style.opacity = '0';
-                clipperJobsModalOverlay.style.visibility = 'hidden';
-                clipperJobsModalOverlay.style.zIndex = '-100';
+            const modalEl = clipperJobsModalOverlay || window._detachedModals['clipperJobsModalOverlay'];
+            if (modalEl) {
+                modalEl.classList.remove('active');
+                modalEl.style.display = 'none';
+                modalEl.style.pointerEvents = 'none';
+                modalEl.style.opacity = '0';
+                modalEl.style.visibility = 'hidden';
+                modalEl.style.zIndex = '-99999';
+                if (modalEl.parentNode) {
+                    modalEl.parentNode.removeChild(modalEl);
+                }
             }
         };
 
         if (btnViewSavedJobs && clipperJobsModalOverlay) {
             btnViewSavedJobs.addEventListener('click', async () => {
-                clipperJobsModalOverlay.classList.add('active');
-                clipperJobsModalOverlay.style.display = 'flex';
-                clipperJobsModalOverlay.style.pointerEvents = 'auto';
-                clipperJobsModalOverlay.style.opacity = '1';
-                clipperJobsModalOverlay.style.visibility = 'visible';
-                clipperJobsModalOverlay.style.zIndex = '9999';
+                const modalEl = clipperJobsModalOverlay || window._detachedModals['clipperJobsModalOverlay'];
+                if (modalEl) {
+                    if (!document.body.contains(modalEl)) {
+                        document.body.appendChild(modalEl);
+                    }
+                    modalEl.classList.add('active');
+                    modalEl.style.display = 'flex';
+                    modalEl.style.pointerEvents = 'auto';
+                    modalEl.style.opacity = '1';
+                    modalEl.style.visibility = 'visible';
+                    modalEl.style.width = '100vw';
+                    modalEl.style.height = '100vh';
+                    modalEl.style.zIndex = '999999';
+                }
                 await loadSavedJobsList();
             });
         }
