@@ -207,7 +207,7 @@ HTML_MAIN = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1280, initial-scale=0.8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>YouTube Creator Studio Pro + Gemini AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -358,6 +358,7 @@ HTML_MAIN = """
             top: calc(100% + 8px);
             right: 0;
             width: 320px;
+            max-width: 90vw;
             background: #1c1c20;
             border: 1px solid #333338;
             border-radius: 14px;
@@ -366,10 +367,12 @@ HTML_MAIN = """
             flex-direction: column;
             z-index: 1500;
             overflow: hidden;
+            pointer-events: none;
             animation: fadeInDrop 0.18s ease-out;
         }
         .account-dropdown.show {
             display: flex;
+            pointer-events: auto;
         }
         @keyframes fadeInDrop {
             from { opacity: 0; transform: translateY(-6px); }
@@ -1433,6 +1436,7 @@ HTML_MAIN = """
             top: 0;
             right: -440px;
             width: 420px;
+            max-width: 100vw;
             height: 100vh;
             background: #161220;
             border-left: 1px solid rgba(168, 85, 247, 0.35);
@@ -1441,8 +1445,9 @@ HTML_MAIN = """
             display: flex;
             flex-direction: column;
             transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
         }
-        .chat-drawer.open { right: 0; }
+        .chat-drawer.open { right: 0; pointer-events: auto; }
         .chat-header {
             padding: 18px 20px;
             border-bottom: 1px solid rgba(168, 85, 247, 0.2);
@@ -1569,6 +1574,14 @@ HTML_MAIN = """
             z-index: 2000;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
+        }
+        .modal-overlay.active, .modal-overlay.open,
+        .modal-overlay[style*="display: flex"],
+        .modal-overlay[style*="display: block"],
+        #clipperJobsModalOverlay[style*="display: flex"],
+        #clipperJobsModalOverlay[style*="display: block"] {
+            pointer-events: auto !important;
         }
         .modal-card {
             background: #1b1629;
@@ -1578,6 +1591,7 @@ HTML_MAIN = """
             width: 90%;
             padding: 28px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            pointer-events: auto;
         }
         .modal-header {
             display: flex;
@@ -1669,6 +1683,38 @@ HTML_MAIN = """
             display: grid;
             grid-template-columns: 200px 1fr;
             gap: 20px;
+        }
+        @media (max-width: 960px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                padding: 0 12px;
+                margin: 12px auto;
+                gap: 16px;
+            }
+            .sidebar {
+                order: 2;
+            }
+            .workspace {
+                order: 1;
+                min-width: 0;
+                width: 100%;
+            }
+            .mode-nav-tabs {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .mode-tab {
+                min-width: 130px;
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+            .top-navbar {
+                padding: 0 14px;
+            }
+            .chat-drawer {
+                width: 100vw;
+                right: -100vw;
+            }
         }
         @media (max-width: 800px) {
             .scene-body { grid-template-columns: 1fr; }
@@ -1839,22 +1885,22 @@ HTML_MAIN = """
             
             <!-- Mode Switcher Tabs -->
             <div class="mode-nav-tabs">
-                <button class="mode-tab active-ai" id="tabGeminiMode">
+                <button type="button" class="mode-tab active-ai" id="tabGeminiMode" onclick="switchWorkspaceTab('gemini')">
                     <span>✨</span>
                     <span>Gemini AI Studio Copilot</span>
                     <span class="tab-badge badge-ai">PRO MULTIMODAL</span>
                 </button>
-                <button class="mode-tab" id="tabClipperMode">
+                <button type="button" class="mode-tab" id="tabClipperMode" onclick="switchWorkspaceTab('clipper')">
                     <span>🎬</span>
                     <span>YouTube URL to Shorts</span>
                     <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">AUTO-CLIPPER</span>
                 </button>
-                <button class="mode-tab" id="tabTrimmerMode">
+                <button type="button" class="mode-tab" id="tabTrimmerMode" onclick="switchWorkspaceTab('trimmer')">
                     <span>✂️</span>
                     <span>Timeline Video Trimmer</span>
                     <span class="tab-badge" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white;">ORIGINAL ASPECT RATIO</span>
                 </button>
-                <button class="mode-tab" id="tabManualMode">
+                <button type="button" class="mode-tab" id="tabManualMode" onclick="switchWorkspaceTab('manual')">
                     <span>🛠️</span>
                     <span>Standard Manual Studio</span>
                     <span class="tab-badge badge-manual">CLASSIC</span>
@@ -2374,7 +2420,7 @@ HTML_MAIN = """
                 </div>
 
                 <!-- Saved Jobs Modal Overlay -->
-                <div id="clipperJobsModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+                <div id="clipperJobsModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 20px; pointer-events: none;">
                     <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 680px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-elevated);">
                             <h3 style="margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
@@ -3007,32 +3053,48 @@ HTML_MAIN = """
         let tempVideoServerFilename = null;
         let clientExtractedFrames = [];
 
-        // Tab Switching
-        const tabGeminiMode = document.getElementById('tabGeminiMode');
-        const tabClipperMode = document.getElementById('tabClipperMode');
-        const tabTrimmerMode = document.getElementById('tabTrimmerMode');
-        const tabManualMode = document.getElementById('tabManualMode');
-        const geminiStudioSection = document.getElementById('geminiStudioSection');
-        const clipperSection = document.getElementById('clipperSection');
-        const trimmerSection = document.getElementById('trimmerSection');
-        const manualStudioSection = document.getElementById('manualStudioSection');
+        // Tab Switching Engine (Globally accessible on window)
+        window.switchWorkspaceTab = function(activeTab) {
+            try {
+                const tabs = {
+                    'gemini': { tab: document.getElementById('tabGeminiMode'), sec: document.getElementById('geminiStudioSection'), activeCls: 'active-ai' },
+                    'clipper': { tab: document.getElementById('tabClipperMode'), sec: document.getElementById('clipperSection'), activeCls: 'active-ai' },
+                    'trimmer': { tab: document.getElementById('tabTrimmerMode'), sec: document.getElementById('trimmerSection'), activeCls: 'active-ai' },
+                    'manual': { tab: document.getElementById('tabManualMode'), sec: document.getElementById('manualStudioSection'), activeCls: 'active-manual' }
+                };
 
-        function switchWorkspaceTab(activeTab) {
-            tabGeminiMode.className = 'mode-tab' + (activeTab === 'gemini' ? ' active-ai' : '');
-            tabClipperMode.className = 'mode-tab' + (activeTab === 'clipper' ? ' active-ai' : '');
-            tabTrimmerMode.className = 'mode-tab' + (activeTab === 'trimmer' ? ' active-ai' : '');
-            tabManualMode.className = 'mode-tab' + (activeTab === 'manual' ? ' active-manual' : '');
+                Object.keys(tabs).forEach(key => {
+                    const item = tabs[key];
+                    if (item.tab) {
+                        item.tab.className = 'mode-tab' + (activeTab === key ? (' ' + item.activeCls) : '');
+                    }
+                    if (item.sec) {
+                        item.sec.style.display = (activeTab === key) ? 'block' : 'none';
+                    }
+                });
+                try {
+                    localStorage.setItem('active_studio_tab', activeTab);
+                } catch(e) {}
+            } catch (err) {
+                console.warn("switchWorkspaceTab error:", err);
+            }
+        };
 
-            geminiStudioSection.style.display = (activeTab === 'gemini') ? 'block' : 'none';
-            clipperSection.style.display = (activeTab === 'clipper') ? 'block' : 'none';
-            trimmerSection.style.display = (activeTab === 'trimmer') ? 'block' : 'none';
-            manualStudioSection.style.display = (activeTab === 'manual') ? 'block' : 'none';
+        // Mobile touch & click binder for navigation tabs
+        function bindTabButton(id, tabName) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            let touched = false;
+            btn.addEventListener('touchend', (e) => {
+                touched = true;
+                window.switchWorkspaceTab(tabName);
+                setTimeout(() => { touched = false; }, 350);
+            }, { passive: true });
+            btn.addEventListener('click', (e) => {
+                if (touched) return;
+                window.switchWorkspaceTab(tabName);
+            });
         }
-
-        tabGeminiMode.addEventListener('click', () => switchWorkspaceTab('gemini'));
-        tabClipperMode.addEventListener('click', () => switchWorkspaceTab('clipper'));
-        tabTrimmerMode.addEventListener('click', () => switchWorkspaceTab('trimmer'));
-        tabManualMode.addEventListener('click', () => switchWorkspaceTab('manual'));
 
         // Gemini Key Modal
         const geminiNavPill = document.getElementById('geminiNavPill');
@@ -3046,32 +3108,48 @@ HTML_MAIN = """
         const geminiModelSelect = document.getElementById('geminiModelSelect');
         const geminiKeyStatusMsg = document.getElementById('geminiKeyStatusMsg');
 
-        function openKeyModal() { geminiModalOverlay.style.display = 'flex'; }
-        function closeKeyModal() { geminiModalOverlay.style.display = 'none'; }
+        function openKeyModal() {
+            if (geminiModalOverlay) {
+                geminiModalOverlay.style.display = 'flex';
+                geminiModalOverlay.style.pointerEvents = 'auto';
+            }
+        }
+        function closeKeyModal() {
+            if (geminiModalOverlay) {
+                geminiModalOverlay.style.display = 'none';
+                geminiModalOverlay.style.pointerEvents = 'none';
+            }
+        }
 
-        geminiNavPill.addEventListener('click', openKeyModal);
-        btnOpenKeyModal.addEventListener('click', openKeyModal);
-        btnCloseKeyModal.addEventListener('click', closeKeyModal);
+        if (geminiNavPill) geminiNavPill.addEventListener('click', openKeyModal);
+        if (btnOpenKeyModal) btnOpenKeyModal.addEventListener('click', openKeyModal);
+        if (btnCloseKeyModal) btnCloseKeyModal.addEventListener('click', closeKeyModal);
+        if (geminiModalOverlay) {
+            geminiModalOverlay.addEventListener('click', (e) => {
+                if (e.target === geminiModalOverlay) closeKeyModal();
+            });
+        }
 
         async function checkGeminiStatus() {
             try {
                 const res = await fetch('/api/gemini/status');
                 const data = await res.json();
                 if (data.has_key) {
-                    geminiDot.className = 'status-dot active';
-                    geminiStatusLabel.textContent = `Gemini Active (${data.masked_key})`;
-                    btnOpenKeyModal.textContent = `⚙️ Key: ${data.masked_key}`;
+                    if (geminiDot) geminiDot.className = 'status-dot active';
+                    if (geminiStatusLabel) geminiStatusLabel.textContent = `Gemini Active (${data.masked_key})`;
+                    if (btnOpenKeyModal) btnOpenKeyModal.textContent = `⚙️ Key: ${data.masked_key}`;
                 } else {
-                    geminiDot.className = 'status-dot warning';
-                    geminiStatusLabel.textContent = 'Setup Gemini Key';
-                    btnOpenKeyModal.textContent = '⚙️ Configure API Key';
+                    if (geminiDot) geminiDot.className = 'status-dot warning';
+                    if (geminiStatusLabel) geminiStatusLabel.textContent = 'Setup Gemini Key';
+                    if (btnOpenKeyModal) btnOpenKeyModal.textContent = '⚙️ Configure API Key';
                 }
             } catch (err) {
                 console.error("Gemini status check failed", err);
             }
         }
 
-        btnSaveGeminiKey.addEventListener('click', async () => {
+        if (btnSaveGeminiKey) {
+            btnSaveGeminiKey.addEventListener('click', async () => {
             const key = geminiApiKeyInput.value.trim();
             const model = geminiModelSelect.value;
             if (!key) {
@@ -3114,6 +3192,7 @@ HTML_MAIN = """
                 btnSaveGeminiKey.innerHTML = '<span>Verify & Save API Key</span>';
             }
         });
+        }
 
         // Video Target Format State & Switcher
         let currentSelectedFormat = 'Short';
@@ -3140,22 +3219,26 @@ HTML_MAIN = """
         const clientVideo = document.getElementById('clientVideoDecoder');
         const clientCanvas = document.getElementById('clientFrameCanvas');
 
-        aiVideoInput.addEventListener('change', (e) => {
-            if (aiVideoInput.files && aiVideoInput.files[0]) {
-                handleAiVideoSelection(aiVideoInput.files[0]);
-            }
-        });
+        if (aiVideoInput) {
+            aiVideoInput.addEventListener('change', (e) => {
+                if (aiVideoInput.files && aiVideoInput.files[0]) {
+                    handleAiVideoSelection(aiVideoInput.files[0]);
+                }
+            });
+        }
 
-        aiVideoDropzone.addEventListener('dragover', (e) => { e.preventDefault(); aiVideoDropzone.classList.add('dragover'); });
-        aiVideoDropzone.addEventListener('dragleave', () => { aiVideoDropzone.classList.remove('dragover'); });
-        aiVideoDropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            aiVideoDropzone.classList.remove('dragover');
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                aiVideoInput.files = e.dataTransfer.files;
-                handleAiVideoSelection(e.dataTransfer.files[0]);
-            }
-        });
+        if (aiVideoDropzone) {
+            aiVideoDropzone.addEventListener('dragover', (e) => { e.preventDefault(); aiVideoDropzone.classList.add('dragover'); });
+            aiVideoDropzone.addEventListener('dragleave', () => { aiVideoDropzone.classList.remove('dragover'); });
+            aiVideoDropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                aiVideoDropzone.classList.remove('dragover');
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    if (aiVideoInput) aiVideoInput.files = e.dataTransfer.files;
+                    handleAiVideoSelection(e.dataTransfer.files[0]);
+                }
+            });
+        }
 
         function handleAiVideoSelection(file) {
             selectedVideoFile = file;
@@ -3234,60 +3317,62 @@ HTML_MAIN = """
         const aiStepsContainer = document.getElementById('aiStepsContainer');
         const geminiResultsBox = document.getElementById('geminiResultsBox');
 
-        btnRunAiAnalysis.addEventListener('click', async () => {
-            if (!selectedVideoFile) {
-                alert("Please select or drop a video file first!");
-                return;
-            }
-
-            btnRunAiAnalysis.disabled = true;
-            aiStepsContainer.style.display = 'block';
-            geminiResultsBox.style.display = 'none';
-
-            // Animate steps
-            setStepActive('step1');
-            setTimeout(() => { setStepCompleted('step1'); setStepActive('step2'); }, 1200);
-
-            const formData = new FormData();
-            formData.append('video_file', selectedVideoFile);
-            formData.append('instructions', document.getElementById('aiCustomPrompt').value);
-            formData.append('format_type', currentSelectedFormat);
-
-            // Step 2 & 3
-            setTimeout(() => { setStepCompleted('step2'); setStepActive('step3'); }, 4000);
-            setTimeout(() => { setStepCompleted('step3'); setStepActive('step4'); }, 8500);
-
-            try {
-                const res = await fetch('/api/gemini/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.error || "Analysis failed");
+        if (btnRunAiAnalysis) {
+            btnRunAiAnalysis.addEventListener('click', async () => {
+                if (!selectedVideoFile) {
+                    alert("Please select or drop a video file first!");
+                    return;
                 }
 
-                setStepCompleted('step4');
-                setStepActive('step5');
+                btnRunAiAnalysis.disabled = true;
+                aiStepsContainer.style.display = 'block';
+                geminiResultsBox.style.display = 'none';
 
-                const metadata = await res.json();
-                currentGeminiData = metadata;
-                tempVideoServerFilename = metadata.video_filename;
-                document.getElementById('existingVideoFilename').value = tempVideoServerFilename;
+                // Animate steps
+                setStepActive('step1');
+                setTimeout(() => { setStepCompleted('step1'); setStepActive('step2'); }, 1200);
 
-                setTimeout(() => {
-                    setStepCompleted('step5');
-                    renderGeminiResults(metadata);
+                const formData = new FormData();
+                formData.append('video_file', selectedVideoFile);
+                formData.append('instructions', document.getElementById('aiCustomPrompt').value);
+                formData.append('format_type', currentSelectedFormat);
+
+                // Step 2 & 3
+                setTimeout(() => { setStepCompleted('step2'); setStepActive('step3'); }, 4000);
+                setTimeout(() => { setStepCompleted('step3'); setStepActive('step4'); }, 8500);
+
+                try {
+                    const res = await fetch('/api/gemini/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!res.ok) {
+                        const errData = await res.json();
+                        throw new Error(errData.error || "Analysis failed");
+                    }
+
+                    setStepCompleted('step4');
+                    setStepActive('step5');
+
+                    const metadata = await res.json();
+                    currentGeminiData = metadata;
+                    tempVideoServerFilename = metadata.video_filename;
+                    document.getElementById('existingVideoFilename').value = tempVideoServerFilename;
+
+                    setTimeout(() => {
+                        setStepCompleted('step5');
+                        renderGeminiResults(metadata);
+                        btnRunAiAnalysis.disabled = false;
+                    }, 600);
+
+                } catch (err) {
+                    alert("Gemini Analysis Error: " + err.message);
                     btnRunAiAnalysis.disabled = false;
-                }, 600);
-
-            } catch (err) {
-                alert("Gemini Analysis Error: " + err.message);
-                btnRunAiAnalysis.disabled = false;
-                aiStepsContainer.style.display = 'none';
-            }
-        });
+                    aiStepsContainer.style.display = 'none';
+                }
+            });
+        }
 
         function setStepActive(id) {
             document.querySelectorAll('.ai-step-item').forEach(el => el.classList.remove('active'));
@@ -3440,16 +3525,24 @@ HTML_MAIN = """
         }
 
         // Auto-Populate Form Button
-        document.getElementById('btnPopulateToManual').addEventListener('click', () => {
-            tabManualMode.click();
-            manualStudioSection.scrollIntoView({ behavior: 'smooth' });
-        });
+        const btnPopulateToManual = document.getElementById('btnPopulateToManual');
+        if (btnPopulateToManual) {
+            btnPopulateToManual.addEventListener('click', () => {
+                window.switchWorkspaceTab('manual');
+                const manualStudioSection = document.getElementById('manualStudioSection');
+                if (manualStudioSection) manualStudioSection.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
 
         // One-Click Auto-Publish Button
-        document.getElementById('btnOneClickPublish').addEventListener('click', () => {
-            tabManualMode.click();
-            document.getElementById('uploadForm').dispatchEvent(new Event('submit'));
-        });
+        const btnOneClickPublish = document.getElementById('btnOneClickPublish');
+        if (btnOneClickPublish) {
+            btnOneClickPublish.addEventListener('click', () => {
+                window.switchWorkspaceTab('manual');
+                const form = document.getElementById('uploadForm');
+                if (form) form.dispatchEvent(new Event('submit'));
+            });
+        }
 
         // Chat Drawer Toggle
         const chatFabBtn = document.getElementById('chatFabBtn');
@@ -3459,18 +3552,29 @@ HTML_MAIN = """
         const btnSendChat = document.getElementById('btnSendChat');
         const chatMessages = document.getElementById('chatMessages');
 
-        chatFabBtn.addEventListener('click', () => chatDrawer.classList.toggle('open'));
-        btnCloseChat.addEventListener('click', () => chatDrawer.classList.remove('open'));
+        if (chatFabBtn && chatDrawer) {
+            chatFabBtn.addEventListener('click', () => {
+                chatDrawer.classList.toggle('open');
+                chatDrawer.style.pointerEvents = chatDrawer.classList.contains('open') ? 'auto' : 'none';
+            });
+        }
+        if (btnCloseChat && chatDrawer) {
+            btnCloseChat.addEventListener('click', () => {
+                chatDrawer.classList.remove('open');
+                chatDrawer.style.pointerEvents = 'none';
+            });
+        }
 
         async function sendChatMessage(text) {
-            if (!text.trim()) return;
+            if (!text || !text.trim()) return;
+            if (!chatMessages) return;
             
             // Add user message
             const userMsg = document.createElement('div');
             userMsg.className = 'chat-msg chat-msg-user';
             userMsg.textContent = text;
             chatMessages.appendChild(userMsg);
-            chatInput.value = '';
+            if (chatInput) chatInput.value = '';
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             // Loading message
@@ -3481,15 +3585,18 @@ HTML_MAIN = """
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
+                const titleVal = document.getElementById('videoTitle') ? document.getElementById('videoTitle').value : '';
+                const catVal = document.getElementById('categorySelect') ? document.getElementById('categorySelect').value : '';
+                const privVal = document.getElementById('privacySelect') ? document.getElementById('privacySelect').value : '';
                 const res = await fetch('/api/gemini/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         message: text,
                         context: {
-                            title: document.getElementById('videoTitle').value,
-                            category: document.getElementById('categorySelect').value,
-                            privacy: document.getElementById('privacySelect').value
+                            title: titleVal,
+                            category: catVal,
+                            privacy: privVal
                         }
                     })
                 });
@@ -3502,8 +3609,10 @@ HTML_MAIN = """
                     btn.className = 'chat-apply-btn';
                     btn.textContent = '✔ Apply Title to Studio';
                     btn.onclick = () => {
-                        document.getElementById('videoTitle').value = data.suggested_title;
-                        document.getElementById('titleCounter').textContent = `${data.suggested_title.length} / 100`;
+                        const vt = document.getElementById('videoTitle');
+                        if (vt) vt.value = data.suggested_title;
+                        const tc = document.getElementById('titleCounter');
+                        if (tc) tc.textContent = `${data.suggested_title.length} / 100`;
                         alert("Title applied to Studio!");
                     };
                     aiMsg.appendChild(document.createElement('br'));
@@ -3515,8 +3624,10 @@ HTML_MAIN = """
                     btn.className = 'chat-apply-btn';
                     btn.textContent = '✔ Apply Description to Studio';
                     btn.onclick = () => {
-                        document.getElementById('videoDesc').value = data.suggested_description;
-                        document.getElementById('descCounter').textContent = `${data.suggested_description.length} / 5000`;
+                        const vd = document.getElementById('videoDesc');
+                        if (vd) vd.value = data.suggested_description;
+                        const dc = document.getElementById('descCounter');
+                        if (dc) dc.textContent = `${data.suggested_description.length} / 5000`;
                         alert("Description applied to Studio!");
                     };
                     aiMsg.appendChild(document.createElement('br'));
@@ -3526,16 +3637,23 @@ HTML_MAIN = """
             } catch (err) {
                 aiMsg.textContent = "Error: " + err.message;
             }
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        btnSendChat.addEventListener('click', () => sendChatMessage(chatInput.value));
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendChatMessage(chatInput.value);
-        });
+        if (btnSendChat && chatInput) {
+            btnSendChat.addEventListener('click', () => sendChatMessage(chatInput.value));
+        }
+        if (chatInput) {
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendChatMessage(chatInput.value);
+            });
+        }
 
         function sendQuickPrompt(promptText) {
-            chatDrawer.classList.add('open');
+            if (chatDrawer) {
+                chatDrawer.classList.add('open');
+                chatDrawer.style.pointerEvents = 'auto';
+            }
             sendChatMessage(promptText);
         }
 
@@ -3544,19 +3662,23 @@ HTML_MAIN = """
         // ==============================================
         const titleInput = document.getElementById('videoTitle');
         const titleCounter = document.getElementById('titleCounter');
-        titleInput.addEventListener('input', () => {
-            const len = titleInput.value.length;
-            titleCounter.textContent = `${len} / 100`;
-            titleCounter.className = 'char-counter ' + (len > 90 ? 'limit-hit' : (len > 75 ? 'limit-near' : ''));
-        });
+        if (titleInput && titleCounter) {
+            titleInput.addEventListener('input', () => {
+                const len = titleInput.value.length;
+                titleCounter.textContent = `${len} / 100`;
+                titleCounter.className = 'char-counter ' + (len > 90 ? 'limit-hit' : (len > 75 ? 'limit-near' : ''));
+            });
+        }
 
         const descInput = document.getElementById('videoDesc');
         const descCounter = document.getElementById('descCounter');
-        descInput.addEventListener('input', () => {
-            const len = descInput.value.length;
-            descCounter.textContent = `${len} / 5000`;
-            descCounter.className = 'char-counter ' + (len > 4800 ? 'limit-hit' : (len > 4000 ? 'limit-near' : ''));
-        });
+        if (descInput && descCounter) {
+            descInput.addEventListener('input', () => {
+                const len = descInput.value.length;
+                descCounter.textContent = `${len} / 5000`;
+                descCounter.className = 'char-counter ' + (len > 4800 ? 'limit-hit' : (len > 4000 ? 'limit-near' : ''));
+            });
+        }
 
         // Tags chips management
         window.tags = [];
@@ -3565,7 +3687,8 @@ HTML_MAIN = """
         const hiddenTags = document.getElementById('hiddenTags');
 
         function updateTags() {
-            hiddenTags.value = window.tags.join(',');
+            if (hiddenTags) hiddenTags.value = window.tags.join(',');
+            if (!tagsWrapper) return;
             const existingChips = tagsWrapper.querySelectorAll('.tag-chip');
             existingChips.forEach(c => c.remove());
 
@@ -3573,83 +3696,96 @@ HTML_MAIN = """
                 const chip = document.createElement('div');
                 chip.className = 'tag-chip';
                 chip.innerHTML = `<span>${tag}</span><span class="remove-tag" data-index="${idx}">&times;</span>`;
-                tagsWrapper.insertBefore(chip, tagInput);
+                if (tagInput) tagsWrapper.insertBefore(chip, tagInput);
+                else tagsWrapper.appendChild(chip);
             });
         }
 
-        tagInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault();
-                const val = tagInput.value.trim().replace(/^,+|,+$/g, '');
-                if (val && !window.tags.includes(val)) {
-                    window.tags.push(val);
+        if (tagInput) {
+            tagInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const val = tagInput.value.trim().replace(/^,+|,+$/g, '');
+                    if (val && !window.tags.includes(val)) {
+                        window.tags.push(val);
+                        updateTags();
+                    }
+                    tagInput.value = '';
+                } else if (e.key === 'Backspace' && tagInput.value === '' && window.tags.length > 0) {
+                    window.tags.pop();
                     updateTags();
                 }
-                tagInput.value = '';
-            } else if (e.key === 'Backspace' && tagInput.value === '' && window.tags.length > 0) {
-                window.tags.pop();
-                updateTags();
-            }
-        });
+            });
+        }
 
-        tagsWrapper.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-tag')) {
-                const idx = parseInt(e.target.dataset.index);
-                window.tags.splice(idx, 1);
-                updateTags();
-            }
-        });
+        if (tagsWrapper) {
+            tagsWrapper.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-tag')) {
+                    const idx = parseInt(e.target.dataset.index);
+                    window.tags.splice(idx, 1);
+                    updateTags();
+                }
+            });
+        }
 
         // Manual File inputs
         const videoInput = document.getElementById('videoFileInput');
         const videoFileInfo = document.getElementById('videoFileInfo');
-        videoInput.addEventListener('change', () => {
-            if (videoInput.files && videoInput.files[0]) {
-                const file = videoInput.files[0];
-                const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-                videoFileInfo.textContent = `Selected: ${file.name} (${sizeMb} MB)`;
-                videoFileInfo.style.display = 'block';
-                if (!titleInput.value) {
-                    titleInput.value = file.name.replace(/\\.[^/.]+$/, "");
-                    titleInput.dispatchEvent(new Event('input'));
+        if (videoInput) {
+            videoInput.addEventListener('change', () => {
+                if (videoInput.files && videoInput.files[0]) {
+                    const file = videoInput.files[0];
+                    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                    if (videoFileInfo) {
+                        videoFileInfo.textContent = `Selected: ${file.name} (${sizeMb} MB)`;
+                        videoFileInfo.style.display = 'block';
+                    }
+                    if (titleInput && !titleInput.value) {
+                        titleInput.value = file.name.replace(/\\.[^/.]+$/, "");
+                        titleInput.dispatchEvent(new Event('input'));
+                    }
                 }
-            }
-        });
+            });
+        }
 
         const thumbInput = document.getElementById('thumbFileInput');
         const thumbPreviewImg = document.getElementById('thumbPreviewImg');
         const thumbPlaceholder = document.getElementById('thumbPlaceholder');
 
-        thumbInput.addEventListener('change', () => {
-            if (thumbInput.files && thumbInput.files[0]) {
-                const file = thumbInput.files[0];
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    thumbPreviewImg.src = e.target.result;
-                    thumbPreviewImg.style.display = 'block';
-                    thumbPlaceholder.style.display = 'none';
-                    document.getElementById('selectedThumbnailFilename').value = '';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Channel Info & Multi-Channel Switcher
-        async function loadChannelInfo() {
-            try {
-                const res = await fetch('/api/channel');
-                if (!res.ok) {
-                    console.warn("Failed to load channel details:", res.status);
-                    return;
+        if (thumbInput) {
+            thumbInput.addEventListener('change', () => {
+                if (thumbInput.files && thumbInput.files[0]) {
+                    const file = thumbInput.files[0];
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        if (thumbPreviewImg) {
+                            thumbPreviewImg.src = e.target.result;
+                            thumbPreviewImg.style.display = 'block';
+                        }
+                        if (thumbPlaceholder) {
+                            thumbPlaceholder.style.display = 'none';
+                        }
+                        const selTh = document.getElementById('selectedThumbnailFilename');
+                        if (selTh) selTh.value = '';
+                    };
+                    reader.readAsDataURL(file);
                 }
-                const data = await res.json();
-                
+            });
+        }
+
+        // Channel Info & Multi-Channel Switcher with Instant Local Cache
+        function renderChannelProfileData(data) {
+            if (!data) return;
+            try {
                 if (data.title) {
-                    document.getElementById('channelTitle').textContent = data.title;
-                    document.getElementById('userName').textContent = data.title;
+                    const cTitle = document.getElementById('channelTitle');
+                    if (cTitle) cTitle.textContent = data.title;
+                    const uName = document.getElementById('userName');
+                    if (uName) uName.textContent = data.title;
                 }
                 if (data.customUrl || data.title) {
-                    document.getElementById('channelHandle').textContent = data.customUrl || ('@' + data.title.toLowerCase().replace(/\\s+/g, ''));
+                    const handle = document.getElementById('channelHandle');
+                    if (handle) handle.textContent = data.customUrl || ('@' + data.title.toLowerCase().replace(/\\s+/g, ''));
                 }
 
                 // Render channel profile picture (snippet.thumbnails.default.url or medium/high)
@@ -3676,9 +3812,29 @@ HTML_MAIN = """
                 const dropEmail = document.getElementById('dropUserEmail');
                 if (dropEmail && data.userEmail) dropEmail.textContent = data.userEmail;
 
-                document.getElementById('statSubscribers').textContent = Number(data.subscriberCount || 0).toLocaleString();
-                document.getElementById('statViews').textContent = Number(data.viewCount || 0).toLocaleString();
-                document.getElementById('statVideos').textContent = Number(data.videoCount || 0).toLocaleString();
+                const statSubs = document.getElementById('statSubscribers');
+                if (statSubs) statSubs.textContent = Number(data.subscriberCount || 0).toLocaleString();
+                const statViews = document.getElementById('statViews');
+                if (statViews) statViews.textContent = Number(data.viewCount || 0).toLocaleString();
+                const statVids = document.getElementById('statVideos');
+                if (statVids) statVids.textContent = Number(data.videoCount || 0).toLocaleString();
+
+                // Save to localStorage for instant 0ms restoration next time
+                try {
+                    localStorage.setItem('cached_yt_channel_profile', JSON.stringify({
+                        title: data.title,
+                        customUrl: data.customUrl,
+                        avatar: avatarUrl,
+                        thumbnail_url: avatarUrl,
+                        userEmail: data.userEmail,
+                        subscriberCount: data.subscriberCount,
+                        viewCount: data.viewCount,
+                        videoCount: data.videoCount,
+                        id: data.id,
+                        allAccounts: data.allAccounts,
+                        allChannels: data.allChannels
+                    }));
+                } catch(e) {}
 
                 // Render channels & accounts in dropdown
                 const listEl = document.getElementById('dropdownChannelsList');
@@ -3724,7 +3880,29 @@ HTML_MAIN = """
                     listEl.innerHTML = html;
                 }
             } catch (err) {
-                console.error(err);
+                console.error("renderChannelProfileData error:", err);
+            }
+        }
+
+        async function loadChannelInfo() {
+            try {
+                // Try instant 0ms render from localStorage first
+                try {
+                    const cached = localStorage.getItem('cached_yt_channel_profile');
+                    if (cached) {
+                        renderChannelProfileData(JSON.parse(cached));
+                    }
+                } catch(e) {}
+
+                const res = await fetch('/api/channel');
+                if (!res.ok) {
+                    console.warn("Failed to load channel details:", res.status);
+                    return;
+                }
+                const data = await res.json();
+                renderChannelProfileData(data);
+            } catch (err) {
+                console.error("loadChannelInfo error:", err);
             }
         }
 
@@ -3775,7 +3953,7 @@ HTML_MAIN = """
             });
         }
         document.addEventListener('click', (e) => {
-            if (accountDropdown && !accountDropdown.contains(e.target) && !userPill.contains(e.target)) {
+            if (accountDropdown && !accountDropdown.contains(e.target) && (!userPill || !userPill.contains(e.target))) {
                 accountDropdown.classList.remove('show');
             }
         });
@@ -3810,7 +3988,10 @@ HTML_MAIN = """
             }
         }
 
-        document.getElementById('refreshVideosBtn').addEventListener('click', loadRecentVideos);
+        const refreshVideosBtn = document.getElementById('refreshVideosBtn');
+        if (refreshVideosBtn) {
+            refreshVideosBtn.addEventListener('click', loadRecentVideos);
+        }
 
         // Upload Form with Resumable Tracking
         const uploadForm = document.getElementById('uploadForm');
@@ -3822,60 +4003,63 @@ HTML_MAIN = """
         const progressStatusText = document.getElementById('progressStatusText');
         const successCard = document.getElementById('successCard');
 
-        uploadForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const hasFile = videoInput.files && videoInput.files[0];
-            const hasExisting = document.getElementById('existingVideoFilename').value;
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const hasFile = videoInput && videoInput.files && videoInput.files[0];
+                const existingInput = document.getElementById('existingVideoFilename');
+                const hasExisting = existingInput ? existingInput.value : '';
 
-            if (!hasFile && !hasExisting) {
-                alert("Please select a video file to upload!");
-                return;
-            }
-
-            const formData = new FormData(uploadForm);
-            submitBtn.disabled = true;
-            progressCard.style.display = 'block';
-            successCard.style.display = 'none';
-            progressBarFill.style.width = '0%';
-            progressPercent.textContent = '0%';
-            progressTitle.textContent = 'Uploading to Server...';
-            progressStatusText.textContent = 'Streaming media payload to local buffer...';
-
-            progressCard.scrollIntoView({ behavior: 'smooth' });
-
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/upload_start', true);
-
-            xhr.upload.onprogress = (evt) => {
-                if (evt.lengthComputable) {
-                    const percentComplete = Math.round((evt.loaded / evt.total) * 45);
-                    progressBarFill.style.width = percentComplete + '%';
-                    progressPercent.textContent = percentComplete + '%';
+                if (!hasFile && !hasExisting) {
+                    alert("Please select a video file to upload!");
+                    return;
                 }
-            };
 
-            xhr.onload = () => {
-                if (xhr.status === 200) {
-                    const res = JSON.parse(xhr.responseText);
-                    const taskId = res.task_id;
-                    progressTitle.textContent = 'YouTube Cloud Ingestion...';
-                    progressStatusText.textContent = 'Connecting to Google Video Resumable Upload Engine...';
-                    pollUploadProgress(taskId);
-                } else {
-                    submitBtn.disabled = false;
-                    progressTitle.textContent = 'Upload Failed';
-                    progressStatusText.textContent = 'Error: ' + xhr.responseText;
-                }
-            };
+                const formData = new FormData(uploadForm);
+                if (submitBtn) submitBtn.disabled = true;
+                if (progressCard) progressCard.style.display = 'block';
+                if (successCard) successCard.style.display = 'none';
+                if (progressBarFill) progressBarFill.style.width = '0%';
+                if (progressPercent) progressPercent.textContent = '0%';
+                if (progressTitle) progressTitle.textContent = 'Uploading to Server...';
+                if (progressStatusText) progressStatusText.textContent = 'Streaming media payload to local buffer...';
 
-            xhr.onerror = () => {
-                submitBtn.disabled = false;
-                progressTitle.textContent = 'Network Error';
-                progressStatusText.textContent = 'Failed to reach local server.';
-            };
+                if (progressCard) progressCard.scrollIntoView({ behavior: 'smooth' });
 
-            xhr.send(formData);
-        });
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload_start', true);
+
+                xhr.upload.onprogress = (evt) => {
+                    if (evt.lengthComputable) {
+                        const percentComplete = Math.round((evt.loaded / evt.total) * 45);
+                        if (progressBarFill) progressBarFill.style.width = percentComplete + '%';
+                        if (progressPercent) progressPercent.textContent = percentComplete + '%';
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 200) {
+                        const res = JSON.parse(xhr.responseText);
+                        const taskId = res.task_id;
+                        if (progressTitle) progressTitle.textContent = 'YouTube Cloud Ingestion...';
+                        if (progressStatusText) progressStatusText.textContent = 'Connecting to Google Video Resumable Upload Engine...';
+                        pollUploadProgress(taskId);
+                    } else {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (progressTitle) progressTitle.textContent = 'Upload Failed';
+                        if (progressStatusText) progressStatusText.textContent = 'Error: ' + xhr.responseText;
+                    }
+                };
+
+                xhr.onerror = () => {
+                    if (submitBtn) submitBtn.disabled = false;
+                    if (progressTitle) progressTitle.textContent = 'Network Error';
+                    if (progressStatusText) progressStatusText.textContent = 'Failed to reach local server.';
+                };
+
+                xhr.send(formData);
+            });
+        }
 
         function pollUploadProgress(taskId) {
             const interval = setInterval(async () => {
@@ -5185,7 +5369,7 @@ HTML_MAIN = """
             trimmerActiveClipIndex = 0;
 
             if (trimmerNarrationScript) {
-                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\n\n');
+                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\\n\\n');
             }
 
             const ttsBgmRadio = document.querySelector('input[name="trimmerAudioMode"][value="tts_bgm"]');
@@ -5896,10 +6080,48 @@ HTML_MAIN = """
             }, 1200);
         }
 
-        // Initialize on page load
-        loadChannelInfo();
-        loadRecentVideos();
-        checkGeminiStatus();
+        // ==============================================
+        // INITIALIZATION & TAB BINDING (WITH TRY-CATCH)
+        // ==============================================
+        function initializeApp() {
+            try {
+                // Bind all tabs with mobile touch and desktop click listeners
+                bindTabButton('tabGeminiMode', 'gemini');
+                bindTabButton('tabClipperMode', 'clipper');
+                bindTabButton('tabTrimmerMode', 'trimmer');
+                bindTabButton('tabManualMode', 'manual');
+
+                // Restore active workspace tab
+                const savedTab = localStorage.getItem('active_studio_tab') || 'gemini';
+                window.switchWorkspaceTab(savedTab);
+            } catch (e) {
+                console.warn("Tab binding warning:", e);
+            }
+
+            try {
+                loadChannelInfo();
+            } catch (e) {
+                console.warn("loadChannelInfo warning:", e);
+            }
+
+            try {
+                loadRecentVideos();
+            } catch (e) {
+                console.warn("loadRecentVideos warning:", e);
+            }
+
+            try {
+                checkGeminiStatus();
+            } catch (e) {
+                console.warn("checkGeminiStatus warning:", e);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
     </script>
 </body>
 </html>
@@ -5910,7 +6132,7 @@ HTML_SETUP = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1280, initial-scale=0.8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>Setup - YouTube Studio Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -6255,6 +6477,33 @@ def channel_info():
             })
 
         if not items:
+            # Check cached channels from user_accounts.json
+            cached_channels = []
+            account_key = session.get('active_account_key') or (user_email.lower().strip() if user_email else '')
+            if account_key and account_key in accounts:
+                cached_channels = accounts[account_key].get('channels', [])
+            elif accounts:
+                first_acc = next(iter(accounts.values()))
+                cached_channels = first_acc.get('channels', [])
+
+            if cached_channels:
+                c_ch = cached_channels[0]
+                return jsonify({
+                    'id': c_ch.get('id', 'cached_channel'),
+                    'title': c_ch.get('title', 'YouTube Creator'),
+                    'customUrl': c_ch.get('customUrl', ''),
+                    'avatar': c_ch.get('avatar', default_avatar),
+                    'thumbnail_url': c_ch.get('thumbnail_url', c_ch.get('avatar', default_avatar)),
+                    'subscriberCount': c_ch.get('subscriberCount', '0'),
+                    'videoCount': c_ch.get('videoCount', '0'),
+                    'viewCount': c_ch.get('viewCount', '0'),
+                    'uploadsPlaylist': '',
+                    'userEmail': user_email,
+                    'has_channel': True,
+                    'allChannels': cached_channels,
+                    'allAccounts': connected_accounts
+                })
+
             user_name = user_email.split('@')[0] if user_email else "YouTube User"
             user_avatar = f"https://ui-avatars.com/api/?name={user_name}&background=ff0000&color=ffffff&size=128"
             return jsonify({
@@ -6310,6 +6559,27 @@ def channel_info():
                 'videoCount': st.get('videoCount', '0'),
                 'viewCount': st.get('viewCount', '0')
             })
+
+        # Persist fetched channel metrics to user_accounts.json for offline / quota exhaustion fallback
+        try:
+            acc_key = session.get('active_account_key') or (user_email.lower().strip() if user_email else '')
+            if acc_key:
+                acc_store = load_accounts_store()
+                if acc_key in acc_store:
+                    acc_store[acc_key]['channels'] = all_channels
+                    acc_store[acc_key]['active_channel_id'] = active_ch.get('id')
+                    save_accounts_store(acc_store)
+                elif user_email:
+                    acc_store[acc_key] = {
+                        "email": user_email,
+                        "credentials": session.get('credentials', {}),
+                        "channels": all_channels,
+                        "active_channel_id": active_ch.get('id'),
+                        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    save_accounts_store(acc_store)
+        except Exception as e:
+            print(f"Notice: Failed to update channel cache in user_accounts: {e}")
 
         uploads_playlist = ''
         try:
