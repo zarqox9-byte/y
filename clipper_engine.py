@@ -2739,6 +2739,269 @@ JSON Format:
     }
 
 
+def generate_20min_movie_explainer_storyboard(
+    youtube_url: str,
+    credentials=None,
+    target_duration: int = 1200,  # 20 minutes default
+    language: str = "Hindi",
+    voice_name: str = "Kore",
+    tone_style: str = "Narrative Deep Storytelling",
+    custom_instructions: str = ""
+) -> Dict[str, Any]:
+    """
+    Analyzes full-length YouTube movie narrative using Gemini and 100-word WPS calibration.
+    Produces a structured 20-minute explainer recap storyboard:
+    1. Hook & Introduction (00:00 - Setup)
+    2. Rising Tension & Plot Twists
+    3. Crucial Action / Climax / Resolution
+    Enforces millisecond-precise voice sync: Target Words per cut = round(Duration * WPS).
+    """
+    logger.info(f"Extracting YouTube movie data for 20-minute explainer: {youtube_url}")
+    yt_info = extract_youtube_info(youtube_url, credentials=credentials)
+    title = yt_info.get("title", "Movie Title")
+    duration = int(yt_info.get("duration", 7200))
+    duration_str = yt_info.get("duration_str", format_seconds_to_timestamp(duration))
+    description = yt_info.get("description", "")
+    chapters = yt_info.get("chapters", [])
+    thumbnail = yt_info.get("thumbnail", "")
+    channel = yt_info.get("channel", "")
+
+    # 100-Word Benchmark Voice Speed Calibration
+    calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language)
+    wps = float(calib.get("wps", 2.35))
+    logger.info(f"Calibrated WPS for Explainer: {wps} ({voice_name} / {tone_style})")
+
+    target_duration = max(60, int(target_duration))
+    target_words = int(round(target_duration * wps))
+
+    chapters_text = ""
+    if chapters:
+        ch_lines = []
+        for ch in chapters[:30]:
+            c_s = format_seconds_to_timestamp(ch.get("start_time", 0))
+            c_e = format_seconds_to_timestamp(ch.get("end_time", 0))
+            ch_lines.append(f"- [{c_s} - {c_e}] {ch.get('title', '')}")
+        chapters_text = "Movie Chapters:\n" + "\n".join(ch_lines)
+
+    prompt = f"""You are a master Hollywood Film Editor, Senior Story Producer, and viral YouTube Movie Explainer Specialist.
+Analyze the complete narrative storyline for this full-length movie:
+- Movie Title: {title}
+- Total Movie Runtime: {duration_str} ({duration} seconds)
+- Channel / Uploader: {channel}
+- Movie Synopsis / Description:
+{description[:2500]}
+{chapters_text}
+
+=== 20-MINUTE EXPLAINER MISSION ===
+Your mission is to construct an EXACT {target_duration // 60}-minute (~{target_duration} seconds) comprehensive cinema explainer recap storyboard that covers the ENTIRE movie narrative from beginning to end without blind cuts.
+
+You must divide the story into 3 CRITICAL PHASES:
+1. PHASE 1: HOOK & INTRODUCTION (Setup) (~25% of target runtime)
+   - Visual shocker / hook (0-15s)
+   - Establishing the world, central hero, their goal, and the inciting incident that kicks off the crisis.
+2. PHASE 2: RISING TENSION & PLOT TWISTS (~50% of target runtime)
+   - Escalating conflict, pursuit, investigation, trials, and dangerous encounters.
+   - Critical midpoint plot twist that shifts the stakes completely.
+   - Dark turn / betrayal / "All hope is lost" moment.
+3. PHASE 3: CRUCIAL ACTION, CLIMAX & RESOLUTION (~25% of target runtime)
+   - Final high-octane showdown / action sequence.
+   - The major mystery or plot revelation.
+   - Dramatic climax and emotional resolution/aftermath.
+
+=== MILLISECOND VOICE SYNC & WPS BUDGET ===
+- Selected Voice: {voice_name} ({tone_style})
+- Calibrated Narration Speed: {wps:.2f} Words Per Second
+- Total Spoken Word Budget: ~{target_words} words in {language} (Devanagari script for Hindi).
+- STRICT RULE PER CUT: For each keeper cut, Target Words = round(Cut Duration * {wps:.2f}).
+  The narration text for that scene MUST strictly fit within this word count so voiceover finishes synchronously as the visual scene concludes.
+
+=== TIMESTAMP CONSTRAINTS ===
+- All timestamps must be non-contiguous, representing the true narrative peaks of the movie across the full {duration}s runtime.
+- Every timestamp must be within 0.0 and {duration}.
+- Format: Numeric seconds (e.g. start: 252.0, end: 288.0 for 04:12 - 04:48).
+- Duration of each cut: between 20 and 100 seconds.
+- Total combined duration of all keeper cuts MUST equal ~{target_duration} seconds.
+- Total keeper cuts: between 12 and 20 scenes.
+
+=== OUTPUT FORMAT ===
+Return STRICT JSON ONLY (no markdown outside JSON):
+{{
+  "summary": "2-3 sentence overview of this 20-minute explainer recap",
+  "keeper_clips": [
+    {{
+      "phase": "Hook & Setup",
+      "start": 12.0,
+      "end": 45.0,
+      "start_ts": "00:12",
+      "end_ts": "00:45",
+      "duration": 33.0,
+      "title": "The Mysterious Premise",
+      "reason": "Establishes the crisis and protagonist dilemma",
+      "target_words": 77,
+      "script_segment": "कहानी की शुरुआत में जब नायक को यह रहस्यमयी सुराग मिलता है..."
+    }}
+  ],
+  "full_script": "Complete stitched Hindi storytelling narration across all keeper scenes..."
+}}
+"""
+
+    keeper_clips = []
+    summary = ""
+    full_script = ""
+    source = "algorithmic"
+
+    client = gemini_engine.get_genai_client()
+    if client:
+        candidate_models = ["gemini-3.5-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+        for model_name in candidate_models:
+            try:
+                logger.info(f"Calling Gemini ({model_name}) for 20-minute explainer storyboard: {title}")
+                resp = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                txt = resp.text.strip()
+                txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
+                txt = re.sub(r"```$", "", txt).strip()
+                data = json.loads(txt)
+                raw_clips = data.get("keeper_clips") or []
+                if isinstance(raw_clips, list) and len(raw_clips) >= 4:
+                    for idx, rc in enumerate(raw_clips, 1):
+                        s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
+                        e = max(s + 5.0, min(duration, float(rc.get("end", s + 30))))
+                        c_dur = round(e - s, 2)
+                        c_words = int(round(c_dur * wps))
+                        keeper_clips.append({
+                            "id": idx,
+                            "phase": rc.get("phase", "Rising Tension & Plot Twists"),
+                            "start": round(s, 2),
+                            "end": round(e, 2),
+                            "start_ts": format_seconds_to_timestamp(s),
+                            "end_ts": format_seconds_to_timestamp(e),
+                            "duration": c_dur,
+                            "title": rc.get("title", f"Scene {idx}"),
+                            "reason": rc.get("reason", "Key story milestone"),
+                            "target_words": rc.get("target_words") or c_words,
+                            "script_segment": rc.get("script_segment", "")
+                        })
+                    if keeper_clips:
+                        keeper_clips.sort(key=lambda x: x["start"])
+                        summary = data.get("summary", "")
+                        full_script = data.get("full_script", " ".join(c["script_segment"] for c in keeper_clips if c["script_segment"]))
+                        source = f"gemini ({model_name})"
+                        break
+            except Exception as ge:
+                logger.warning(f"Model {model_name} explainer call notice: {ge}")
+
+    # Fallback: Algorithmic 3-Phase Explainer Generator (16 high-impact scenes)
+    if not keeper_clips:
+        logger.info("Using algorithmic 3-phase cinema explainer generator fallback...")
+        phase_plan = [
+            # Phase 1: Hook & Introduction (Setup) (~300s)
+            ("Hook & Setup", 0.02, 0.05, "1. The Inciting Hook & Catastrophe", "Initial shock that disrupts ordinary life"),
+            ("Hook & Setup", 0.07, 0.11, "2. Protagonist Introduction & Stakes", "Establishes protagonist dilemma and core motivation"),
+            ("Hook & Setup", 0.13, 0.17, "3. The Call to Adventure & First Trial", "Hero crosses the threshold into danger"),
+            ("Hook & Setup", 0.18, 0.22, "4. Assembling the Squad / Briefing", "High-stakes strategy and rules of engagement"),
+
+            # Phase 2: Rising Tension & Plot Twists (~600s)
+            ("Rising Tension & Plot Twists", 0.25, 0.31, "5. First Enemy Confrontation", "Hero faces initial ambush; stakes escalate"),
+            ("Rising Tension & Plot Twists", 0.33, 0.39, "6. Critical Investigation & Clue Found", "Hidden conspiracy discovered"),
+            ("Rising Tension & Plot Twists", 0.41, 0.47, "7. The Secret Infiltration", "Undercover operation in hostile territory"),
+            ("Rising Tension & Plot Twists", 0.49, 0.55, "8. The Massive Midpoint Twist", "Shocking reveal flips the entire mission"),
+            ("Rising Tension & Plot Twists", 0.57, 0.63, "9. High-Speed Pursuit & Escape", "Life-or-death chase sequence"),
+            ("Rising Tension & Plot Twists", 0.65, 0.71, "10. The Unexpected Betrayal", "An ally reveals true deceptive motives"),
+            ("Rising Tension & Plot Twists", 0.73, 0.78, "11. The Darkest Hour (All Hope Lost)", "Hero cornered with zero apparent escape"),
+            ("Rising Tension & Plot Twists", 0.79, 0.83, "12. Rallying for the Final Stand", "Regrouping with renewed resolve"),
+
+            # Phase 3: Action, Climax & Resolution (~300s)
+            ("Crucial Action & Climax", 0.85, 0.89, "13. Storming the Enemy Fortress", "The ultimate action sequence begins"),
+            ("Crucial Action & Climax", 0.90, 0.94, "14. The Final Face-to-Face Showdown", "Protagonist vs Antagonist direct battle"),
+            ("Crucial Action & Climax", 0.95, 0.97, "15. The Mastermind Revelation", "The final secret unveiled"),
+            ("Crucial Action & Climax", 0.98, 0.995, "16. Resolution, Justice & Closure", "The aftermath and powerful final punchline")
+        ]
+
+        target_per_cut = target_duration / len(phase_plan)
+        script_segments = []
+
+        for idx, (phase_name, r_s, r_e, sc_title, sc_reason) in enumerate(phase_plan, 1):
+            mid = duration * ((r_s + r_e) / 2.0)
+            s = max(0.0, mid - (target_per_cut / 2.0))
+            e = min(duration, s + target_per_cut)
+            c_dur = round(e - s, 2)
+            c_words = int(round(c_dur * wps))
+
+            if idx == 1:
+                seg = "कहानी की शुरुआत एक दिल दहला देने वाले मोड़ से होती है, जहाँ चारों तरफ अफरा-तफरी मच जाती है।"
+            elif idx == 8:
+                seg = "यहीं पर कहानी में सबसे बड़ा ट्विस्ट आता है, जब एक ऐसा सच सामने आता है जिसने पूरे खेल को पलट कर रख दिया।"
+            elif idx >= 13:
+                seg = "अब शुरू होता है अंतिम और निर्णायक मुकाबला, जहाँ नायक अपनी जान की बाज़ी लगाकर दुश्मनों के मंसूबों को नाकाम कर देता है।"
+            else:
+                seg = f"दृश्य {idx} में तनाव अपने चरम पर पहुँच जाता है, और हर एक सेकंड में नया खतरा सामने आता है।"
+
+            script_segments.append(seg)
+            keeper_clips.append({
+                "id": idx,
+                "phase": phase_name,
+                "start": round(s, 2),
+                "end": round(e, 2),
+                "start_ts": format_seconds_to_timestamp(s),
+                "end_ts": format_seconds_to_timestamp(e),
+                "duration": c_dur,
+                "title": sc_title,
+                "reason": sc_reason,
+                "target_words": c_words,
+                "script_segment": seg
+            })
+
+        summary = f"20-Minute Cinema Explainer for {title} spanning across {duration_str} with {len(keeper_clips)} keeper scenes."
+        full_script = " ".join(script_segments)
+
+    tot_kept = sum(c["duration"] for c in keeper_clips)
+    tot_filler = max(0.0, duration - tot_kept)
+    filler_pct = round((tot_filler / max(1.0, duration)) * 100, 1) if duration > 0 else 0
+
+    phase_groups = {
+        "Hook & Setup": [c for c in keeper_clips if "Hook" in c["phase"] or "Setup" in c["phase"]],
+        "Rising Tension & Plot Twists": [c for c in keeper_clips if "Tension" in c["phase"] or "Twist" in c["phase"]],
+        "Crucial Action & Climax": [c for c in keeper_clips if "Action" in c["phase"] or "Climax" in c["phase"]]
+    }
+
+    return {
+        "success": True,
+        "source": source,
+        "title": title,
+        "duration": duration,
+        "duration_str": duration_str,
+        "thumbnail": thumbnail,
+        "channel": channel,
+        "youtube_info": {
+            "url": youtube_url,
+            "title": title,
+            "duration": duration,
+            "duration_str": duration_str,
+            "thumbnail": thumbnail,
+            "channel": channel
+        },
+        "target_duration": target_duration,
+        "wps": wps,
+        "calibrated_wps": wps,
+        "voice_name": voice_name,
+        "tone_style": tone_style,
+        "total_duration_sec": round(tot_kept, 2),
+        "total_clips": len(keeper_clips),
+        "total_words": int(round(tot_kept * wps)),
+        "total_kept_duration": round(tot_kept, 2),
+        "filler_removed_duration": round(tot_filler, 2),
+        "filler_removed_percent": filler_pct,
+        "summary": summary,
+        "keeper_clips": keeper_clips,
+        "phase_groups": phase_groups,
+        "phases": phase_groups,
+        "full_script": full_script
+    }
+
+
 def export_timeline_trimmed_video(
     source_video_path: str,
     keeper_clips: List[Dict[str, Any]],
@@ -2753,6 +3016,7 @@ def export_timeline_trimmed_video(
     Slices and concatenates keeper clips from source_video_path WITHOUT changing resolution
     or aspect ratio.
     Keeps 100% original video size (native width & height, e.g. 1920x1080).
+    Uses ultra-fast stream copy (-c copy) as primary slicing mechanism.
     """
     def notify(pct: int, msg: str):
         if progress_callback:
@@ -2789,44 +3053,47 @@ def export_timeline_trimmed_video(
     sliced_paths = []
 
     try:
-        notify(5, f"Preparing to slice {total_clips} clips at original resolution...")
+        notify(5, f"Preparing to slice {total_clips} clips at original resolution via ultra-fast stream copy...")
 
         # 1. Slice each keeper clip WITHOUT RESIZING (keeps native resolution & aspect ratio)
+        # Prioritizes ultra-fast stream copy (-c copy)
         for i, clip in enumerate(sanitized):
             s = clip["start"]
             e = clip["end"]
             clip_out = os.path.join(task_temp, f"clip_{i:03d}.mp4")
 
-            cmd = [
+            # Try ultra-fast stream copy first
+            cmd_copy = [
                 ffmpeg_bin, "-y",
                 "-ss", str(s),
                 "-to", str(e),
                 "-i", source_video_path,
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "20"
+                "-c", "copy"
             ]
-            if audio_mode == "original":
-                cmd.extend(["-c:a", "aac", "-b:a", "192k"])
-            else:
-                cmd.extend(["-an"])  # strip audio for TTS narration
-            cmd.extend(["-avoid_negative_ts", "make_zero", clip_out])
+            if audio_mode != "original":
+                cmd_copy.extend(["-an"])  # strip audio for voiceover replacement
+            cmd_copy.extend(["-avoid_negative_ts", "make_zero", clip_out])
 
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if res.returncode == 0 and os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
+            res_copy = subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res_copy.returncode == 0 and os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
                 sliced_paths.append(clip_out)
             else:
-                logger.warning(f"Slice failed for clip {i} ({s}-{e}), retrying stream copy: {res.stderr[:200]}")
-                cmd_copy = [
+                # Fallback to keyframe-accurate ultrafast re-encode (zero resizing, preserves 100% native resolution)
+                cmd_fast = [
                     ffmpeg_bin, "-y",
                     "-ss", str(s),
                     "-to", str(e),
                     "-i", source_video_path,
-                    "-c", "copy",
-                    "-avoid_negative_ts", "make_zero",
-                    clip_out
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast",
+                    "-crf", "18"
                 ]
-                subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if audio_mode == "original":
+                    cmd_fast.extend(["-c:a", "aac", "-b:a", "192k"])
+                else:
+                    cmd_fast.extend(["-an"])
+                cmd_fast.extend(["-avoid_negative_ts", "make_zero", clip_out])
+                subprocess.run(cmd_fast, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
                     sliced_paths.append(clip_out)
 

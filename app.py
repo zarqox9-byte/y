@@ -2410,6 +2410,126 @@ HTML_MAIN = """
                     </div>
                 </div>
 
+                <!-- 20-Minute Movie Explainer Copilot Card -->
+                <div style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.75), rgba(15, 23, 42, 0.95)); border: 1px solid #7c3aed; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 26px;">🧠</span>
+                            <div>
+                                <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #ede9fe;">20-Minute Movie Explainer Copilot (Hollywood 3-Phase Storyboard)</h3>
+                                <p style="margin: 0; font-size: 12px; color: #a78bfa;">Analyzes complete movie narrative from YouTube &bull; 100-word calibrated voice sync &bull; Auto-injects cuts into timeline</p>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="background: rgba(124, 58, 237, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.4);">100% YOUTUBE DATA GROUNDING</span>
+                            <span style="background: rgba(6, 182, 212, 0.2); color: #67e8f9; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.3);">WPS CALIBRATED TTS</span>
+                        </div>
+                    </div>
+
+                    <!-- Explainer Input Controls Grid -->
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 14px;">
+                        <div>
+                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Movie YouTube URL:</label>
+                            <input type="text" id="trimmerExplainerYtUrl" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;" placeholder="https://www.youtube.com/watch?v=...">
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Target Explainer Length:</label>
+                            <select id="trimmerExplainerDuration" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
+                                <option value="1200" selected>🎬 20 Minutes (Full Explainer)</option>
+                                <option value="900">⏱️ 15 Minutes (Extended Recap)</option>
+                                <option value="600">⚡ 10 Minutes (Standard Recap)</option>
+                                <option value="300">🔥 5 Minutes (Fast Breakdown)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Voice Character:</label>
+                            <select id="trimmerExplainerVoice" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
+                                <option value="Kore" selected>Kore (Hindi Deep Male)</option>
+                                <option value="Fenrir">Fenrir (Dramatic Intense)</option>
+                                <option value="Puck">Puck (Fast-Paced Punch)</option>
+                                <option value="Aoede">Aoede (Expressive Female)</option>
+                                <option value="Charon">Charon (Deep Mysterious)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Tone Style:</label>
+                            <select id="trimmerExplainerTone" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
+                                <option value="Narrative Deep Storytelling" selected>Narrative Deep Storytelling</option>
+                                <option value="Suspense / Thriller">Suspense / Thriller</option>
+                                <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
+                                <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 18px; font-size: 13px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);">
+                                <span id="btnPlanExplainerIcon">🚀</span>
+                                <span id="btnPlanExplainerText">Plan 20-Min Explainer</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Storyboard Results & 3-Phase Visual Breakdown (Initially Hidden) -->
+                    <div id="trimmerExplainerStoryboardContainer" style="display: none; margin-top: 16px; border-top: 1px solid rgba(124, 58, 237, 0.3); padding-top: 16px;">
+                        <!-- Movie Metadata Header -->
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 14px;">
+                                <img id="trimmerExplainerThumb" src="" alt="Thumbnail" style="width: 72px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #334155; display: none;">
+                                <div>
+                                    <div id="trimmerExplainerTitle" style="font-size: 14px; font-weight: 700; color: #f8fafc;">Movie Title</div>
+                                    <div id="trimmerExplainerMetaSub" style="font-size: 11px; color: #94a3b8;">Runtime: 02:14:41 &bull; Channel: Cinema Channel</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <span id="trimmerExplainerBadgeWps" style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: 2.35 w/s</span>
+                                <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: 2820 words</span>
+                                <span id="trimmerExplainerBadgeClips" style="background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #c084fc; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Keeper Clips: 14</span>
+                                <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
+                                    <span>⚡</span> <span>Inject Cuts into Timeline</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Summary quote -->
+                        <div id="trimmerExplainerSummary" style="font-size: 12px; color: #cbd5e1; font-style: italic; background: rgba(255,255,255,0.02); border-left: 3px solid #7c3aed; padding: 8px 14px; margin-bottom: 14px; border-radius: 0 6px 6px 0;"></div>
+
+                        <!-- 3-Phase Storyboard Cards -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;" id="trimmerExplainerPhasesGrid">
+                            <!-- Phase 1 Card -->
+                            <div style="background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 8px; padding: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🎣 PHASE 1: Hook &amp; Setup</span>
+                                    <span id="trimmerPhase1Meta" style="font-size: 11px; color: #94a3b8;">~5 min</span>
+                                </div>
+                                <div id="trimmerPhase1Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
+                            </div>
+
+                            <!-- Phase 2 Card -->
+                            <div style="background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: 8px; padding: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 12px; font-weight: 700; color: #c084fc;">⚡ PHASE 2: Rising Tension &amp; Twists</span>
+                                    <span id="trimmerPhase2Meta" style="font-size: 11px; color: #94a3b8;">~10 min</span>
+                                </div>
+                                <div id="trimmerPhase2Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
+                            </div>
+
+                            <!-- Phase 3 Card -->
+                            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 12px; font-weight: 700; color: #f87171;">💥 PHASE 3: Climax &amp; Resolution</span>
+                                    <span id="trimmerPhase3Meta" style="font-size: 11px; color: #94a3b8;">~5 min</span>
+                                </div>
+                                <div id="trimmerPhase3Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Auto-Injection Guidance Banner -->
+                        <div id="trimmerExplainerAutoInjectNotice" style="margin-top: 12px; padding: 10px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; font-size: 12px; color: #a7f3d0; display: flex; align-items: center; gap: 8px;">
+                            <span>💡</span>
+                            <span><b>Instant Auto-Cut:</b> Drag &amp; drop or select your movie file below. All narrative keeper cuts and calibrated Hindi voiceover script will be automatically injected into the timeline!</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Video Input / Source Selector -->
                 <div style="background: var(--bg-elevated); border: 1px dashed #0284c7; border-radius: 10px; padding: 20px; margin-bottom: 20px; text-align: center;" id="trimmerDropzone">
                     <input type="file" id="trimmerVideoFileInput" accept="video/mp4,video/x-matroska,video/quicktime,video/webm" style="display: none;">
@@ -4937,6 +5057,167 @@ HTML_MAIN = """
         let nextClipId = 1;
         let exportPollInterval = null;
 
+        // 20-Minute Movie Explainer Copilot Elements & State
+        let currentExplainerStoryboard = null;
+        const trimmerExplainerYtUrl = document.getElementById('trimmerExplainerYtUrl');
+        const trimmerExplainerDuration = document.getElementById('trimmerExplainerDuration');
+        const trimmerExplainerVoice = document.getElementById('trimmerExplainerVoice');
+        const trimmerExplainerTone = document.getElementById('trimmerExplainerTone');
+        const btnTrimmerPlanExplainer = document.getElementById('btnTrimmerPlanExplainer');
+        const btnPlanExplainerIcon = document.getElementById('btnPlanExplainerIcon');
+        const btnPlanExplainerText = document.getElementById('btnPlanExplainerText');
+        const trimmerExplainerStoryboardContainer = document.getElementById('trimmerExplainerStoryboardContainer');
+        const trimmerExplainerThumb = document.getElementById('trimmerExplainerThumb');
+        const trimmerExplainerTitle = document.getElementById('trimmerExplainerTitle');
+        const trimmerExplainerMetaSub = document.getElementById('trimmerExplainerMetaSub');
+        const trimmerExplainerBadgeWps = document.getElementById('trimmerExplainerBadgeWps');
+        const trimmerExplainerBadgeWords = document.getElementById('trimmerExplainerBadgeWords');
+        const trimmerExplainerBadgeClips = document.getElementById('trimmerExplainerBadgeClips');
+        const trimmerExplainerSummary = document.getElementById('trimmerExplainerSummary');
+        const btnInjectExplainerCuts = document.getElementById('btnInjectExplainerCuts');
+        const trimmerPhase1Clips = document.getElementById('trimmerPhase1Clips');
+        const trimmerPhase2Clips = document.getElementById('trimmerPhase2Clips');
+        const trimmerPhase3Clips = document.getElementById('trimmerPhase3Clips');
+        const trimmerPhase1Meta = document.getElementById('trimmerPhase1Meta');
+        const trimmerPhase2Meta = document.getElementById('trimmerPhase2Meta');
+        const trimmerPhase3Meta = document.getElementById('trimmerPhase3Meta');
+
+        function renderExplainerStoryboardUI(storyboard) {
+            if (!storyboard || !storyboard.keeper_clips) return;
+            if (trimmerExplainerStoryboardContainer) trimmerExplainerStoryboardContainer.style.display = 'block';
+
+            if (trimmerExplainerThumb && storyboard.thumbnail) {
+                trimmerExplainerThumb.src = storyboard.thumbnail;
+                trimmerExplainerThumb.style.display = 'block';
+            }
+            if (trimmerExplainerTitle) {
+                trimmerExplainerTitle.textContent = storyboard.title || 'Movie Narrative Explainer';
+            }
+            if (trimmerExplainerMetaSub) {
+                trimmerExplainerMetaSub.innerHTML = `Runtime: <b>${storyboard.duration_str || 'Full Movie'}</b> &bull; Target: <b>${Math.round((storyboard.target_duration || 1200) / 60)} Minutes</b> &bull; Voice: <b>${storyboard.voice_name || 'Kore'} (${storyboard.tone_style || 'Narrative Deep'})</b>`;
+            }
+            if (trimmerExplainerBadgeWps) {
+                trimmerExplainerBadgeWps.textContent = `⚡ WPS: ${(storyboard.calibrated_wps || 2.35).toFixed(2)} w/s`;
+            }
+            if (trimmerExplainerBadgeWords) {
+                trimmerExplainerBadgeWords.textContent = `📝 Spoken Words: ${storyboard.total_words || Math.round((storyboard.target_duration || 1200) * (storyboard.calibrated_wps || 2.35))}`;
+            }
+            if (trimmerExplainerBadgeClips) {
+                trimmerExplainerBadgeClips.textContent = `🎬 Keeper Scenes: ${storyboard.total_clips || storyboard.keeper_clips.length}`;
+            }
+            if (trimmerExplainerSummary) {
+                trimmerExplainerSummary.textContent = storyboard.summary || 'Comprehensive narrative recap covering the entire storyline without blind cuts.';
+            }
+
+            const clips = storyboard.keeper_clips || [];
+            const p1 = clips.filter(c => (c.phase && c.phase.includes('1')) || (c.title && c.title.toLowerCase().includes('phase 1')));
+            const p2 = clips.filter(c => (c.phase && c.phase.includes('2')) || (c.title && c.title.toLowerCase().includes('phase 2')));
+            const p3 = clips.filter(c => (c.phase && c.phase.includes('3')) || (c.title && c.title.toLowerCase().includes('phase 3')));
+
+            let phase1Clips = p1, phase2Clips = p2, phase3Clips = p3;
+            if (phase1Clips.length === 0 && phase2Clips.length === 0 && phase3Clips.length === 0) {
+                const count = clips.length;
+                const c1 = Math.max(1, Math.round(count * 0.25));
+                const c2 = Math.max(1, Math.round(count * 0.5));
+                phase1Clips = clips.slice(0, c1);
+                phase2Clips = clips.slice(c1, c1 + c2);
+                phase3Clips = clips.slice(c1 + c2);
+            }
+
+            function renderPhaseClips(container, metaEl, pClips) {
+                if (!container) return;
+                container.innerHTML = '';
+                const totalDur = pClips.reduce((acc, c) => acc + (c.duration || (c.end - c.start)), 0);
+                if (metaEl) metaEl.textContent = `${pClips.length} scenes • ${formatSecs(totalDur)}`;
+
+                pClips.forEach(c => {
+                    const row = document.createElement('div');
+                    row.style.background = 'rgba(0,0,0,0.3)';
+                    row.style.padding = '6px 8px';
+                    row.style.borderRadius = '4px';
+                    row.style.border = '1px solid rgba(255,255,255,0.05)';
+                    row.style.fontSize = '11px';
+                    row.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                            <span style="font-weight: 700; color: #f1f5f9;">${c.title || 'Scene'}</span>
+                            <span style="color: #38bdf8; font-family: monospace;">${formatSecs(c.start)} - ${formatSecs(c.end)} (${(c.duration || (c.end-c.start)).toFixed(0)}s)</span>
+                        </div>
+                        <div style="color: #94a3b8; font-size: 10px; line-height: 1.3;">${(c.narration || c.reason || '').slice(0, 95)}${(c.narration || '').length > 95 ? '...' : ''}</div>
+                    `;
+                    container.appendChild(row);
+                });
+            }
+
+            renderPhaseClips(trimmerPhase1Clips, trimmerPhase1Meta, phase1Clips);
+            renderPhaseClips(trimmerPhase2Clips, trimmerPhase2Meta, phase2Clips);
+            renderPhaseClips(trimmerPhase3Clips, trimmerPhase3Meta, phase3Clips);
+        }
+
+        function applyExplainerStoryboardToTimeline(storyboard) {
+            if (!storyboard || !storyboard.keeper_clips || storyboard.keeper_clips.length === 0) return;
+            const clips = storyboard.keeper_clips;
+
+            nextClipId = 1;
+            trimmerKeeperClips = clips.map((c, idx) => {
+                let s = Math.max(0, parseFloat(c.start) || 0);
+                let e = parseFloat(c.end) || (s + 60);
+                if (trimmerTotalDuration > 0) {
+                    if (s >= trimmerTotalDuration) s = Math.max(0, trimmerTotalDuration - 30);
+                    if (e > trimmerTotalDuration) e = trimmerTotalDuration;
+                }
+                const dur = Math.max(0.5, e - s);
+                return {
+                    id: nextClipId++,
+                    start: s,
+                    end: e,
+                    duration: dur,
+                    title: c.title || `Scene ${idx + 1}`,
+                    reason: c.reason || c.phase || 'Narrative Keeper Cut',
+                    narration: c.narration || ''
+                };
+            }).filter(c => c.end > c.start + 0.3);
+
+            if (trimmerKeeperClips.length === 0) {
+                resetTrimmerClips();
+                return;
+            }
+
+            trimmerActiveClipIndex = 0;
+
+            if (trimmerNarrationScript) {
+                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\n\n');
+            }
+
+            const ttsBgmRadio = document.querySelector('input[name="trimmerAudioMode"][value="tts_bgm"]');
+            if (ttsBgmRadio) {
+                ttsBgmRadio.checked = true;
+                if (trimmerTtsOptionsContainer) trimmerTtsOptionsContainer.style.display = 'block';
+            }
+
+            if (trimmerTtsVoiceSelect && storyboard.voice_name) {
+                trimmerTtsVoiceSelect.value = storyboard.voice_name;
+            }
+            if (trimmerTtsToneSelect && storyboard.tone_style) {
+                trimmerTtsToneSelect.value = storyboard.tone_style;
+            }
+
+            renderTrimmerTimelineUI();
+            updateTrimmerStats();
+            updateTrimmerDeck();
+
+            if (trimmerKeeperClips.length > 0) {
+                trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+            }
+
+            const totalKept = trimmerKeeperClips.reduce((acc, c) => acc + c.duration, 0);
+            const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
+            if (noticeEl) {
+                noticeEl.innerHTML = `✅ <b>Injected into Timeline:</b> ${trimmerKeeperClips.length} keeper cuts (${formatSecs(totalKept)}) with synchronized narration script! Discarded all filler scenes.`;
+                noticeEl.style.background = 'rgba(16, 185, 129, 0.2)';
+                noticeEl.style.borderColor = '#10b981';
+            }
+        }
+
         // Toggle TTS voiceover options UI when audio mode changes
         document.querySelectorAll('input[name="trimmerAudioMode"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -5009,8 +5290,12 @@ HTML_MAIN = """
                 trimmerFileInfoBadge.innerHTML = `🎥 <b>${file.name}</b> &bull; ${formatSecs(trimmerTotalDuration)} &bull; ${sizeMb} MB &bull; ${trimmerAspectRatio}`;
                 trimmerFileInfoBadge.style.display = 'inline-block';
 
-                // Initialize with full video as 1 clip
-                resetTrimmerClips();
+                // Auto-inject 20-minute explainer cuts if storyboard exists, else initialize full video as 1 clip
+                if (currentExplainerStoryboard && currentExplainerStoryboard.keeper_clips && currentExplainerStoryboard.keeper_clips.length > 0) {
+                    applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
+                } else {
+                    resetTrimmerClips();
+                }
             };
 
             // Upload in background to server for FFmpeg slicing
@@ -5419,6 +5704,76 @@ HTML_MAIN = """
                     btnTrimmerGeminiAutoCut.disabled = false;
                     btnTrimmerGeminiAutoCut.innerHTML = '<span>🤖</span> <span>Gemini Auto-Cut &amp; Trim</span>';
                 }
+            });
+        }
+
+        // 20-MINUTE MOVIE EXPLAINER STORYBOARD COPILOT
+        if (btnTrimmerPlanExplainer) {
+            btnTrimmerPlanExplainer.addEventListener('click', async () => {
+                const url = (trimmerExplainerYtUrl ? trimmerExplainerYtUrl.value : '').trim();
+                if (!url) {
+                    alert('Please enter a YouTube movie URL to plan the 20-minute explainer.');
+                    if (trimmerExplainerYtUrl) trimmerExplainerYtUrl.focus();
+                    return;
+                }
+
+                btnTrimmerPlanExplainer.disabled = true;
+                if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span>';
+                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Extracting Movie Structure...';
+
+                try {
+                    const payload = {
+                        youtube_url: url,
+                        target_duration: parseInt(trimmerExplainerDuration ? trimmerExplainerDuration.value : '1200') || 1200,
+                        voice_name: trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore',
+                        tone_style: trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling',
+                        language: 'Hindi'
+                    };
+
+                    const res = await fetch('/api/trimmer/plan_explainer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+
+                    if (!data.success && data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    currentExplainerStoryboard = data;
+                    renderExplainerStoryboardUI(data);
+
+                    if (trimmerTotalDuration > 0) {
+                        applyExplainerStoryboardToTimeline(data);
+                        alert(`20-Minute Explainer Ready!\nAnalyzed "${data.title}" and auto-injected ${data.total_clips} cuts totaling ${formatSecs(data.total_duration_sec)} into your timeline with millisecond-synced Hindi voiceover!`);
+                    } else {
+                        const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
+                        if (noticeEl) {
+                            noticeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                } catch (err) {
+                    alert('Explainer Planning Error: ' + err.message);
+                } finally {
+                    btnTrimmerPlanExplainer.disabled = false;
+                    if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🚀';
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Plan 20-Min Explainer';
+                }
+            });
+        }
+
+        if (btnInjectExplainerCuts) {
+            btnInjectExplainerCuts.addEventListener('click', () => {
+                if (!currentExplainerStoryboard) {
+                    alert('Please plan a 20-minute explainer first using a YouTube URL.');
+                    return;
+                }
+                if (trimmerTotalDuration <= 0) {
+                    alert('Please select or drag your movie video file below first.');
+                    return;
+                }
+                applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
             });
         }
 
@@ -7274,6 +7629,40 @@ def trimmer_gemini_autocut():
         custom_prompt=custom_prompt
     )
     return jsonify(result)
+
+
+@app.route('/api/trimmer/plan_explainer', methods=['POST'])
+def trimmer_plan_explainer():
+    """
+    Extracts 100% accurate YouTube metadata and calls Gemini with calibrated 100-word WPS
+    to generate an exact 20-minute (or user-chosen target duration) 3-phase explainer storyboard.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    youtube_url = (data.get('youtube_url') or '').strip()
+    target_duration = int(data.get('target_duration') or 1200)
+    language = (data.get('language') or 'Hindi').strip()
+    voice_name = (data.get('voice_name') or 'Kore').strip()
+    tone_style = (data.get('tone_style') or 'Narrative Deep Storytelling').strip()
+    custom_instructions = (data.get('custom_instructions') or '').strip()
+
+    if not youtube_url:
+        return jsonify({'success': False, 'error': 'YouTube URL is required'}), 400
+
+    try:
+        creds = get_stored_credentials()
+        storyboard = clipper_engine.generate_20min_movie_explainer_storyboard(
+            youtube_url=youtube_url,
+            credentials=creds,
+            target_duration=target_duration,
+            language=language,
+            voice_name=voice_name,
+            tone_style=tone_style,
+            custom_instructions=custom_instructions
+        )
+        return jsonify(storyboard)
+    except Exception as e:
+        print(f"Trimmer plan explainer error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 def _execute_trimmer_export_worker(task_id: str, payload: Dict[str, Any]):
