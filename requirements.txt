@@ -12,3 +12,4 @@ yt-dlp>=2024.0.0
 edge-tts>=6.1.0
 imageio-ffmpeg>=0.4.9
 psycopg2-binary>=2.9.9
+youtube-transcript-api>=0.6.2

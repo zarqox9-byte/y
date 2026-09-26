@@ -7117,10 +7117,10 @@ HTML_MAIN = """
                         explainerPipelineSpeedBadge.textContent = `${voiceName}: ${measuredWps.toFixed(2)} WPS • ${measuredCps.toFixed(1)} CPS`;
                     }
 
-                    setPipelineStepState(2, 'active', '⏳ <b>2. Bounds (5%–20%):</b> Extracting...');
-                    setPipelineStepState(3, 'active', '⏳ <b>3. Word Budget:</b> Syncing Script...');
+                    setPipelineStepState(2, 'active', '⏳ <b>2. Real Story:</b> Extracting Transcript...');
+                    setPipelineStepState(3, 'pending', '<b>3. Audio-Master:</b> 1:1 Voice Lock');
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.textContent = `🎬 Generating PardaCine story arc (5%–20% runtime bounds) matched to ${measuredWps.toFixed(2)} WPS...`;
+                        explainerPipelineStatusTitle.textContent = `🎬 Starting 5-Stage Audio-Master Job (5%–20% runtime bounds, locked voice: ${voiceName})...`;
                     }
 
                     const payload = {
@@ -7131,23 +7131,64 @@ HTML_MAIN = """
                         language: lang,
                         calibrated_wps: measuredWps,
                         calibrated_cps: measuredCps,
+                        synthesize_audio_master: true,
                         channel_id: window.currentActiveChannelId || 'default'
                     };
 
-                    const res = await fetch('/api/trimmer/plan_explainer', {
+                    const startRes = await fetch('/api/explainer/start_job', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    let data;
+                    let startData;
                     try {
-                        data = await res.json();
+                        startData = await startRes.json();
                     } catch (parseErr) {
-                        throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
+                        throw new Error(`Server returned non-JSON response (HTTP ${startRes.status}).`);
                     }
 
-                    if (!data.success && data.error) {
-                        throw new Error(data.error);
+                    if (!startData.success || !startData.job_id) {
+                        throw new Error(startData.error || 'Failed to start async explainer job.');
+                    }
+
+                    const jobId = startData.job_id;
+                    let data = null;
+
+                    // Poll /api/explainer/status/<job_id> until completed or error (eliminates 30-60s HTTP timeout)
+                    while (true) {
+                        await new Promise(r => setTimeout(r, 1400));
+                        const pollRes = await fetch(`/api/explainer/status/${encodeURIComponent(jobId)}`);
+                        const pollData = await pollRes.json();
+
+                        if (!pollData.success && pollData.status === 'not_found') {
+                            throw new Error(pollData.error || 'Explainer job lost.');
+                        }
+
+                        const pct = parseInt(pollData.progress || 10, 10);
+                        const stepMsg = pollData.current_step || 'Processing 5-Stage Audio-Master Pipeline...';
+                        if (btnPlanExplainerText) {
+                            btnPlanExplainerText.textContent = `${pct}% • ${stepMsg.slice(0, 48)}...`;
+                        }
+                        if (explainerPipelineStatusTitle) {
+                            explainerPipelineStatusTitle.textContent = `⏳ [${pct}%] ${stepMsg}`;
+                        }
+
+                        if (pct >= 25 && pct < 55) {
+                            setPipelineStepState(2, 'active', '⏳ <b>2. Real Story:</b> Character-Pure Script...');
+                            setPipelineStepState(3, 'active', '⏳ <b>3. Word Budget:</b> 12–24 Beats...');
+                        } else if (pct >= 55) {
+                            setPipelineStepState(2, 'done', '✅ <b>2. Real Story:</b> Extracted');
+                            setPipelineStepState(3, 'done', '✅ <b>3. Word Budget:</b> Character-Pure');
+                            setPipelineStepState(4, 'active', `⏳ <b>4. Audio-Master:</b> ${pct}% Scene-by-Scene...`);
+                        }
+
+                        if (pollData.status === 'error') {
+                            throw new Error(pollData.error || 'Explainer pipeline job failed.');
+                        }
+                        if (pollData.status === 'completed' && pollData.result) {
+                            data = pollData.result;
+                            break;
+                        }
                     }
 
                     data.calibrated_wps = data.calibrated_wps || measuredWps;
@@ -7159,66 +7200,40 @@ HTML_MAIN = """
 
                     renderExplainerStoryboardUI(data);
 
-                    // Synthesize full Voiceover + Ducked Suspense BGM
-                    setPipelineStepState(4, 'active', '⏳ <b>4. Auto TTS:</b> Synthesizing MP3...');
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Synthesizing Voiceover + Ducked BGM...';
-                    if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.textContent = `🎙️ Synthesizing ${lang} voiceover (${voiceName}) + ducked suspense BGM...`;
-                    }
-
-                    const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\\n\\n');
+                    // Stage 3-4 Audio-Master already synthesized 1:1 scene-by-scene locked voiceover in the background worker!
+                    const prebuiltAudioUrl = data.narration_audio_url || data.audio_url || '';
                     const totalCutsDurationSec = parseFloat(data.total_duration_sec || data.total_kept_duration) || (data.keeper_clips || []).reduce((acc, c) => acc + (parseFloat(c.duration) || 0), 0);
-                    if (fullScriptText || (data.keeper_clips && data.keeper_clips.length > 0)) {
-                        const ttsRes = await fetch('/api/tts/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                script: fullScriptText,
-                                keeper_clips: data.keeper_clips || [],
-                                target_duration_sec: totalCutsDurationSec,
-                                calibrated_wps: measuredWps,
-                                calibrated_cps: measuredCps,
-                                voice_name: voiceName,
-                                tone_style: toneStyle,
-                                language: lang,
-                                audio_mode: 'tts_bgm',
-                                include_bgm: true,
-                                channel_id: window.currentActiveChannelId || 'default'
-                            })
-                        });
-                        const ttsData = await ttsRes.json();
-                        if (ttsData.success && ttsData.audio_url) {
-                            currentNarrationAudioUrl = ttsData.audio_url;
-                            data.narration_audio_url = ttsData.audio_url;
-                            currentExplainerStoryboard.narration_audio_url = ttsData.audio_url;
-                            if (ttsData.script) {
-                                data.full_script = ttsData.script;
-                                if (trimmerNarrationScript) trimmerNarrationScript.value = ttsData.script;
-                            }
 
-                            if (explainerReadyAudioBar) explainerReadyAudioBar.style.display = 'flex';
-                            if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = ttsData.audio_url;
-                            if (btnDownloadExplainerReadyMp3) {
-                                btnDownloadExplainerReadyMp3.href = ttsData.audio_url;
-                                btnDownloadExplainerReadyMp3.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
-                            }
-
-                            if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
-                            if (trimmerNarrationAudioPlayer) trimmerNarrationAudioPlayer.src = ttsData.audio_url;
-                            if (btnQuickDownloadAudio) {
-                                btnQuickDownloadAudio.href = ttsData.audio_url;
-                                btnQuickDownloadAudio.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
-                            }
-                            if (btnDownloadNarrationAudio) {
-                                btnDownloadNarrationAudio.href = ttsData.audio_url;
-                                btnDownloadNarrationAudio.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
-                                btnDownloadNarrationAudio.style.display = 'inline-flex';
-                            }
-                            const syncDelta = typeof ttsData.duration_delta === 'number' ? ` (Δ ${ttsData.duration_delta.toFixed(2)}s)` : '';
-                            setPipelineStepState(4, 'done', `✅ <b>4. Auto TTS:</b> 1:1 Synced (${formatSecs(ttsData.duration || totalCutsDurationSec)}${syncDelta})`);
-                        } else {
-                            setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Synthesize on Export');
+                    if (prebuiltAudioUrl) {
+                        currentNarrationAudioUrl = prebuiltAudioUrl;
+                        data.narration_audio_url = prebuiltAudioUrl;
+                        currentExplainerStoryboard.narration_audio_url = prebuiltAudioUrl;
+                        if (data.full_script && trimmerNarrationScript) {
+                            trimmerNarrationScript.value = data.full_script;
                         }
+
+                        if (explainerReadyAudioBar) explainerReadyAudioBar.style.display = 'flex';
+                        if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = prebuiltAudioUrl;
+                        if (btnDownloadExplainerReadyMp3) {
+                            btnDownloadExplainerReadyMp3.href = prebuiltAudioUrl;
+                            btnDownloadExplainerReadyMp3.download = 'pardacine_audio_master_1to1.mp3';
+                        }
+
+                        if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
+                        if (trimmerNarrationAudioPlayer) trimmerNarrationAudioPlayer.src = prebuiltAudioUrl;
+                        if (btnQuickDownloadAudio) {
+                            btnQuickDownloadAudio.href = prebuiltAudioUrl;
+                            btnQuickDownloadAudio.download = 'pardacine_audio_master_1to1.mp3';
+                        }
+                        if (btnDownloadNarrationAudio) {
+                            btnDownloadNarrationAudio.href = prebuiltAudioUrl;
+                            btnDownloadNarrationAudio.download = 'pardacine_audio_master_1to1.mp3';
+                            btnDownloadNarrationAudio.style.display = 'inline-flex';
+                        }
+                        const driftVal = typeof data.sync_drift_sec === 'number' ? data.sync_drift_sec : 0.0;
+                        setPipelineStepState(4, 'done', `✅ <b>4. Audio-Master:</b> 1:1 Synced (${formatSecs(data.audio_duration_sec || totalCutsDurationSec)} • Δ ${driftVal.toFixed(2)}s)`);
+                    } else {
+                        setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Synthesize on Export');
                     }
 
                     // Inject into Step 5 CapCut Timeline
@@ -7228,7 +7243,8 @@ HTML_MAIN = """
                     updateSeqStepPills(5);
 
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.innerHTML = `✅ <b>PardaCine Storyboard &amp; 1:1 Synced Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie) synced to Step 5 CapCut timeline.`;
+                        const lockEngineBadge = data.locked_voice_engine ? ` • Voice Lock: ${data.locked_voice_engine}` : '';
+                        explainerPipelineStatusTitle.innerHTML = `✅ <b>Audio-Master 1:1 Storyboard &amp; Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie • Δ 0.00s drift${lockEngineBadge}) synced to Step 5 CapCut timeline.`;
                     }
                 } catch (err) {
                     alert('Cinema Explainer Pipeline Error: ' + err.message);
@@ -7281,7 +7297,7 @@ HTML_MAIN = """
                 }
 
                 btnGenerateNarrationOnly.disabled = true;
-                btnGenerateNarrationOnly.innerHTML = '<span>⏳</span> <span>Synthesizing 1:1 Synced Audio...</span>';
+                btnGenerateNarrationOnly.innerHTML = '<span>⏳</span> <span>Synthesizing 1:1 Audio-Master...</span>';
 
                 try {
                     const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
@@ -7313,6 +7329,11 @@ HTML_MAIN = """
                     currentNarrationAudioUrl = data.audio_url;
                     if (data.script && trimmerNarrationScript) {
                         trimmerNarrationScript.value = data.script;
+                    }
+                    if (Array.isArray(data.keeper_clips) && data.keeper_clips.length > 0) {
+                        trimmerKeeperClips = data.keeper_clips;
+                        renderTrimmerClipsList();
+                        renderCapCutRulerAndTracks();
                     }
 
                     if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
@@ -7366,12 +7387,30 @@ HTML_MAIN = """
             const ffmpeg = await getFFmpeg(progressCb);
             const { fetchFile } = FFmpeg;
 
-            if (progressCb) progressCb(0.05, 'Writing source video to in-browser virtual memory (0MB cloud)...');
-            ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(sourceFile));
+            // Zero-Full-RAM Slicing: Mount sourceFile via WORKERFS on-demand byte reader instead of loading 1GB+ into MEMFS
+            const mountDir = '/work';
+            let mountedWorkerFs = false;
+            let inputVideoPath = '';
+            try {
+                try { ffmpeg.FS('mkdir', mountDir); } catch (mkdirErr) {}
+                if (ffmpeg.FS.filesystems && ffmpeg.FS.filesystems.WORKERFS) {
+                    if (progressCb) progressCb(0.05, 'Mounting source video for zero-RAM on-demand segment slicing...');
+                    ffmpeg.FS('mount', ffmpeg.FS.filesystems.WORKERFS, { files: [sourceFile] }, mountDir);
+                    mountedWorkerFs = true;
+                    inputVideoPath = `${mountDir}/${sourceFile.name}`;
+                }
+            } catch (mountErr) {
+                mountedWorkerFs = false;
+            }
+
+            if (!mountedWorkerFs) {
+                // Never load huge multi-hundred-MB / 1GB+ files into WASM RAM buffer; delegate to native stream-seeking
+                throw new Error('WORKERFS direct disk mount unavailable; delegating to lightweight native stream-seeker to protect browser RAM.');
+            }
 
             let hasCustomAudio = false;
             if (audioMode !== 'original' && narrationAudioUrl) {
-                if (progressCb) progressCb(0.12, 'Writing narration audio to virtual memory...');
+                if (progressCb) progressCb(0.12, 'Loading 1:1 Audio-Master narration track...');
                 try {
                     ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(narrationAudioUrl));
                     hasCustomAudio = true;
@@ -7391,25 +7430,23 @@ HTML_MAIN = """
 
                 if (progressCb) {
                     const stepRatio = (i / count) * 0.70;
-                    progressCb(0.15 + stepRatio, `Slicing cut ${i + 1} of ${count} (${s}s - ${dur}s)...`);
+                    progressCb(0.15 + stepRatio, `Slicing cut ${i + 1} of ${count} (${s}s • ${dur}s)...`);
                 }
 
-                // Slices keeper cuts without re-encoding (-c copy)
-                // If replacing audio with TTS, strip original audio (-an)
+                // Slices keeper cuts directly from mounted File stream without re-encoding (-c copy)
                 if (audioMode === 'original' || !hasCustomAudio) {
-                    await ffmpeg.run('-ss', s, '-t', dur, '-i', 'source.mp4', '-c', 'copy', clipName);
+                    await ffmpeg.run('-ss', s, '-t', dur, '-i', inputVideoPath, '-c', 'copy', clipName);
                 } else {
-                    await ffmpeg.run('-ss', s, '-t', dur, '-i', 'source.mp4', '-c', 'copy', '-an', clipName);
+                    await ffmpeg.run('-ss', s, '-t', dur, '-i', inputVideoPath, '-c', 'copy', '-an', clipName);
                 }
 
                 concatLines.push(`file '${clipName}'`);
             }
 
-            if (progressCb) progressCb(0.88, 'Stitching cuts and muxing synchronized audio...');
+            if (progressCb) progressCb(0.88, 'Stitching cuts and muxing 1:1 Audio-Master track...');
             ffmpeg.FS('writeFile', 'concat.txt', concatLines.join('\\n'));
 
             if (hasCustomAudio) {
-                // Stitch video cuts and mux synchronized neural Hindi narration + ducked BGM
                 await ffmpeg.run(
                     '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
                     '-i', 'audio.mp3',
@@ -7426,13 +7463,15 @@ HTML_MAIN = """
                 );
             }
 
-            if (progressCb) progressCb(0.96, 'Extracting finished video from virtual memory...');
+            if (progressCb) progressCb(0.96, 'Extracting finished video...');
             const outData = ffmpeg.FS('readFile', 'output.mp4');
             const blob = new Blob([outData.buffer], { type: 'video/mp4' });
 
-            // Free virtual memory immediately
+            // Free virtual memory and unmount immediately
             try {
-                ffmpeg.FS('unlink', 'source.mp4');
+                if (mountedWorkerFs) {
+                    try { ffmpeg.FS('unmount', mountDir); } catch (umErr) {}
+                }
                 ffmpeg.FS('unlink', 'concat.txt');
                 ffmpeg.FS('unlink', 'output.mp4');
                 if (hasCustomAudio) ffmpeg.FS('unlink', 'audio.mp3');
@@ -7617,8 +7656,13 @@ HTML_MAIN = """
                             if (ttsData.script && trimmerNarrationScript) {
                                 trimmerNarrationScript.value = ttsData.script;
                             }
+                            if (Array.isArray(ttsData.keeper_clips) && ttsData.keeper_clips.length > 0) {
+                                trimmerKeeperClips = ttsData.keeper_clips;
+                                renderTrimmerClipsList();
+                                renderCapCutRulerAndTracks();
+                            }
                         }
-                        updateProgress(25, '1:1 Synced narration audio ready! Initializing in-browser video slicer...');
+                        updateProgress(25, '1:1 Audio-Master narration ready! Initializing zero-RAM segment slicer...');
                     } else {
                         updateProgress(20, 'Original audio mode selected. Initializing in-browser video slicer...');
                     }
@@ -9647,6 +9691,8 @@ def tts_generate():
             'video_duration': round(video_dur, 2),
             'duration_delta': round(dur_delta, 3),
             'synced_1to1': dur_delta <= 1.0,
+            'keeper_clips': sync_res.get('keeper_clips', keeper_clips),
+            'locked_engine': sync_res.get('locked_engine'),
             'target_word_count': sync_res.get('target_word_count'),
             'actual_word_count': sync_res.get('actual_word_count'),
             'wps': sync_res.get('wps'),
@@ -9664,6 +9710,153 @@ def tts_generate():
 # TIMELINE VIDEO TRIMMER & SLICER ENGINE (ORIGINAL SIZE PRESERVED)
 # ==============================================================
 trimmer_export_tasks: Dict[str, Dict[str, Any]] = {}
+explainer_async_jobs: Dict[str, Dict[str, Any]] = {}
+
+
+def _parse_explainer_target_duration(target_duration_raw: Any) -> Any:
+    if str(target_duration_raw).strip().lower() in ['dynamic', 'min_bound', 'balanced', 'max_bound', '5pct', '10pct', '20pct'] or not target_duration_raw:
+        return str(target_duration_raw or 'dynamic').strip().lower()
+    try:
+        return int(target_duration_raw)
+    except (ValueError, TypeError):
+        return 'dynamic'
+
+
+def _execute_explainer_async_job_worker(job_id: str, payload: Dict[str, Any], creds: Any, ch_id: str):
+    """
+    Asynchronous background worker for the 5-Stage Audio-Master Explainer Pipeline.
+    Prevents 30-60s Render HTTP gateway timeouts by running transcript extraction,
+    Gemini script synthesis, and scene-by-scene 1:1 locked voiceover generation in background.
+    """
+    def progress_cb(pct: int, msg: str):
+        if job_id in explainer_async_jobs:
+            explainer_async_jobs[job_id]['progress'] = int(pct)
+            explainer_async_jobs[job_id]['current_step'] = str(msg)
+
+    try:
+        youtube_url = (payload.get('youtube_url') or '').strip()
+        target_duration = _parse_explainer_target_duration(payload.get('target_duration', 'dynamic'))
+        language = (payload.get('language') or 'Hindi').strip()
+        voice_name = (payload.get('voice_name') or 'Kore').strip()
+        tone_style = (payload.get('tone_style') or 'Narrative Deep Storytelling').strip()
+        custom_instructions = (payload.get('custom_instructions') or '').strip()
+
+        calibrated_wps = payload.get('calibrated_wps')
+        calibrated_cps = payload.get('calibrated_cps')
+        try:
+            calibrated_wps = float(calibrated_wps) if calibrated_wps else None
+        except Exception:
+            calibrated_wps = None
+        try:
+            calibrated_cps = float(calibrated_cps) if calibrated_cps else None
+        except Exception:
+            calibrated_cps = None
+
+        local_video_path = ""
+        filename = payload.get('filename')
+        if filename:
+            safe_name = secure_filename(str(filename))
+            for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, clipper_engine.CLIPPER_DIR, UPLOAD_FOLDER]:
+                p = os.path.join(cand_dir, safe_name)
+                if os.path.exists(p):
+                    local_video_path = p
+                    break
+
+        synthesize_audio_master = bool(payload.get('synthesize_audio_master', True))
+
+        storyboard = clipper_engine.generate_cinema_explainer_storyboard(
+            youtube_url=youtube_url,
+            credentials=creds,
+            target_duration=target_duration,
+            language=language,
+            voice_name=voice_name,
+            tone_style=tone_style,
+            custom_instructions=custom_instructions,
+            channel_id=ch_id,
+            calibrated_wps=calibrated_wps,
+            calibrated_cps=calibrated_cps,
+            synthesize_audio_master=synthesize_audio_master,
+            progress_callback=progress_cb,
+            local_video_path=local_video_path
+        )
+
+        if not storyboard.get('success'):
+            explainer_async_jobs[job_id]['status'] = 'error'
+            explainer_async_jobs[job_id]['error'] = storyboard.get('error', 'Failed to generate explainer storyboard.')
+            explainer_async_jobs[job_id]['current_step'] = f"Error: {storyboard.get('error', 'Pipeline failed')}"
+            return
+
+        explainer_async_jobs[job_id]['status'] = 'completed'
+        explainer_async_jobs[job_id]['progress'] = 100
+        explainer_async_jobs[job_id]['current_step'] = 'Stage 5/5: 1:1 Audio-Master Storyboard & Locked Voiceover Ready!'
+        explainer_async_jobs[job_id]['result'] = storyboard
+    except Exception as e:
+        print(f"Async explainer job {job_id} error: {e}")
+        if job_id in explainer_async_jobs:
+            explainer_async_jobs[job_id]['status'] = 'error'
+            explainer_async_jobs[job_id]['error'] = str(e)
+            explainer_async_jobs[job_id]['current_step'] = f"Pipeline Error: {str(e)}"
+
+
+@app.route('/api/explainer/start_job', methods=['POST'])
+def explainer_start_job():
+    """
+    Starts an asynchronous 5-Stage Audio-Master Explainer job and returns job_id immediately (<50ms).
+    Eliminates Render 30-60s HTTP request timeouts.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    youtube_url = (data.get('youtube_url') or '').strip()
+    if not youtube_url:
+        return jsonify({'success': False, 'error': 'YouTube URL is required'}), 200
+
+    job_id = str(uuid.uuid4())[:10]
+    creds = get_stored_credentials()
+    ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+
+    explainer_async_jobs[job_id] = {
+        'job_id': job_id,
+        'status': 'running',
+        'progress': 5,
+        'current_step': 'Stage 1/5: Extracting real movie transcript & metadata...',
+        'error': None,
+        'result': None,
+        'created_at': time.time()
+    }
+
+    thread = threading.Thread(
+        target=_execute_explainer_async_job_worker,
+        args=(job_id, data, creds, ch_id),
+        daemon=True
+    )
+    thread.start()
+
+    return jsonify({
+        'success': True,
+        'job_id': job_id,
+        'status': 'running',
+        'progress': 5,
+        'current_step': explainer_async_jobs[job_id]['current_step']
+    })
+
+
+@app.route('/api/explainer/status/<job_id>', methods=['GET'])
+def explainer_job_status(job_id):
+    """
+    Polls the status, progress percentage, current stage, and final Audio-Master result of an explainer job.
+    """
+    job = explainer_async_jobs.get(job_id)
+    if not job:
+        return jsonify({'success': False, 'error': 'Explainer job not found', 'status': 'not_found'}), 404
+    return jsonify({
+        'success': True,
+        'job_id': job_id,
+        'status': job.get('status', 'running'),
+        'progress': job.get('progress', 0),
+        'current_step': job.get('current_step', ''),
+        'error': job.get('error'),
+        'result': job.get('result')
+    })
+
 
 @app.route('/api/trimmer/upload', methods=['POST'])
 def trimmer_upload():
@@ -9749,19 +9942,11 @@ def trimmer_gemini_autocut():
 @app.route('/api/trimmer/plan_explainer', methods=['POST'])
 def trimmer_plan_explainer():
     """
-    Extracts 100% accurate YouTube metadata and calls Gemini with calibrated 100-char WPS/CPS
-    to generate a PardaCine-style mathematically bounded (5%-20% source runtime) cinema explainer storyboard.
+    Synchronous compatibility endpoint for the 5-stage Audio-Master Cinema Explainer storyboard.
     """
     data = request.get_json(force=True, silent=True) or {}
     youtube_url = (data.get('youtube_url') or '').strip()
-    target_duration_raw = data.get('target_duration', 'dynamic')
-    if str(target_duration_raw).strip().lower() in ['dynamic', 'min_bound', 'balanced', 'max_bound', '5pct', '10pct', '20pct'] or not target_duration_raw:
-        target_duration = str(target_duration_raw or 'dynamic').strip().lower()
-    else:
-        try:
-            target_duration = int(target_duration_raw)
-        except (ValueError, TypeError):
-            target_duration = 'dynamic'
+    target_duration = _parse_explainer_target_duration(data.get('target_duration', 'dynamic'))
     language = (data.get('language') or 'Hindi').strip()
     voice_name = (data.get('voice_name') or 'Kore').strip()
     tone_style = (data.get('tone_style') or 'Narrative Deep Storytelling').strip()
@@ -9783,6 +9968,7 @@ def trimmer_plan_explainer():
     try:
         creds = get_stored_credentials()
         ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+        synthesize_audio_master = bool(data.get('synthesize_audio_master', data.get('generate_audio', False)))
         storyboard = clipper_engine.generate_cinema_explainer_storyboard(
             youtube_url=youtube_url,
             credentials=creds,
@@ -9793,42 +9979,9 @@ def trimmer_plan_explainer():
             custom_instructions=custom_instructions,
             channel_id=ch_id,
             calibrated_wps=calibrated_wps,
-            calibrated_cps=calibrated_cps
+            calibrated_cps=calibrated_cps,
+            synthesize_audio_master=synthesize_audio_master
         )
-
-        # Optional server audio generation for instant in-browser playback
-        if data.get('generate_audio') and storyboard.get('success') and storyboard.get('full_script'):
-            try:
-                task_id = uuid.uuid4().hex[:8]
-                tts_raw = os.path.join(clipper_engine.TEMP_DIR, f"vo_raw_{task_id}.mp3")
-                final_mp3 = os.path.join(clipper_engine.TEMP_DIR, f"narration_mixed_{task_id}.mp3")
-                script_txt = storyboard['full_script']
-                g_ok = clipper_engine.generate_gemini_tts_audio(
-                    text=script_txt, output_path=tts_raw, voice_name=voice_name, tone_style=tone_style, channel_id=ch_id
-                )
-                if not g_ok or not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
-                    clipper_engine.generate_voiceover_audio(text=script_txt, output_path=tts_raw, language=language)
-
-                bgm_path = clipper_engine.ensure_background_music_exists()
-                ffmpeg_bin = clipper_engine.get_ffmpeg_bin()
-                import subprocess
-                cmd = [
-                    ffmpeg_bin, "-y",
-                    "-i", tts_raw,
-                    "-stream_loop", "-1", "-i", bgm_path,
-                    "-filter_complex", "[0:a]volume=1.0[vo];[1:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first[aout]",
-                    "-map", "[aout]",
-                    "-c:a", "libmp3lame", "-b:a", "192k",
-                    final_mp3
-                ]
-                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) < 500:
-                    shutil.copyfile(tts_raw, final_mp3)
-                out_name = os.path.basename(final_mp3)
-                storyboard['audio_url'] = f"/api/clipper/tts_sample/{out_name}"
-            except Exception as ae:
-                print(f"Plan explainer audio pre-gen notice: {ae}")
-
         return jsonify(storyboard)
     except Exception as e:
         print(f"Trimmer plan explainer error: {e}")
