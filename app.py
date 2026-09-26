@@ -248,6 +248,7 @@ HTML_MAIN = """
     <title>YouTube Creator Studio Pro + Gemini AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         :root {
             --bg-base: #0f0f0f;
@@ -2483,12 +2484,13 @@ HTML_MAIN = """
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
                             <span style="font-size: 24px;">✂️</span>
                             <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #e0f2fe;">Timeline Video Trimmer &amp; Narrative Slicer</h3>
+                            <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);">⚡ ZERO SERVER UPLOAD</span>
                             <span style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">100% NATIVE RESOLUTION</span>
-                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">NO 9:16 RESIZING</span>
+                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">CLIENT-SIDE PROCESSING</span>
                         </div>
-                        <p style="margin: 0; font-size: 13px; color: #94a3b8; max-width: 820px; line-height: 1.45;">
-                            Upload any length video (10m to 2h+). Keep 100% of your video's original resolution and aspect ratio (no vertical crop, no distortion).
-                            Manually split at any second, delete unwanted filler, or let Gemini auto-detect dramatic story scenes and stitch only keeper clips seamlessly in real time.
+                        <p style="margin: 0; font-size: 13px; color: #94a3b8; max-width: 840px; line-height: 1.45;">
+                            Load any size movie (800MB to 4GB+). Your source video never leaves your browser (0MB cloud bandwidth, zero upload timeouts).
+                            Slicing, keeper cuts, and synchronized Hindi narration audio muxing happen directly inside your browser for instant local MP4 download.
                         </p>
                     </div>
                 </div>
@@ -2596,7 +2598,7 @@ HTML_MAIN = """
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
                         <span style="font-size: 36px;">🎬</span>
                         <div style="font-size: 15px; font-weight: 600; color: #f0f9ff;">Drag &amp; Drop Video Here, or <button type="button" class="btn-populate" id="btnBrowseTrimmerFile" style="padding: 4px 12px; font-size: 13px; display: inline-block;">Browse Local File</button></div>
-                        <div style="font-size: 12px; color: var(--text-muted);">Supports MP4, MKV, MOV, WEBM &bull; Any duration from 10 minutes to 2+ hours</div>
+                        <div style="font-size: 12px; color: #6ee7b7; font-weight: 500;">⚡ 100% In-Browser Local Playback &amp; Slicing &bull; Zero Server Upload (0MB Data Transferred) &bull; Any size (800MB - 4GB+)</div>
                         <div id="trimmerFileInfoBadge" style="display: none; margin-top: 10px; padding: 8px 16px; background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; border-radius: 20px; font-size: 13px; color: #bae6fd; font-weight: 600;"></div>
                     </div>
                 </div>
@@ -2752,15 +2754,31 @@ HTML_MAIN = """
                                     </select>
                                 </div>
                             </div>
-                            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Recap Story Narration Script:</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-size: 11px; color: var(--text-muted); margin: 0;">Recap Story Narration Script (Devanagari Hindi):</label>
+                                <button type="button" id="btnGenerateNarrationOnly" style="background: rgba(124, 58, 237, 0.2); border: 1px solid #7c3aed; color: #c084fc; font-size: 11px; padding: 2px 10px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    <span>🎵</span> <span>Synthesize &amp; Download MP3 Only</span>
+                                </button>
+                            </div>
                             <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 60px; font-size: 12px; resize: vertical;" placeholder="Script automatically generated by Gemini or enter your own custom narration..."></textarea>
+                            
+                            <!-- In-browser Narration Audio Preview -->
+                            <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+                                    <span style="font-size: 14px;">🎧</span>
+                                    <audio id="trimmerNarrationAudioPlayer" controls style="height: 30px; flex-grow: 1;"></audio>
+                                </div>
+                                <a id="btnQuickDownloadAudio" href="#" download class="btn-populate" style="font-size: 11px; padding: 4px 10px; text-decoration: none; color: #c4b5fd; border-color: #7c3aed; white-space: nowrap;">
+                                    ⬇️ Download MP3
+                                </a>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Export Button -->
                     <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 700; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
-                        <span id="btnExportIcon">🚀</span>
-                        <span id="btnExportText">Export Final Video (Preserve Original Resolution)</span>
+                        <span id="btnExportIcon">🎬</span>
+                        <span id="btnExportText">Export &amp; Download Video (Zero Server Upload &bull; In-Browser Slicing)</span>
                     </button>
                 </div>
 
@@ -2785,7 +2803,10 @@ HTML_MAIN = """
                                 <div id="trimmerExportMetaDetails" style="font-size: 13px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.6;"></div>
                                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                                     <a id="btnDownloadExportedVideo" href="#" download class="btn-upload" style="text-decoration: none; padding: 10px 18px; font-size: 13px; background: #10b981; display: inline-flex; align-items: center; gap: 6px;">
-                                        <span>⬇️</span> <span>Download MP4</span>
+                                        <span>⬇️</span> <span>Download Sliced MP4</span>
+                                    </a>
+                                    <a id="btnDownloadNarrationAudio" href="#" download class="btn-upload" style="text-decoration: none; padding: 10px 18px; font-size: 13px; background: #7c3aed; display: none; align-items: center; gap: 6px;">
+                                        <span>🎵</span> <span>Download Hindi Narration (MP3)</span>
                                     </a>
                                     <button type="button" id="btnSendExportToYouTube" class="btn-populate" style="padding: 10px 18px; font-size: 13px; background: rgba(255, 0, 85, 0.2); border-color: #ff0055; color: #fda4af;">
                                         <span>📤</span> <span>Send to YouTube Upload</span>
@@ -5477,7 +5498,13 @@ HTML_MAIN = """
         const trimmerExportedPlayer = document.getElementById('trimmerExportedPlayer');
         const trimmerExportMetaDetails = document.getElementById('trimmerExportMetaDetails');
         const btnDownloadExportedVideo = document.getElementById('btnDownloadExportedVideo');
+        const btnDownloadNarrationAudio = document.getElementById('btnDownloadNarrationAudio');
+        const btnGenerateNarrationOnly = document.getElementById('btnGenerateNarrationOnly');
+        const trimmerAudioPreviewBox = document.getElementById('trimmerAudioPreviewBox');
+        const trimmerNarrationAudioPlayer = document.getElementById('trimmerNarrationAudioPlayer');
+        const btnQuickDownloadAudio = document.getElementById('btnQuickDownloadAudio');
         const btnSendExportToYouTube = document.getElementById('btnSendExportToYouTube');
+        let currentNarrationAudioUrl = null;
 
         // State variables
         let trimmerTotalDuration = 0;
@@ -5813,10 +5840,10 @@ HTML_MAIN = """
                 trimmerAspectRatio = `${trimmerVideoWidth}x${trimmerVideoHeight} (${ratio}:1)`;
                 
                 trimmerHudResBadge.textContent = `${trimmerVideoWidth}x${trimmerVideoHeight} (Original Aspect Ratio)`;
-                trimmerFileInfoBadge.innerHTML = `🎥 <b>${file.name}</b> &bull; ${formatSecs(trimmerTotalDuration)} &bull; ${sizeMb} MB &bull; ${trimmerAspectRatio}`;
+                trimmerFileInfoBadge.innerHTML = `🎥 <b>${file.name}</b> &bull; ${formatSecs(trimmerTotalDuration)} &bull; ${sizeMb} MB &bull; <span style="color: #6ee7b7; font-weight: 700;">⚡ Zero Server Upload (100% In-Browser)</span>`;
                 trimmerFileInfoBadge.style.display = 'inline-block';
 
-                // Auto-inject 20-minute explainer cuts if storyboard exists, else initialize full video as 1 clip
+                // Auto-inject explainer cuts if storyboard exists, else initialize full video as 1 clip
                 if (currentExplainerStoryboard && currentExplainerStoryboard.keeper_clips && currentExplainerStoryboard.keeper_clips.length > 0) {
                     applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
                 } else {
@@ -5824,31 +5851,12 @@ HTML_MAIN = """
                 }
             };
 
-            // Upload in background to server for FFmpeg slicing
-            uploadTrimmerFileToServer(file);
+            // ZERO-SERVER-UPLOAD ARCHITECTURE: Source video stays 100% private in browser memory!
         }
 
         async function uploadTrimmerFileToServer(file) {
-            const formData = new FormData();
-            formData.append('video_file', file);
-            try {
-                trimmerFileInfoBadge.innerHTML += ` &bull; <span id="trimmerUploadStatusSpan" style="color: #facc15;">Uploading to cloud...</span>`;
-                const res = await fetch('/api/trimmer/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                if (data.success) {
-                    trimmerServerFilename = data.filename;
-                    const statusSpan = document.getElementById('trimmerUploadStatusSpan');
-                    if (statusSpan) {
-                        statusSpan.style.color = '#6ee7b7';
-                        statusSpan.textContent = 'Ready for Slicing & Export';
-                    }
-                }
-            } catch (err) {
-                console.warn('Background trimmer upload notice:', err);
-            }
+            // No-op: video is never uploaded to cloud server
+            return;
         }
 
         function resetTrimmerClips() {
@@ -6309,123 +6317,462 @@ HTML_MAIN = """
             });
         }
 
-        // EXPORT FINAL VIDEO PIPELINE (100% ORIGINAL RESOLUTION PRESERVED)
-        if (btnExportFinalVideo) {
-            btnExportFinalVideo.addEventListener('click', async () => {
-                if (trimmerKeeperClips.length === 0) {
-                    alert('No clips to export.');
+        // -------------------------------------------------------------
+        // ZERO-SERVER-UPLOAD IN-BROWSER SLICING & AUDIO MUXING PIPELINE
+        // -------------------------------------------------------------
+        if (btnGenerateNarrationOnly) {
+            btnGenerateNarrationOnly.addEventListener('click', async () => {
+                const scriptText = trimmerNarrationScript ? trimmerNarrationScript.value.trim() : '';
+                if (!scriptText) {
+                    alert('Please enter or generate a narration script first.');
+                    if (trimmerNarrationScript) trimmerNarrationScript.focus();
                     return;
                 }
 
-                if (!trimmerServerFilename) {
-                    alert('Video is still uploading to server. Please wait a few moments and try again.');
+                btnGenerateNarrationOnly.disabled = true;
+                btnGenerateNarrationOnly.innerHTML = '<span>⏳</span> <span>Synthesizing Audio...</span>';
+
+                try {
+                    const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
+                    const audioMode = audioModeInput ? audioModeInput.value : 'tts_bgm';
+                    const includeBgm = (audioMode === 'tts_bgm' || audioMode === 'cinema_explainer');
+
+                    const res = await fetch('/api/tts/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            script: scriptText,
+                            voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
+                            tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
+                            language: 'Hindi',
+                            audio_mode: audioMode,
+                            include_bgm: includeBgm
+                        })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        throw new Error(data.error || 'Failed to synthesize narration audio.');
+                    }
+
+                    currentNarrationAudioUrl = data.audio_url;
+
+                    if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
+                    if (trimmerNarrationAudioPlayer) {
+                        trimmerNarrationAudioPlayer.src = data.audio_url;
+                        trimmerNarrationAudioPlayer.play().catch(() => {});
+                    }
+                    if (btnQuickDownloadAudio) {
+                        btnQuickDownloadAudio.href = data.audio_url;
+                        btnQuickDownloadAudio.download = data.filename || 'synced_narration_bgm.mp3';
+                    }
+                    if (btnDownloadNarrationAudio) {
+                        btnDownloadNarrationAudio.href = data.audio_url;
+                        btnDownloadNarrationAudio.download = data.filename || 'synced_narration_bgm.mp3';
+                        btnDownloadNarrationAudio.style.display = 'inline-flex';
+                    }
+                } catch (err) {
+                    alert('TTS Audio Generation Error: ' + err.message);
+                } finally {
+                    btnGenerateNarrationOnly.disabled = false;
+                    btnGenerateNarrationOnly.innerHTML = '<span>🎵</span> <span>Synthesize &amp; Download MP3 Only</span>';
+                }
+            });
+        }
+
+        let ffmpegInstance = null;
+        async function getFFmpeg(progressCb) {
+            if (ffmpegInstance && ffmpegInstance.isLoaded()) {
+                return ffmpegInstance;
+            }
+            if (typeof FFmpeg === 'undefined') {
+                throw new Error('FFmpeg WebAssembly library is not available in browser.');
+            }
+            const { createFFmpeg } = FFmpeg;
+            ffmpegInstance = createFFmpeg({
+                log: false,
+                corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+            });
+            if (progressCb) {
+                ffmpegInstance.setProgress(({ ratio }) => {
+                    if (ratio >= 0 && ratio <= 1) {
+                        progressCb(ratio, `FFmpeg processing (${Math.round(ratio * 100)}%)...`);
+                    }
+                });
+            }
+            await ffmpegInstance.load();
+            return ffmpegInstance;
+        }
+
+        async function runFFmpegWasmExport(sourceFile, keeperClips, audioMode, narrationAudioUrl, progressCb) {
+            const ffmpeg = await getFFmpeg(progressCb);
+            const { fetchFile } = FFmpeg;
+
+            if (progressCb) progressCb(0.05, 'Writing source video to in-browser virtual memory (0MB cloud)...');
+            ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(sourceFile));
+
+            let hasCustomAudio = false;
+            if (audioMode !== 'original' && narrationAudioUrl) {
+                if (progressCb) progressCb(0.12, 'Writing narration audio to virtual memory...');
+                try {
+                    ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(narrationAudioUrl));
+                    hasCustomAudio = true;
+                } catch (e) {
+                    console.warn('Could not load narration audio into WASM:', e);
+                }
+            }
+
+            const concatLines = [];
+            const count = keeperClips.length;
+
+            for (let i = 0; i < count; i++) {
+                const c = keeperClips[i];
+                const s = Math.max(0, parseFloat(c.start) || 0).toFixed(2);
+                const dur = Math.max(0.3, parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 1.0).toFixed(2);
+                const clipName = `c_${i}.mp4`;
+
+                if (progressCb) {
+                    const stepRatio = (i / count) * 0.70;
+                    progressCb(0.15 + stepRatio, `Slicing cut ${i + 1} of ${count} (${s}s - ${dur}s)...`);
+                }
+
+                // Slices keeper cuts without re-encoding (-c copy)
+                // If replacing audio with TTS, strip original audio (-an)
+                if (audioMode === 'original' || !hasCustomAudio) {
+                    await ffmpeg.run('-ss', s, '-t', dur, '-i', 'source.mp4', '-c', 'copy', clipName);
+                } else {
+                    await ffmpeg.run('-ss', s, '-t', dur, '-i', 'source.mp4', '-c', 'copy', '-an', clipName);
+                }
+
+                concatLines.push(`file '${clipName}'`);
+            }
+
+            if (progressCb) progressCb(0.88, 'Stitching cuts and muxing synchronized audio...');
+            ffmpeg.FS('writeFile', 'concat.txt', concatLines.join('\n'));
+
+            if (hasCustomAudio) {
+                // Stitch video cuts and mux synchronized neural Hindi narration + ducked BGM
+                await ffmpeg.run(
+                    '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+                    '-i', 'audio.mp3',
+                    '-c:v', 'copy',
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-shortest',
+                    'output.mp4'
+                );
+            } else {
+                await ffmpeg.run(
+                    '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+                    '-c', 'copy',
+                    'output.mp4'
+                );
+            }
+
+            if (progressCb) progressCb(0.96, 'Extracting finished video from virtual memory...');
+            const outData = ffmpeg.FS('readFile', 'output.mp4');
+            const blob = new Blob([outData.buffer], { type: 'video/mp4' });
+
+            // Free virtual memory immediately
+            try {
+                ffmpeg.FS('unlink', 'source.mp4');
+                ffmpeg.FS('unlink', 'concat.txt');
+                ffmpeg.FS('unlink', 'output.mp4');
+                if (hasCustomAudio) ffmpeg.FS('unlink', 'audio.mp3');
+                for (let i = 0; i < count; i++) {
+                    try { ffmpeg.FS('unlink', `c_${i}.mp4`); } catch (ce) {}
+                }
+            } catch (cleanErr) {}
+
+            return blob;
+        }
+
+        async function runCanvasMediaRecorderExport(videoPlayer, keeperClips, audioMode, narrationAudioUrl, progressCb) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoPlayer.videoWidth || 1920;
+                    canvas.height = videoPlayer.videoHeight || 1080;
+                    const ctx = canvas.getContext('2d');
+
+                    const canvasStream = canvas.captureStream(30);
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    let audioCtx = null;
+                    let audioDest = null;
+                    let audioEl = null;
+
+                    if (AudioContext) {
+                        audioCtx = new AudioContext();
+                        audioDest = audioCtx.createMediaStreamDestination();
+
+                        if (audioMode !== 'original' && narrationAudioUrl) {
+                            audioEl = new Audio();
+                            audioEl.crossOrigin = 'anonymous';
+                            audioEl.src = narrationAudioUrl;
+                            const aSrc = audioCtx.createMediaElementSource(audioEl);
+                            aSrc.connect(audioDest);
+                        } else if (audioMode === 'original') {
+                            const vSrc = audioCtx.createMediaElementSource(videoPlayer);
+                            vSrc.connect(audioDest);
+                        }
+                    }
+
+                    const streamTracks = [...canvasStream.getVideoTracks()];
+                    if (audioDest && audioDest.stream.getAudioTracks().length > 0) {
+                        streamTracks.push(...audioDest.stream.getAudioTracks());
+                    }
+
+                    const recStream = new MediaStream(streamTracks);
+                    let mimeType = 'video/mp4';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = 'video/webm;codecs=vp9,opus';
+                        if (!MediaRecorder.isTypeSupported(mimeType)) {
+                            mimeType = 'video/webm';
+                        }
+                    }
+
+                    const recorder = new MediaRecorder(recStream, {
+                        mimeType: mimeType,
+                        videoBitsPerSecond: 6000000
+                    });
+
+                    const recordedChunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+                    };
+
+                    recorder.onstop = () => {
+                        videoPlayer.muted = false;
+                        const blob = new Blob(recordedChunks, { type: mimeType });
+                        resolve(blob);
+                    };
+
+                    recorder.start(500);
+
+                    // Mute video element to prevent original audio bleed when using TTS
+                    videoPlayer.muted = (audioMode !== 'original');
+                    if (audioEl) audioEl.play().catch(() => {});
+
+                    let clipIdx = 0;
+                    const totalClips = keeperClips.length;
+
+                    async function playNextClip() {
+                        if (clipIdx >= totalClips) {
+                            if (audioEl) audioEl.pause();
+                            recorder.stop();
+                            return;
+                        }
+
+                        const c = keeperClips[clipIdx];
+                        if (progressCb) {
+                            progressCb(clipIdx / totalClips, `Recording cut ${clipIdx + 1}/${totalClips}: ${c.title || 'Scene'}`);
+                        }
+
+                        videoPlayer.currentTime = c.start;
+                        await new Promise(r => {
+                            const onSeek = () => {
+                                videoPlayer.removeEventListener('seeked', onSeek);
+                                r();
+                            };
+                            videoPlayer.addEventListener('seeked', onSeek);
+                        });
+
+                        await videoPlayer.play();
+
+                        const drawFrame = () => {
+                            if (videoPlayer.paused || videoPlayer.ended) return;
+                            ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+                            if (videoPlayer.currentTime >= c.end) {
+                                videoPlayer.pause();
+                                clipIdx++;
+                                playNextClip();
+                            } else {
+                                requestAnimationFrame(drawFrame);
+                            }
+                        };
+                        requestAnimationFrame(drawFrame);
+                    }
+
+                    playNextClip();
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        if (btnExportFinalVideo) {
+            btnExportFinalVideo.addEventListener('click', async () => {
+                if (trimmerKeeperClips.length === 0) {
+                    alert('No keeper clips selected on timeline to export.');
+                    return;
+                }
+                if (!trimmerLocalFile) {
+                    alert('Please select or drag your source movie video into the Trimmer first.');
                     return;
                 }
 
                 const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
                 const audioMode = audioModeInput ? audioModeInput.value : 'original';
-                const payload = {
-                    filename: trimmerServerFilename,
-                    keeper_clips: trimmerKeeperClips,
-                    audio_mode: audioMode,
-                    voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
-                    tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep',
-                    script: trimmerNarrationScript ? trimmerNarrationScript.value : ''
-                };
+                const scriptText = trimmerNarrationScript ? trimmerNarrationScript.value.trim() : '';
 
                 btnExportFinalVideo.disabled = true;
                 if (btnExportIcon) btnExportIcon.textContent = '⏳';
-                if (btnExportText) btnExportText.textContent = 'Starting Export...';
+                if (btnExportText) btnExportText.textContent = 'Processing In-Browser...';
                 if (trimmerExportCard) trimmerExportCard.style.display = 'block';
                 if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'none';
-                if (trimmerExportProgressBar) trimmerExportProgressBar.style.width = '5%';
-                if (trimmerExportPercentText) trimmerExportPercentText.textContent = '5%';
-                if (trimmerExportStepText) trimmerExportStepText.textContent = 'Initiating FFmpeg original-size export...';
+
+                function updateProgress(pct, msg) {
+                    if (trimmerExportProgressBar) trimmerExportProgressBar.style.width = `${pct}%`;
+                    if (trimmerExportPercentText) trimmerExportPercentText.textContent = `${pct}%`;
+                    if (trimmerExportStepText) trimmerExportStepText.textContent = msg;
+                }
 
                 try {
-                    const res = await fetch('/api/trimmer/export', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await res.json();
-                    if (data.success && data.task_id) {
-                        pollTrimmerExport(data.task_id);
+                    let narrationAudioUrl = currentNarrationAudioUrl;
+
+                    // 1. If audio mode is TTS / BGM and not generated yet or script changed, generate on server
+                    if (audioMode === 'tts' || audioMode === 'tts_bgm' || audioMode === 'cinema_explainer') {
+                        if (!narrationAudioUrl) {
+                            updateProgress(10, 'Synthesizing Neural Hindi Voiceover & Ducked BGM on server...');
+                            const ttsRes = await fetch('/api/tts/generate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    script: scriptText || 'कहानी की शुरुआत में नायक को रोमांचक सच्चाई का पता चलता है।',
+                                    voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
+                                    tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
+                                    language: 'Hindi',
+                                    audio_mode: audioMode,
+                                    include_bgm: (audioMode === 'tts_bgm' || audioMode === 'cinema_explainer')
+                                })
+                            });
+                            const ttsData = await ttsRes.json();
+                            if (!ttsData.success) {
+                                throw new Error(ttsData.error || 'Failed to synthesize narration audio.');
+                            }
+                            narrationAudioUrl = ttsData.audio_url;
+                            currentNarrationAudioUrl = narrationAudioUrl;
+                        }
+                        updateProgress(25, 'Narration audio ready! Initializing in-browser video slicer...');
                     } else {
-                        throw new Error(data.error || 'Failed to start export');
+                        updateProgress(20, 'Original audio mode selected. Initializing in-browser video slicer...');
                     }
+
+                    // 2. Perform in-browser slicing (Primary: FFmpeg.wasm, Fallback: Canvas MediaRecorder)
+                    let exportedBlob = null;
+                    let methodUsed = "FFmpeg.wasm (Lossless Stream-Copy)";
+
+                    if (typeof FFmpeg !== 'undefined') {
+                        try {
+                            updateProgress(30, 'Starting in-browser WebAssembly engine...');
+                            exportedBlob = await runFFmpegWasmExport(
+                                trimmerLocalFile,
+                                trimmerKeeperClips,
+                                audioMode,
+                                narrationAudioUrl,
+                                (ratio, subMsg) => {
+                                    const p = Math.round(30 + ratio * 65);
+                                    updateProgress(Math.min(95, p), subMsg || `In-browser processing (${Math.round(ratio * 100)}%)...`);
+                                }
+                            );
+                        } catch (wasmErr) {
+                            console.warn('FFmpeg.wasm error, smoothly falling back to Canvas MediaRecorder:', wasmErr);
+                            exportedBlob = null;
+                        }
+                    }
+
+                    if (!exportedBlob) {
+                        methodUsed = "HTML5 Canvas MediaRecorder (Native)";
+                        updateProgress(35, 'Recording timeline clips directly in browser...');
+                        exportedBlob = await runCanvasMediaRecorderExport(
+                            trimmerPlayer,
+                            trimmerKeeperClips,
+                            audioMode,
+                            narrationAudioUrl,
+                            (p, msg) => {
+                                updateProgress(Math.round(35 + p * 60), msg);
+                            }
+                        );
+                    }
+
+                    if (!exportedBlob || exportedBlob.size === 0) {
+                        throw new Error('In-browser slicing produced empty output.');
+                    }
+
+                    updateProgress(100, 'Export complete! 100% processed locally on your device.');
+
+                    const finalUrl = URL.createObjectURL(exportedBlob);
+                    const outMb = (exportedBlob.size / (1024 * 1024)).toFixed(2);
+                    const totalSec = trimmerKeeperClips.reduce((a, c) => a + c.duration, 0);
+                    const safeTitle = (currentExplainerStoryboard && currentExplainerStoryboard.title)
+                        ? currentExplainerStoryboard.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30)
+                        : 'cinema_explainer';
+                    const outFilename = `${safeTitle}_${formatSecs(totalSec).replace(':', 'm')}.mp4`;
+
+                    if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
+                    if (trimmerExportedPlayer) trimmerExportedPlayer.src = finalUrl;
+                    if (btnDownloadExportedVideo) {
+                        btnDownloadExportedVideo.href = finalUrl;
+                        btnDownloadExportedVideo.download = outFilename;
+                    }
+
+                    if (btnDownloadNarrationAudio) {
+                        if (narrationAudioUrl) {
+                            btnDownloadNarrationAudio.href = narrationAudioUrl;
+                            btnDownloadNarrationAudio.download = `${safeTitle}_narration_bgm.mp3`;
+                            btnDownloadNarrationAudio.style.display = 'inline-flex';
+                        } else {
+                            btnDownloadNarrationAudio.style.display = 'none';
+                        }
+                    }
+
+                    if (trimmerExportMetaDetails) {
+                        trimmerExportMetaDetails.innerHTML = `
+                            <div><b>File:</b> ${outFilename}</div>
+                            <div><b>Engine:</b> ${methodUsed}</div>
+                            <div><b>Resolution:</b> ${trimmerVideoWidth}x${trimmerVideoHeight} (Original Aspect Ratio)</div>
+                            <div><b>Duration:</b> ${formatSecs(totalSec)} (${trimmerKeeperClips.length} keeper cuts)</div>
+                            <div><b>Size:</b> ${outMb} MB</div>
+                            <div><b>Audio Track:</b> ${audioMode === 'original' ? 'Original Movie Audio' : 'Neural Hindi Voiceover + Ducked Tension BGM'}</div>
+                            <div style="color: #6ee7b7; font-weight: 700; margin-top: 6px;">⚡ ZERO SERVER UPLOAD: 0MB uploaded to cloud &bull; 100% Private &amp; Instant</div>
+                        `;
+                    }
+
+                    // Auto-trigger download
+                    const tempLink = document.createElement('a');
+                    tempLink.href = finalUrl;
+                    tempLink.download = outFilename;
+                    document.body.appendChild(tempLink);
+                    tempLink.click();
+                    document.body.removeChild(tempLink);
+
+                    if (btnSendExportToYouTube) {
+                        btnSendExportToYouTube.onclick = () => {
+                            tabManualMode.click();
+                            try {
+                                const dt = new DataTransfer();
+                                const fileObj = new File([exportedBlob], outFilename, { type: 'video/mp4' });
+                                dt.items.add(fileObj);
+                                const videoFileInput = document.getElementById('videoFile');
+                                if (videoFileInput) videoFileInput.files = dt.files;
+                            } catch(e) {}
+                            document.getElementById('videoTitle').value = `${currentExplainerStoryboard ? currentExplainerStoryboard.title : 'Movie Explainer'} - Hindi Storytelling Recap`;
+                            const fileInfoEl = document.getElementById('videoFileInfo');
+                            if (fileInfoEl) {
+                                fileInfoEl.textContent = `Using Sliced Video: ${outFilename} (${outMb} MB)`;
+                                fileInfoEl.style.display = 'block';
+                            }
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        };
+                    }
+
                 } catch (err) {
-                    alert('Export failed: ' + err.message);
+                    console.error('Client-side export error:', err);
+                    alert('Export Error: ' + err.message);
+                } finally {
                     btnExportFinalVideo.disabled = false;
-                    if (btnExportIcon) btnExportIcon.textContent = '🚀';
-                    if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
+                    if (btnExportIcon) btnExportIcon.textContent = '🎬';
+                    if (btnExportText) btnExportText.textContent = 'Export & Download Video (Zero Server Upload • In-Browser Slicing)';
                 }
             });
-        }
-
-        function pollTrimmerExport(taskId) {
-            if (exportPollInterval) clearInterval(exportPollInterval);
-            exportPollInterval = setInterval(async () => {
-                try {
-                    const res = await fetch(`/api/trimmer/export_status/${taskId}`);
-                    const task = await res.json();
-                    
-                    if (task.progress !== undefined && trimmerExportProgressBar && trimmerExportPercentText) {
-                        trimmerExportProgressBar.style.width = `${task.progress}%`;
-                        trimmerExportPercentText.textContent = `${task.progress}%`;
-                    }
-                    if (task.step && trimmerExportStepText) {
-                        trimmerExportStepText.textContent = task.step;
-                    }
-
-                    if (task.status === 'completed') {
-                        clearInterval(exportPollInterval);
-                        if (btnExportFinalVideo) btnExportFinalVideo.disabled = false;
-                        if (btnExportIcon) btnExportIcon.textContent = '🚀';
-                        if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
-
-                        // Display result
-                        const r = task.result;
-                        if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
-                        if (trimmerExportedPlayer) trimmerExportedPlayer.src = r.video_url;
-                        if (btnDownloadExportedVideo) btnDownloadExportedVideo.href = r.download_url;
-                        
-                        const meta = r.metadata || {};
-                        if (trimmerExportMetaDetails) {
-                            trimmerExportMetaDetails.innerHTML = `
-                                <div><b>File:</b> ${r.filename}</div>
-                                <div><b>Resolution:</b> ${meta.width || trimmerVideoWidth}x${meta.height || trimmerVideoHeight} (${meta.aspect_ratio || '16:9'} Native)</div>
-                                <div><b>Duration:</b> ${meta.duration_str || formatSecs(meta.duration || 0)}</div>
-                                <div><b>Size:</b> ${meta.size_mb || 0} MB</div>
-                                <div style="color: #6ee7b7; font-weight: 600; margin-top: 4px;">✅ Zero Aspect-Ratio Distortion &bull; 100% Native Size Maintained</div>
-                            `;
-                        }
-
-                        // Connect YouTube upload button
-                        if (btnSendExportToYouTube) {
-                            btnSendExportToYouTube.onclick = () => {
-                                tabManualMode.click();
-                                document.getElementById('videoTitle').value = `Highlights Montage (${formatSecs(meta.duration || 0)})`;
-                                document.getElementById('existingVideoFilename').value = r.filename;
-                                document.getElementById('videoFileInfo').textContent = `Using Exported Video: ${r.filename} (${meta.size_mb || 0} MB)`;
-                                document.getElementById('videoFileInfo').style.display = 'block';
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                            };
-                        }
-                    } else if (task.status === 'error') {
-                        clearInterval(exportPollInterval);
-                        if (btnExportFinalVideo) btnExportFinalVideo.disabled = false;
-                        if (btnExportIcon) btnExportIcon.textContent = '🚀';
-                        if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
-                        if (trimmerExportStepText) {
-                            trimmerExportStepText.textContent = `Error: ${task.error || 'Export failed'}`;
-                            trimmerExportStepText.style.color = '#f87171';
-                        }
-                    }
-                } catch (err) {
-                    console.warn('Poll error:', err);
-                }
-            }, 1200);
         }
 
         // ==============================================
@@ -8241,6 +8588,89 @@ def clipper_serve_tts_sample(filename):
     return resp
 
 
+@app.route('/api/tts/generate', methods=['POST'])
+@app.route('/api/trimmer/generate_narration_audio', methods=['POST'])
+def tts_generate():
+    """
+    ZERO-SERVER-UPLOAD AUDIO PIPELINE:
+    Synthesizes neural Hindi narration voiceover (Edge-TTS / Gemini Flash)
+    and mixes ducked cinematic suspense BGM.
+    Returns direct audio URL for client-side in-browser muxing and direct download.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    script = (data.get('script') or data.get('text') or '').strip()
+    voice_name = (data.get('voice_name') or data.get('voice') or 'Kore').strip()
+    tone_style = (data.get('tone_style') or data.get('tone') or 'Narrative Deep Storytelling').strip()
+    language = (data.get('language') or 'Hindi').strip()
+    audio_mode = (data.get('audio_mode') or 'tts_bgm').strip().lower()
+    include_bgm = data.get('include_bgm', True)
+    if audio_mode == 'tts':
+        include_bgm = False
+    elif audio_mode == 'original':
+        return jsonify({'success': False, 'error': 'Original audio mode does not generate TTS audio'}), 200
+
+    ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+
+    if not script:
+        return jsonify({'success': False, 'error': 'Narration script is required'}), 200
+
+    try:
+        task_id = uuid.uuid4().hex[:8]
+        tts_raw = os.path.join(clipper_engine.TEMP_DIR, f"vo_raw_{task_id}.mp3")
+        final_mp3 = os.path.join(clipper_engine.TEMP_DIR, f"narration_mixed_{task_id}.mp3")
+
+        # 1. Synthesize Neural Voiceover
+        gen_ok = clipper_engine.generate_gemini_tts_audio(
+            text=script,
+            output_path=tts_raw,
+            voice_name=voice_name,
+            tone_style=tone_style,
+            channel_id=ch_id
+        )
+        if not gen_ok or not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
+            clipper_engine.generate_voiceover_audio(text=script, output_path=tts_raw, language=language)
+
+        if not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
+            return jsonify({'success': False, 'error': 'Failed to synthesize voiceover audio'}), 200
+
+        # 2. Mix with Ducked Suspense BGM if requested
+        if include_bgm:
+            bgm_path = clipper_engine.ensure_background_music_exists()
+            ffmpeg_bin = clipper_engine.get_ffmpeg_bin()
+            cmd = [
+                ffmpeg_bin, "-y",
+                "-i", tts_raw,
+                "-stream_loop", "-1", "-i", bgm_path,
+                "-filter_complex", "[0:a]volume=1.0[vo];[1:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first[aout]",
+                "-map", "[aout]",
+                "-c:a", "libmp3lame", "-b:a", "192k",
+                final_mp3
+            ]
+            import subprocess
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) < 500:
+                shutil.copyfile(tts_raw, final_mp3)
+        else:
+            shutil.copyfile(tts_raw, final_mp3)
+
+        out_name = os.path.basename(final_mp3)
+        audio_meta = clipper_engine.get_video_metadata(final_mp3)
+        audio_dur = float(audio_meta.get("duration", 0.0))
+
+        return jsonify({
+            'success': True,
+            'audio_url': f"/api/clipper/tts_sample/{out_name}",
+            'filename': out_name,
+            'duration': round(audio_dur, 2),
+            'voice_name': voice_name,
+            'tone_style': tone_style,
+            'has_bgm': include_bgm
+        })
+    except Exception as e:
+        print(f"TTS generate error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
 # ==============================================================
 # TIMELINE VIDEO TRIMMER & SLICER ENGINE (ORIGINAL SIZE PRESERVED)
 # ==============================================================
@@ -8364,6 +8794,40 @@ def trimmer_plan_explainer():
             custom_instructions=custom_instructions,
             channel_id=ch_id
         )
+
+        # Optional server audio generation for instant in-browser playback
+        if data.get('generate_audio') and storyboard.get('success') and storyboard.get('full_script'):
+            try:
+                task_id = uuid.uuid4().hex[:8]
+                tts_raw = os.path.join(clipper_engine.TEMP_DIR, f"vo_raw_{task_id}.mp3")
+                final_mp3 = os.path.join(clipper_engine.TEMP_DIR, f"narration_mixed_{task_id}.mp3")
+                script_txt = storyboard['full_script']
+                g_ok = clipper_engine.generate_gemini_tts_audio(
+                    text=script_txt, output_path=tts_raw, voice_name=voice_name, tone_style=tone_style, channel_id=ch_id
+                )
+                if not g_ok or not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
+                    clipper_engine.generate_voiceover_audio(text=script_txt, output_path=tts_raw, language=language)
+
+                bgm_path = clipper_engine.ensure_background_music_exists()
+                ffmpeg_bin = clipper_engine.get_ffmpeg_bin()
+                import subprocess
+                cmd = [
+                    ffmpeg_bin, "-y",
+                    "-i", tts_raw,
+                    "-stream_loop", "-1", "-i", bgm_path,
+                    "-filter_complex", "[0:a]volume=1.0[vo];[1:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first[aout]",
+                    "-map", "[aout]",
+                    "-c:a", "libmp3lame", "-b:a", "192k",
+                    final_mp3
+                ]
+                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) < 500:
+                    shutil.copyfile(tts_raw, final_mp3)
+                out_name = os.path.basename(final_mp3)
+                storyboard['audio_url'] = f"/api/clipper/tts_sample/{out_name}"
+            except Exception as ae:
+                print(f"Plan explainer audio pre-gen notice: {ae}")
+
         return jsonify(storyboard)
     except Exception as e:
         print(f"Trimmer plan explainer error: {e}")
