@@ -2850,10 +2850,11 @@ def get_video_metadata(video_path: str) -> Dict[str, Any]:
 # =====================================================================
 
 def extract_real_movie_transcript_and_story(
-    youtube_url: str,
+    youtube_url: str = "",
     video_id: Optional[str] = None,
     yt_info: Optional[Dict[str, Any]] = None,
-    local_video_path: Optional[str] = None
+    local_video_path: Optional[str] = None,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     STAGE 2: Multi-Tier Real Story & Transcript Extraction.
@@ -3227,7 +3228,8 @@ def execute_audio_master_1to1_pipeline(
     include_bgm: bool = True,
     engine_lock: str = "edge_neural",
     channel_id: Optional[str] = None,
-    progress_callback: Optional[Any] = None
+    progress_callback: Optional[Any] = None,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     STAGE 3 & 4: AUDIO-MASTER 1:1 DURATION SYNC (THE CORE FIX).
@@ -3477,7 +3479,8 @@ def synthesize_scene_by_scene_synced_audio(
     cps: Optional[float] = None,
     include_bgm: bool = False,
     channel_id: Optional[str] = None,
-    engine_lock: str = "edge_neural"
+    engine_lock: str = "edge_neural",
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Audio-Master 1:1 wrapper for `/api/tts/generate` and timeline exports:
@@ -3554,7 +3557,8 @@ def analyze_video_timeline_autocut(
     custom_prompt: str = "",
     channel_id: Optional[str] = None,
     calibrated_wps: Optional[float] = None,
-    calibrated_cps: Optional[float] = None
+    calibrated_cps: Optional[float] = None,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Analyzes local video timeline and generates 12-16 PardaCine scene beats within 5%-20% runtime bounds.
@@ -3696,7 +3700,7 @@ JSON Format:
 
 
 def generate_cinema_explainer_storyboard(
-    youtube_url: str,
+    youtube_url: Optional[str] = None,
     credentials=None,
     target_duration: Any = "dynamic",
     language: str = "Hindi",
@@ -3707,7 +3711,11 @@ def generate_cinema_explainer_storyboard(
     calibrated_wps: Optional[float] = None,
     calibrated_cps: Optional[float] = None,
     synthesize_audio_master: bool = True,
-    progress_callback: Optional[Any] = None
+    progress_callback: Optional[Any] = None,
+    local_video_path: Optional[str] = None,
+    video_duration: Optional[float] = None,
+    wps: float = 2.3,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     5-STAGE AUDIO-MASTER MOVIE EXPLAINER ENGINE:
@@ -3725,27 +3733,50 @@ def generate_cinema_explainer_storyboard(
                 pass
         logger.info(f"[5-Stage Explainer] [{pct}%] {msg}")
 
-    notify(5, f"Stage 2: Extracting real movie metadata & subtitles for {youtube_url}...")
-    try:
-        yt_info = extract_youtube_info(youtube_url, credentials=credentials)
-    except Exception as e:
-        logger.warning(f"Error in extract_youtube_info: {e}, using baseline metadata")
-        vid = extract_video_id(youtube_url) or "video"
+    youtube_url_clean = (youtube_url or "").strip()
+    local_meta: Dict[str, Any] = {}
+    if local_video_path and os.path.exists(str(local_video_path)):
+        try:
+            local_meta = get_video_metadata(str(local_video_path))
+        except Exception as lme:
+            logger.warning(f"Local video metadata probe notice: {lme}")
+
+    notify(5, f"Stage 2: Extracting real movie metadata & subtitles for {youtube_url_clean or local_video_path or 'video'}...")
+    yt_info: Dict[str, Any] = {}
+    if youtube_url_clean:
+        try:
+            yt_info = extract_youtube_info(youtube_url_clean, credentials=credentials)
+        except Exception as e:
+            logger.warning(f"Error in extract_youtube_info: {e}, using baseline metadata")
+            vid = extract_video_id(youtube_url_clean) or "video"
+            yt_info = {
+                "url": youtube_url_clean,
+                "title": f"Movie Storyline ({vid})",
+                "duration": int(video_duration or local_meta.get("duration") or 7200),
+                "duration_str": "02:00:00",
+                "description": "",
+                "chapters": [],
+                "thumbnail": f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if len(vid) == 11 else "",
+                "channel": "YouTube"
+            }
+    else:
+        fallback_dur = int(video_duration or local_meta.get("duration") or 7200)
+        local_title = os.path.splitext(os.path.basename(str(local_video_path)))[0] if local_video_path else "Movie Storyline"
         yt_info = {
-            "url": youtube_url,
-            "title": f"Movie Storyline ({vid})",
-            "duration": 7200,
-            "duration_str": "02:00:00",
-            "description": "",
+            "url": "",
+            "title": local_title,
+            "duration": fallback_dur,
+            "duration_str": format_seconds_to_timestamp(fallback_dur),
+            "description": custom_instructions or "",
             "chapters": [],
-            "thumbnail": f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if len(vid) == 11 else "",
-            "channel": "YouTube"
+            "thumbnail": "",
+            "channel": "Local Cinema"
         }
 
-    title = yt_info.get("title", "Movie Title")
-    duration = int(yt_info.get("duration") or 7200)
+    title = yt_info.get("title") or "Movie Title"
+    duration = int(video_duration or yt_info.get("duration") or local_meta.get("duration") or 7200)
     if duration <= 60:
-        duration = 7200
+        duration = int(local_meta.get("duration") or 7200) if int(local_meta.get("duration") or 0) > 60 else 7200
     duration_str = yt_info.get("duration_str") or format_seconds_to_timestamp(duration)
     description = yt_info.get("description", "")
     chapters = yt_info.get("chapters", [])
@@ -3754,20 +3785,22 @@ def generate_cinema_explainer_storyboard(
 
     # Stage 2: Multi-Tier Real Transcript & Story Extraction
     story_data = extract_real_movie_transcript_and_story(
-        youtube_url=youtube_url,
-        video_id=extract_video_id(youtube_url),
-        yt_info=yt_info
+        youtube_url=youtube_url_clean,
+        video_id=extract_video_id(youtube_url_clean) if youtube_url_clean else None,
+        yt_info=yt_info,
+        local_video_path=local_video_path
     )
     transcript_digest = story_data.get("transcript_digest", "")
     transcript_source = story_data.get("transcript_source", "metadata_synopsis")
 
     # Stage 1: Voice Speed Calibration
+    base_wps = float(calibrated_wps or wps or 2.35)
     if calibrated_wps and float(calibrated_wps) > 0 and calibrated_cps and float(calibrated_cps) > 0:
         wps = float(calibrated_wps)
         cps = float(calibrated_cps)
     else:
         calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language)
-        wps = float(calibrated_wps or calib.get("wps", 2.35))
+        wps = float(calibrated_wps or calib.get("wps") or base_wps)
         cps = float(calibrated_cps or calib.get("cps", 12.5))
 
     # Mathematical Duration Bounds: 5% (1/20th) min to 20% (1/5th) max of source video runtime
@@ -4053,7 +4086,8 @@ def export_timeline_trimmed_video(
     script: str = "",
     progress_callback: Optional[Any] = None,
     channel_id: Optional[str] = None,
-    calibrated_wps: Optional[float] = None
+    calibrated_wps: Optional[float] = None,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     STAGE 5: Lightweight Direct Keyframe Stream-Slicing & Audio-Master 1:1 Muxing.
