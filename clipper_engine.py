@@ -499,7 +499,8 @@ def analyze_movie_narrative_for_shorts(
     job_id: Optional[str] = None,
     wps: float = 2.4,
     voice_name: str = "Kore",
-    tone_style: str = "Suspense / Thriller"
+    tone_style: str = "Suspense / Thriller",
+    channel_id: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
     """
     Prompts Google Gemini to analyze the movie's storyline and generate
@@ -632,33 +633,42 @@ Return ONLY a valid JSON array of objects with no markdown explanation:
 ]
 """
 
-    logger.info("Calling Gemini for chronological scene segmentation...")
-    client = gemini_engine.get_genai_client()
-    cfg = gemini_engine.get_gemini_config()
-    target_model = cfg.get("model") or gemini_engine.DEFAULT_MODEL
-    models_to_try = [target_model] + [m for m in gemini_engine.FALLBACK_MODELS if m != target_model]
-
     raw_response = None
     quota_error_msg = None
     status = "ANALYZED"
 
-    for model_name in models_to_try:
-        try:
-            logger.info(f"Attempting Gemini scene analysis with model: {model_name}")
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config={"temperature": 0.3, "tools": []}
-            )
-            if response and response.text:
-                raw_response = response.text.strip()
-                logger.info(f"Successfully received Gemini response using {model_name}")
-                break
-        except Exception as e:
-            err_str = str(e)
-            logger.warning(f"Model {model_name} failed with error: {err_str}. Cascading...")
-            if any(w in err_str.lower() for w in ["429", "resource_exhausted", "quota", "rate limit"]):
-                quota_error_msg = f"Gemini API Quota Exceeded (429): {err_str}"
+    try:
+        import channel_key_store
+        def _call_gemini_shorts(client, api_key):
+            cfg = gemini_engine.get_gemini_config(channel_id)
+            target_model = cfg.get("model") or gemini_engine.DEFAULT_MODEL
+            models_to_try = [target_model] + [m for m in gemini_engine.FALLBACK_MODELS if m != target_model]
+            for model_name in models_to_try:
+                try:
+                    logger.info(f"Attempting Gemini scene analysis with model: {model_name}")
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config={"temperature": 0.3, "tools": []}
+                    )
+                    if resp and resp.text:
+                        logger.info(f"Successfully received Gemini response using {model_name}")
+                        return resp.text.strip()
+                except Exception as m_err:
+                    err_str = str(m_err)
+                    logger.warning(f"Model {model_name} failed with error: {err_str}.")
+                    if any(w in err_str.lower() for w in ["429", "resource_exhausted", "quota", "rate limit"]):
+                        raise m_err  # Trigger failover to next key in pool
+            return None
+
+        raw_response = channel_key_store.execute_with_channel_key_rotation(
+            channel_id=channel_id,
+            operation_name="Movie Narrative Shorts Analysis",
+            action_fn=_call_gemini_shorts
+        )
+    except Exception as e:
+        logger.warning(f"Gemini shorts analysis rotation notice: {e}")
+        quota_error_msg = str(e)
 
     scenes = []
     if raw_response:
@@ -1471,12 +1481,14 @@ def generate_gemini_tts_audio(
     output_path: str,
     voice_name: str = "Kore",
     tone_style: str = "Suspense / Thriller",
-    language: str = "Hindi"
+    language: str = "Hindi",
+    channel_id: Optional[str] = None
 ) -> bool:
     """
-    Synthesizes speech using Google Gemini 3.1/3.8 Flash TTS preview model.
+    Synthesizes speech using Google Gemini 3.1/3.8 Flash TTS preview model
+    with 10-key pool auto-rotation per channel.
     Converts 24kHz mono PCM to 192kbps MP3 via FFmpeg.
-    Falls back smoothly to Edge-TTS if quota or network issue occurs.
+    Falls back smoothly to Edge-TTS if quota or network issue occurs across all keys.
     """
     if not text or not text.strip():
         logger.warning("Empty script provided for Gemini TTS.")
@@ -1484,14 +1496,12 @@ def generate_gemini_tts_audio(
 
     logger.info(f"Generating Gemini TTS audio (Voice: {voice_name}, Tone: {tone_style}) for script: {text[:60]}...")
 
-    # 1. Try Gemini TTS via google.genai
+    # 1. Try Gemini TTS with auto-rotation across channel key pool
     try:
-        from google import genai
+        import channel_key_store
         from google.genai import types
-        cfg = gemini_engine.get_gemini_config()
-        api_key = cfg.get("api_key")
-        if api_key:
-            client = genai.Client(api_key=api_key)
+
+        def _tts_worker(client, api_key):
             tone_prefix = TONE_PROMPT_PRESETS.get(tone_style, f"Say in {language} in a dramatic storytelling voice: ")
             tts_prompt = f"{tone_prefix}{text.strip()}"
 
@@ -1530,7 +1540,7 @@ def generate_gemini_tts_audio(
                         ]
                         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                         if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-                            logger.info(f"Gemini TTS audio successfully created: {output_path} ({os.path.getsize(output_path)} bytes)")
+                            logger.info(f"Gemini TTS audio created with key {channel_key_store.mask_key(api_key)}: {output_path} ({os.path.getsize(output_path)} bytes)")
                             return True
                     finally:
                         if os.path.exists(temp_wav):
@@ -1538,8 +1548,13 @@ def generate_gemini_tts_audio(
                                 os.remove(temp_wav)
                             except Exception:
                                 pass
+            return False
+
+        tts_success = channel_key_store.execute_with_channel_key_rotation(channel_id, "Gemini TTS", _tts_worker)
+        if tts_success:
+            return True
     except Exception as ge:
-        logger.warning(f"Gemini TTS generation encountered: {ge}. Cascading to Edge-TTS fallback...")
+        logger.warning(f"Gemini TTS generation notice: {ge}. Cascading to Edge-TTS fallback...")
 
     # 2. Resilient fallback to Edge-TTS
     logger.info("Falling back to high-quality Edge-TTS neural engine...")
@@ -2683,7 +2698,8 @@ def analyze_video_timeline_autocut(
     focus_style: str = "highlights",
     target_duration: Optional[int] = None,
     language: str = "Hindi",
-    custom_prompt: str = ""
+    custom_prompt: str = "",
+    channel_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Analyzes video timeline and discovers key narrative timestamps.
@@ -2715,9 +2731,7 @@ def analyze_video_timeline_autocut(
     script = ""
     source = "algorithmic"
 
-    client = gemini_engine.get_genai_client()
-    if client:
-        prompt = f"""You are a master Hollywood film editor and cinema director.
+    prompt = f"""You are a master Hollywood film editor and cinema director.
 Analyze this video storyline:
 - Title: {title or os.path.basename(video_path)}
 - Total Video Duration: {int(duration)} seconds ({int(duration // 60)}m {int(duration % 60)}s)
@@ -2751,37 +2765,49 @@ JSON Format:
   "script": "कहानी की शुरुआत में... (Hindi recap narration matching the scenes)"
 }}
 """
-        try:
-            config = gemini_engine.get_gemini_config()
-            model_name = config.get("model") or "gemini-2.5-flash"
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt
-            )
-            txt = resp.text.strip()
-            txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
-            txt = re.sub(r"```$", "", txt).strip()
-            data = json.loads(txt)
-            raw_clips = data.get("keeper_clips") or []
-            if isinstance(raw_clips, list) and len(raw_clips) >= 2:
-                for idx, rc in enumerate(raw_clips):
-                    s = max(0.0, min(duration - 1.0, float(rc.get("start", 0))))
-                    e = max(s + 2.0, min(duration, float(rc.get("end", s + 10))))
-                    if e > s:
-                        keeper_clips.append({
-                            "id": idx + 1,
-                            "start": round(s, 2),
-                            "end": round(e, 2),
-                            "duration": round(e - s, 2),
-                            "title": rc.get("title", f"Scene {idx + 1}"),
-                            "reason": rc.get("reason", "Key narrative highlight")
-                        })
-                if keeper_clips:
-                    keeper_clips.sort(key=lambda x: x["start"])
-                    script = data.get("script", "")
-                    source = "gemini"
-        except Exception as ge:
-            logger.warning(f"Gemini timeline autocut notice: {ge}. Using algorithmic cuts.")
+    try:
+        import channel_key_store
+        def _do_autocut(client, api_key):
+            nonlocal keeper_clips, script, source
+            for model_name in ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
+                try:
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+                    txt = resp.text.strip()
+                    txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
+                    txt = re.sub(r"```$", "", txt).strip()
+                    data = json.loads(txt)
+                    raw_clips = data.get("keeper_clips") or []
+                    if isinstance(raw_clips, list) and len(raw_clips) >= 2:
+                        for idx, rc in enumerate(raw_clips):
+                            s = max(0.0, min(duration - 1.0, float(rc.get("start", 0))))
+                            e = max(s + 2.0, min(duration, float(rc.get("end", s + 10))))
+                            if e > s:
+                                keeper_clips.append({
+                                    "id": idx + 1,
+                                    "start": round(s, 2),
+                                    "end": round(e, 2),
+                                    "duration": round(e - s, 2),
+                                    "title": rc.get("title", f"Scene {idx + 1}"),
+                                    "reason": rc.get("reason", "Key narrative highlight")
+                                })
+                        if keeper_clips:
+                            keeper_clips.sort(key=lambda x: x["start"])
+                            script = data.get("script", "")
+                            source = f"gemini ({model_name})"
+                            return True
+                except Exception as ge:
+                    err_s = str(ge)
+                    if any(q in err_s for q in ["429", "RESOURCE_EXHAUSTED", "quota"]):
+                        raise ge
+                    logger.warning(f"Autocut model {model_name} notice: {ge}")
+            return False
+
+        channel_key_store.execute_with_channel_key_rotation(channel_id, "Timeline Autocut", _do_autocut)
+    except Exception as ge:
+        logger.warning(f"Gemini timeline autocut notice: {ge}. Using algorithmic cuts.")
 
     if not keeper_clips:
         ratios = [
@@ -2832,7 +2858,8 @@ def generate_20min_movie_explainer_storyboard(
     language: str = "Hindi",
     voice_name: str = "Kore",
     tone_style: str = "Narrative Deep Storytelling",
-    custom_instructions: str = ""
+    custom_instructions: str = "",
+    channel_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Analyzes full-length YouTube movie narrative using Gemini and 100-word WPS calibration.
@@ -2953,8 +2980,8 @@ Return STRICT JSON ONLY (no markdown outside JSON):
     full_script = ""
     source = "algorithmic"
 
-    client = gemini_engine.get_genai_client()
-    if client:
+    try:
+        import channel_key_store
         candidate_models = [
             "gemini-3.6-flash",
             "gemini-3.5-flash-lite",
@@ -2965,45 +2992,59 @@ Return STRICT JSON ONLY (no markdown outside JSON):
             "gemini-3.8-flash",
             "gemini-flash-latest"
         ]
-        for model_name in candidate_models:
-            try:
-                logger.info(f"Calling Gemini ({model_name}) for 20-minute explainer storyboard: {title}")
-                resp = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                txt = resp.text.strip()
-                txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
-                txt = re.sub(r"```$", "", txt).strip()
-                data = json.loads(txt)
-                raw_clips = data.get("keeper_clips") or []
-                if isinstance(raw_clips, list) and len(raw_clips) >= 4:
-                    for idx, rc in enumerate(raw_clips, 1):
-                        s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
-                        e = max(s + 5.0, min(duration, float(rc.get("end", s + 30))))
-                        c_dur = round(e - s, 2)
-                        c_words = int(round(c_dur * wps))
-                        keeper_clips.append({
-                            "id": idx,
-                            "phase": rc.get("phase", "Rising Tension & Plot Twists"),
-                            "start": round(s, 2),
-                            "end": round(e, 2),
-                            "start_ts": format_seconds_to_timestamp(s),
-                            "end_ts": format_seconds_to_timestamp(e),
-                            "duration": c_dur,
-                            "title": rc.get("title", f"Scene {idx}"),
-                            "reason": rc.get("reason", "Key story milestone"),
-                            "target_words": rc.get("target_words") or c_words,
-                            "script_segment": rc.get("script_segment", "")
-                        })
-                    if keeper_clips:
-                        keeper_clips.sort(key=lambda x: x["start"])
-                        summary = data.get("summary", "")
-                        full_script = data.get("full_script", " ".join(c["script_segment"] for c in keeper_clips if c["script_segment"]))
-                        source = f"gemini ({model_name})"
-                        break
-            except Exception as ge:
-                logger.warning(f"Model {model_name} explainer call notice: {ge}")
+
+        def _do_explainer_call(client, api_key):
+            nonlocal keeper_clips, summary, full_script, source
+            masked_k = channel_key_store.mask_key(api_key)
+            for model_name in candidate_models:
+                try:
+                    logger.info(f"Calling Gemini ({model_name}) [Key: {masked_k}] for 20-minute explainer storyboard: {title}")
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+                    txt = resp.text.strip()
+                    txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
+                    txt = re.sub(r"```$", "", txt).strip()
+                    data = json.loads(txt)
+                    raw_clips = data.get("keeper_clips") or []
+                    if isinstance(raw_clips, list) and len(raw_clips) >= 4:
+                        parsed_clips = []
+                        for idx, rc in enumerate(raw_clips, 1):
+                            s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
+                            e = max(s + 5.0, min(duration, float(rc.get("end", s + 30))))
+                            c_dur = round(e - s, 2)
+                            c_words = int(round(c_dur * wps))
+                            parsed_clips.append({
+                                "id": idx,
+                                "phase": rc.get("phase", "Rising Tension & Plot Twists"),
+                                "start": round(s, 2),
+                                "end": round(e, 2),
+                                "start_ts": format_seconds_to_timestamp(s),
+                                "end_ts": format_seconds_to_timestamp(e),
+                                "duration": c_dur,
+                                "title": rc.get("title", f"Scene {idx}"),
+                                "reason": rc.get("reason", "Key story milestone"),
+                                "target_words": rc.get("target_words") or c_words,
+                                "script_segment": rc.get("script_segment", "")
+                            })
+                        if parsed_clips:
+                            parsed_clips.sort(key=lambda x: x["start"])
+                            keeper_clips = parsed_clips
+                            summary = data.get("summary", "")
+                            full_script = data.get("full_script", " ".join(c["script_segment"] for c in keeper_clips if c["script_segment"]))
+                            source = f"gemini ({model_name}) [{masked_k}]"
+                            return True
+                except Exception as ge:
+                    err_s = str(ge)
+                    if any(term in err_s for term in ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]):
+                        raise ge
+                    logger.warning(f"Model {model_name} explainer call notice: {ge}")
+            return False
+
+        channel_key_store.execute_with_channel_key_rotation(channel_id, "20-Min Explainer Storyboard", _do_explainer_call)
+    except Exception as ge:
+        logger.warning(f"Gemini storyboard generation notice with key pool: {ge}")
 
     # Fallback: Algorithmic 3-Phase Explainer Generator (16 high-impact scenes)
     if not keeper_clips:
@@ -3122,7 +3163,8 @@ def export_timeline_trimmed_video(
     voice_name: str = "Kore",
     tone_style: str = "Narrative Deep",
     script: str = "",
-    progress_callback: Optional[Any] = None
+    progress_callback: Optional[Any] = None,
+    channel_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Slices and concatenates keeper clips from source_video_path WITHOUT changing resolution
@@ -3260,7 +3302,8 @@ def export_timeline_trimmed_video(
                 text=clean_script,
                 output_path=tts_audio_path,
                 voice_name=voice_name,
-                tone_style=tone_style
+                tone_style=tone_style,
+                channel_id=channel_id
             )
             if not gen_ok:
                 generate_voiceover_audio(text=clean_script, output_path=tts_audio_path, language="Hindi")

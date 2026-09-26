@@ -14,3 +14,7 @@ test_*.py
 test_*.json
 scratch_*.py
 push_repo.py
+user_accounts.json
+*.mp4
+verify_*.py
+run_local_*.py

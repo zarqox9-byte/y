@@ -23,44 +23,48 @@ FALLBACK_MODELS = [
     "gemini-3.1-flash-lite"
 ]
 
-def get_gemini_config() -> Dict[str, Any]:
-    config = {
-        "api_key": os.environ.get("GEMINI_API_KEY", "").strip(),
-        "model": DEFAULT_MODEL,
-        "is_configured": False
-    }
+def get_gemini_config(channel_id: Optional[str] = None) -> Dict[str, Any]:
+    try:
+        import channel_key_store
+        keys = channel_key_store.get_channel_keys(channel_id)
+    except Exception:
+        keys = []
+
+    model = DEFAULT_MODEL
+    key = keys[0] if keys else os.environ.get("GEMINI_API_KEY", "").strip()
+
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-                if saved.get("api_key"):
-                    config["api_key"] = saved["api_key"].strip()
+                if not key and saved.get("api_key"):
+                    key = saved["api_key"].strip()
                 if saved.get("model"):
-                    config["model"] = saved["model"].strip()
+                    model = saved["model"].strip()
         except Exception as e:
             print(f"Error loading gemini_config.json: {e}")
 
-    config["is_configured"] = bool(config["api_key"])
-    return config
+    return {
+        "api_key": key,
+        "keys_pool": keys,
+        "keys_count": len(keys),
+        "model": model,
+        "is_configured": bool(key)
+    }
 
-def save_gemini_config(api_key: str, model: str = DEFAULT_MODEL) -> Dict[str, Any]:
+def save_gemini_config(api_key: str, model: str = DEFAULT_MODEL, channel_id: Optional[str] = None) -> Dict[str, Any]:
     api_key = api_key.strip()
     if not api_key:
         return {"success": False, "error": "API key cannot be empty"}
 
-    # Test key with a quick ping
     try:
-        from google import genai
-        test_client = genai.Client(api_key=api_key)
-        test_client.models.generate_content(
-            model=model or DEFAULT_MODEL,
-            contents="Say 'OK'"
-        )
+        import channel_key_store
+        clean_id = (channel_id or "").strip() or "default"
+        ok, msg = channel_key_store.add_channel_key(clean_id, api_key, verify=True)
+        if not ok and "already in this channel's pool" not in msg:
+            return {"success": False, "error": msg}
     except Exception as e:
-        err_str = str(e)
-        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str or "PERMISSION_DENIED" in err_str:
-            return {"success": False, "error": f"Invalid Gemini API key: {err_str}"}
-        print(f"Key test notice: {e}")
+        print(f"Channel key store add notice: {e}")
 
     data = {
         "api_key": api_key,
@@ -69,6 +73,7 @@ def save_gemini_config(api_key: str, model: str = DEFAULT_MODEL) -> Dict[str, An
     }
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
     return {
         "success": True,
         "is_configured": True,
@@ -98,21 +103,47 @@ def mask_key(key: str) -> str:
         return "****"
     return f"{key[:4]}...{key[-4:]}"
 
-def get_gemini_status() -> Dict[str, Any]:
-    cfg = get_gemini_config()
-    return {
-        "has_key": cfg["is_configured"],
-        "masked_key": mask_key(cfg["api_key"]),
-        "model": cfg["model"]
-    }
+def get_gemini_status(channel_id: Optional[str] = None) -> Dict[str, Any]:
+    try:
+        import channel_key_store
+        pool_status = channel_key_store.get_channel_key_pool_status(channel_id)
+        cfg = get_gemini_config(channel_id)
+        has_key = pool_status["total_active_keys"] > 0 or cfg["is_configured"]
+        masked = pool_status["current_key_masked"] or mask_key(cfg["api_key"])
+        return {
+            "has_key": has_key,
+            "masked_key": masked,
+            "model": cfg["model"],
+            "total_keys": pool_status["total_active_keys"],
+            "pool_status": pool_status
+        }
+    except Exception:
+        cfg = get_gemini_config(channel_id)
+        return {
+            "has_key": cfg["is_configured"],
+            "masked_key": mask_key(cfg["api_key"]),
+            "model": cfg["model"],
+            "total_keys": 1 if cfg["is_configured"] else 0
+        }
 
-def get_genai_client():
-    cfg = get_gemini_config()
-    if not cfg["api_key"]:
-        raise ValueError("Gemini API key is not configured. Please add your API key in the Gemini Settings panel.")
+def get_genai_client(channel_id: Optional[str] = None, key: Optional[str] = None):
+    active_key = key
+    if not active_key:
+        try:
+            import channel_key_store
+            active_key = channel_key_store.get_next_channel_key(channel_id)
+        except Exception:
+            pass
+
+    if not active_key:
+        cfg = get_gemini_config(channel_id)
+        active_key = cfg.get("api_key")
+
+    if not active_key:
+        raise ValueError("Gemini API key is not configured for this channel. Please add your API key in the Gemini Settings panel.")
     try:
         from google import genai
-        return genai.Client(api_key=cfg["api_key"])
+        return genai.Client(api_key=active_key)
     except ImportError:
         raise ImportError("google-genai SDK is installing or not found. Please wait a few seconds and try again.")
 
