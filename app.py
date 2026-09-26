@@ -277,7 +277,10 @@ HTML_MAIN = """
             color: var(--text-primary);
             margin: 0;
             padding: 0;
-            min-width: 1200px;
+            min-width: 0;
+            width: 100%;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
 
         /* Top Navbar */
@@ -693,12 +696,30 @@ HTML_MAIN = """
             gap: 24px;
         }
         .mode-nav-tabs {
+            position: relative;
+            z-index: 9999;
             display: flex;
             gap: 10px;
             background: var(--bg-surface);
             padding: 8px;
             border-radius: var(--card-radius);
             border: 1px solid var(--border-color);
+        }
+        .mode-tab,
+        #trimmer-tab,
+        #copilot-tab,
+        #tabTrimmerMode,
+        #tabGeminiMode,
+        #tabClipperMode,
+        #tabManualMode {
+            position: relative;
+            z-index: 9999;
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
         }
         .mode-tab {
             flex: 1;
@@ -709,12 +730,14 @@ HTML_MAIN = """
             padding: 12px 18px;
             border-radius: 8px;
             border: none;
-            cursor: pointer;
             font-size: 14px;
             font-weight: 600;
             color: var(--text-secondary);
             background: transparent;
             transition: all 0.2s;
+        }
+        .mode-tab * {
+            pointer-events: none;
         }
         .mode-tab:hover {
             color: white;
@@ -744,6 +767,14 @@ HTML_MAIN = """
         .badge-manual {
             background: #444;
             color: #ddd;
+        }
+
+        .trimmer-explainer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 14px;
         }
 
         /* Gemini AI Studio Box */
@@ -1479,13 +1510,29 @@ HTML_MAIN = """
             background: #161220;
             border-left: 1px solid rgba(168, 85, 247, 0.35);
             box-shadow: -10px 0 40px rgba(0,0,0,0.8);
-            z-index: 1001;
-            display: flex;
+            z-index: -100;
+            display: none;
             flex-direction: column;
-            transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
             pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
         }
-        .chat-drawer.open { right: 0; pointer-events: auto; }
+        .chat-drawer.open {
+            display: flex !important;
+            right: 0 !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            z-index: 1001 !important;
+        }
+        .chat-drawer:not(.open) {
+            display: none !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            z-index: -100 !important;
+        }
         .chat-header {
             padding: 18px 20px;
             border-bottom: 1px solid rgba(168, 85, 247, 0.2);
@@ -1609,17 +1656,34 @@ HTML_MAIN = """
             top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0,0,0,0.75);
             backdrop-filter: blur(4px);
-            z-index: 2000;
+            z-index: -100;
             align-items: center;
             justify-content: center;
             pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
         }
         .modal-overlay.active, .modal-overlay.open,
         .modal-overlay[style*="display: flex"],
         .modal-overlay[style*="display: block"],
+        #clipperJobsModalOverlay.active,
+        #clipperJobsModalOverlay.open,
         #clipperJobsModalOverlay[style*="display: flex"],
         #clipperJobsModalOverlay[style*="display: block"] {
+            display: flex !important;
             pointer-events: auto !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            z-index: 9999 !important;
+        }
+        .modal-overlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]),
+        #geminiModalOverlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]),
+        #clipperJobsModalOverlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]) {
+            display: none !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            z-index: -100 !important;
         }
         .modal-card {
             background: #1b1629;
@@ -1728,9 +1792,12 @@ HTML_MAIN = """
                 padding: 0 12px;
                 margin: 12px auto;
                 gap: 16px;
+                width: 100%;
+                max-width: 100%;
             }
             .sidebar {
                 order: 2;
+                width: 100%;
             }
             .workspace {
                 order: 1;
@@ -1738,13 +1805,18 @@ HTML_MAIN = """
                 width: 100%;
             }
             .mode-nav-tabs {
+                position: relative;
+                z-index: 9999;
                 flex-wrap: wrap;
                 gap: 8px;
             }
             .mode-tab {
                 min-width: 130px;
-                padding: 10px 14px;
+                padding: 12px 14px;
                 font-size: 13px;
+                pointer-events: auto !important;
+                z-index: 9999;
+                touch-action: manipulation;
             }
             .top-navbar {
                 padding: 0 14px;
@@ -1752,6 +1824,13 @@ HTML_MAIN = """
             .chat-drawer {
                 width: 100vw;
                 right: -100vw;
+            }
+            .chat-drawer.open {
+                right: 0 !important;
+            }
+            .trimmer-explainer-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
             }
         }
         @media (max-width: 800px) {
@@ -1923,7 +2002,12 @@ HTML_MAIN = """
             
             <!-- Mode Switcher Tabs -->
             <div class="mode-nav-tabs">
-                <button type="button" class="mode-tab active-ai" id="tabGeminiMode" onclick="switchWorkspaceTab('gemini')">
+                <button type="button" class="mode-tab active-ai" id="tabTrimmerMode" onclick="switchWorkspaceTab('trimmer')">
+                    <span>✂️</span>
+                    <span>Timeline Video Trimmer</span>
+                    <span class="tab-badge" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white;">ORIGINAL ASPECT RATIO</span>
+                </button>
+                <button type="button" class="mode-tab" id="tabGeminiMode" onclick="switchWorkspaceTab('gemini')">
                     <span>✨</span>
                     <span>Gemini AI Studio Copilot</span>
                     <span class="tab-badge badge-ai">PRO MULTIMODAL</span>
@@ -1932,11 +2016,6 @@ HTML_MAIN = """
                     <span>🎬</span>
                     <span>YouTube URL to Shorts</span>
                     <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">AUTO-CLIPPER</span>
-                </button>
-                <button type="button" class="mode-tab" id="tabTrimmerMode" onclick="switchWorkspaceTab('trimmer')">
-                    <span>✂️</span>
-                    <span>Timeline Video Trimmer</span>
-                    <span class="tab-badge" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white;">ORIGINAL ASPECT RATIO</span>
                 </button>
                 <button type="button" class="mode-tab" id="tabManualMode" onclick="switchWorkspaceTab('manual')">
                     <span>🛠️</span>
@@ -1948,7 +2027,7 @@ HTML_MAIN = """
             <!-- ============================================== -->
             <!-- 1. GEMINI AI STUDIO COPILOT PANEL              -->
             <!-- ============================================== -->
-            <div class="card" id="geminiStudioSection">
+            <div class="card" id="geminiStudioSection" style="display: none;">
                 <div class="ai-banner">
                     <div class="ai-banner-left">
                         <div class="ai-banner-title">
@@ -2458,7 +2537,7 @@ HTML_MAIN = """
                 </div>
 
                 <!-- Saved Jobs Modal Overlay -->
-                <div id="clipperJobsModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 20px; pointer-events: none;">
+                <div id="clipperJobsModalOverlay" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: -100; align-items: center; justify-content: center; padding: 20px; pointer-events: none; opacity: 0; visibility: hidden;">
                     <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 680px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-elevated);">
                             <h3 style="margin: 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
@@ -2476,7 +2555,7 @@ HTML_MAIN = """
             <!-- ============================================== -->
             <!-- 3. TIMELINE VIDEO TRIMMER & SLICER (ORIGINAL RESOLUTION) -->
             <!-- ============================================== -->
-            <div class="card" id="trimmerSection" style="display: none; padding: 24px; background: var(--bg-surface); border-radius: var(--card-radius); border: 1px solid var(--border-color);">
+            <div class="card" id="trimmerSection" style="display: block; padding: 24px; background: var(--bg-surface); border-radius: var(--card-radius); border: 1px solid var(--border-color);">
                 
                 <!-- Hero Banner -->
                 <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: 12px; padding: 18px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
@@ -2513,7 +2592,7 @@ HTML_MAIN = """
                     </div>
 
                     <!-- Explainer Input Controls Grid -->
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 14px;">
+                    <div class="trimmer-explainer-grid">
                         <div>
                             <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Movie YouTube URL:</label>
                             <input type="text" id="trimmerExplainerYtUrl" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;" placeholder="https://www.youtube.com/watch?v=...">
@@ -3011,7 +3090,7 @@ HTML_MAIN = """
         <span>Gemini AI Assistant</span>
     </button>
 
-    <div class="chat-drawer" id="chatDrawer">
+    <div class="chat-drawer" id="chatDrawer" style="display: none; pointer-events: none; opacity: 0; visibility: hidden; z-index: -100;">
         <div class="chat-header">
             <div class="chat-header-title">
                 <span>✨</span>
@@ -3043,7 +3122,7 @@ HTML_MAIN = """
     <!-- ============================================== -->
     <!-- GEMINI API CONFIG MODAL (10-KEY POOL)          -->
     <!-- ============================================== -->
-    <div class="modal-overlay" id="geminiModalOverlay">
+    <div class="modal-overlay" id="geminiModalOverlay" style="display: none; pointer-events: none; opacity: 0; visibility: hidden; z-index: -100;">
         <div class="modal-card" style="max-width: 640px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 24px;">
             <div class="modal-header" style="margin-bottom: 12px;">
                 <h3>
@@ -3119,6 +3198,8 @@ HTML_MAIN = """
         // Tab Switching Engine (Globally accessible on window)
         window.switchWorkspaceTab = function(activeTab) {
             try {
+                // Map aliases (e.g. copilot, copilot-tab, trimmer-tab)
+                const targetKey = (activeTab === 'copilot' || activeTab === 'copilot-tab') ? 'gemini' : (activeTab === 'trimmer-tab' ? 'trimmer' : activeTab);
                 const tabs = {
                     'gemini': { tab: document.getElementById('tabGeminiMode'), sec: document.getElementById('geminiStudioSection'), activeCls: 'active-ai' },
                     'clipper': { tab: document.getElementById('tabClipperMode'), sec: document.getElementById('clipperSection'), activeCls: 'active-ai' },
@@ -3129,14 +3210,17 @@ HTML_MAIN = """
                 Object.keys(tabs).forEach(key => {
                     const item = tabs[key];
                     if (item.tab) {
-                        item.tab.className = 'mode-tab' + (activeTab === key ? (' ' + item.activeCls) : '');
+                        item.tab.className = 'mode-tab' + (targetKey === key ? (' ' + item.activeCls) : '');
+                        item.tab.style.pointerEvents = 'auto';
+                        item.tab.style.cursor = 'pointer';
+                        item.tab.style.zIndex = '9999';
                     }
                     if (item.sec) {
-                        item.sec.style.display = (activeTab === key) ? 'block' : 'none';
+                        item.sec.style.display = (targetKey === key) ? 'block' : 'none';
                     }
                 });
                 try {
-                    localStorage.setItem('active_studio_tab', activeTab);
+                    localStorage.setItem('active_studio_tab', targetKey);
                 } catch(e) {}
             } catch (err) {
                 console.warn("switchWorkspaceTab error:", err);
@@ -3147,7 +3231,13 @@ HTML_MAIN = """
         function bindTabButton(id, tabName) {
             const btn = document.getElementById(id);
             if (!btn) return;
+            btn.style.pointerEvents = 'auto';
+            btn.style.cursor = 'pointer';
+            btn.style.zIndex = '9999';
             let touched = false;
+            btn.addEventListener('touchstart', (e) => {
+                // Passive touch start - do not block browser gestures or touch tracking
+            }, { passive: true });
             btn.addEventListener('touchend', (e) => {
                 touched = true;
                 window.switchWorkspaceTab(tabName);
@@ -3182,8 +3272,12 @@ HTML_MAIN = """
 
         function openKeyModal() {
             if (geminiModalOverlay) {
+                geminiModalOverlay.classList.add('active');
                 geminiModalOverlay.style.display = 'flex';
                 geminiModalOverlay.style.pointerEvents = 'auto';
+                geminiModalOverlay.style.opacity = '1';
+                geminiModalOverlay.style.visibility = 'visible';
+                geminiModalOverlay.style.zIndex = '9999';
                 if (modalActiveChannelTitle) {
                     modalActiveChannelTitle.textContent = window.currentActiveChannelTitle || 'Active Channel';
                 }
@@ -3193,8 +3287,12 @@ HTML_MAIN = """
 
         function closeKeyModal() {
             if (geminiModalOverlay) {
+                geminiModalOverlay.classList.remove('active');
                 geminiModalOverlay.style.display = 'none';
                 geminiModalOverlay.style.pointerEvents = 'none';
+                geminiModalOverlay.style.opacity = '0';
+                geminiModalOverlay.style.visibility = 'hidden';
+                geminiModalOverlay.style.zIndex = '-100';
             }
         }
 
@@ -3820,14 +3918,32 @@ HTML_MAIN = """
 
         if (chatFabBtn && chatDrawer) {
             chatFabBtn.addEventListener('click', () => {
-                chatDrawer.classList.toggle('open');
-                chatDrawer.style.pointerEvents = chatDrawer.classList.contains('open') ? 'auto' : 'none';
+                const willOpen = !chatDrawer.classList.contains('open');
+                if (willOpen) {
+                    chatDrawer.classList.add('open');
+                    chatDrawer.style.display = 'flex';
+                    chatDrawer.style.pointerEvents = 'auto';
+                    chatDrawer.style.opacity = '1';
+                    chatDrawer.style.visibility = 'visible';
+                    chatDrawer.style.zIndex = '1001';
+                } else {
+                    chatDrawer.classList.remove('open');
+                    chatDrawer.style.display = 'none';
+                    chatDrawer.style.pointerEvents = 'none';
+                    chatDrawer.style.opacity = '0';
+                    chatDrawer.style.visibility = 'hidden';
+                    chatDrawer.style.zIndex = '-100';
+                }
             });
         }
         if (btnCloseChat && chatDrawer) {
             btnCloseChat.addEventListener('click', () => {
                 chatDrawer.classList.remove('open');
+                chatDrawer.style.display = 'none';
                 chatDrawer.style.pointerEvents = 'none';
+                chatDrawer.style.opacity = '0';
+                chatDrawer.style.visibility = 'hidden';
+                chatDrawer.style.zIndex = '-100';
             });
         }
 
@@ -4457,21 +4573,33 @@ HTML_MAIN = """
         }
 
         // Saved Jobs Modal Open / Close
+        const hideJobsModal = () => {
+            if (clipperJobsModalOverlay) {
+                clipperJobsModalOverlay.classList.remove('active');
+                clipperJobsModalOverlay.style.display = 'none';
+                clipperJobsModalOverlay.style.pointerEvents = 'none';
+                clipperJobsModalOverlay.style.opacity = '0';
+                clipperJobsModalOverlay.style.visibility = 'hidden';
+                clipperJobsModalOverlay.style.zIndex = '-100';
+            }
+        };
+
         if (btnViewSavedJobs && clipperJobsModalOverlay) {
             btnViewSavedJobs.addEventListener('click', async () => {
+                clipperJobsModalOverlay.classList.add('active');
                 clipperJobsModalOverlay.style.display = 'flex';
+                clipperJobsModalOverlay.style.pointerEvents = 'auto';
+                clipperJobsModalOverlay.style.opacity = '1';
+                clipperJobsModalOverlay.style.visibility = 'visible';
+                clipperJobsModalOverlay.style.zIndex = '9999';
                 await loadSavedJobsList();
             });
         }
 
         if (btnCloseJobsModal && clipperJobsModalOverlay) {
-            btnCloseJobsModal.addEventListener('click', () => {
-                clipperJobsModalOverlay.style.display = 'none';
-            });
+            btnCloseJobsModal.addEventListener('click', hideJobsModal);
             clipperJobsModalOverlay.addEventListener('click', (e) => {
-                if (e.target === clipperJobsModalOverlay) {
-                    clipperJobsModalOverlay.style.display = 'none';
-                }
+                if (e.target === clipperJobsModalOverlay) hideJobsModal();
             });
         }
 
@@ -4529,7 +4657,7 @@ HTML_MAIN = """
         }
 
         window.openAndResumeSavedJob = async function(jobId) {
-            clipperJobsModalOverlay.style.display = 'none';
+            hideJobsModal();
             try {
                 const res = await fetch(`/api/clipper/job/${jobId}`);
                 const data = await res.json();
@@ -6781,14 +6909,21 @@ HTML_MAIN = """
         function initializeApp() {
             try {
                 // Bind all tabs with mobile touch and desktop click listeners
+                bindTabButton('tabTrimmerMode', 'trimmer');
                 bindTabButton('tabGeminiMode', 'gemini');
                 bindTabButton('tabClipperMode', 'clipper');
-                bindTabButton('tabTrimmerMode', 'trimmer');
                 bindTabButton('tabManualMode', 'manual');
 
-                // Restore active workspace tab
-                const savedTab = localStorage.getItem('active_studio_tab') || 'gemini';
-                window.switchWorkspaceTab(savedTab);
+                // Support aliases
+                bindTabButton('trimmer-tab', 'trimmer');
+                bindTabButton('copilot-tab', 'gemini');
+
+                // Auto-activate timeline trimmer tab:
+                // Mobile devices ALWAYS default to 'trimmer' so user lands straight onto movie editing timeline
+                const isMobile = window.innerWidth <= 960 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+                const savedTab = localStorage.getItem('active_studio_tab');
+                const defaultTab = isMobile ? 'trimmer' : (savedTab || 'trimmer');
+                window.switchWorkspaceTab(defaultTab);
             } catch (e) {
                 console.warn("Tab binding warning:", e);
             }
