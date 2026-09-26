@@ -695,9 +695,31 @@ HTML_MAIN = """
             flex-direction: column;
             gap: 24px;
         }
+        /* Global Touch & Interaction Guarantee: All navigation tabs, inputs, and buttons */
+        .mode-tab,
+        button,
+        input,
+        select,
+        textarea,
+        .form-control,
+        .btn-upload,
+        .btn-populate,
+        #trimmer-tab,
+        #copilot-tab,
+        #tabTrimmerMode,
+        #tabGeminiMode,
+        #tabClipperMode,
+        #tabManualMode {
+            pointer-events: auto !important;
+            touch-action: manipulation;
+            position: relative;
+            z-index: 9999;
+            -webkit-tap-highlight-color: transparent;
+        }
         .mode-nav-tabs {
             position: relative;
             z-index: 9999;
+            pointer-events: auto !important;
             display: flex;
             gap: 10px;
             background: var(--bg-surface);
@@ -705,23 +727,10 @@ HTML_MAIN = """
             border-radius: var(--card-radius);
             border: 1px solid var(--border-color);
         }
-        .mode-tab,
-        #trimmer-tab,
-        #copilot-tab,
-        #tabTrimmerMode,
-        #tabGeminiMode,
-        #tabClipperMode,
-        #tabManualMode {
-            position: relative;
-            z-index: 9999;
-            pointer-events: auto !important;
+        .mode-tab {
             cursor: pointer !important;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
             user-select: none;
             -webkit-user-select: none;
-        }
-        .mode-tab {
             flex: 1;
             display: flex;
             align-items: center;
@@ -1653,10 +1662,10 @@ HTML_MAIN = """
         .modal-overlay {
             display: none;
             position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
+            top: 0; left: 0; width: 0; height: 0;
             background: rgba(0,0,0,0.75);
             backdrop-filter: blur(4px);
-            z-index: -100;
+            z-index: -99999;
             align-items: center;
             justify-content: center;
             pointer-events: none;
@@ -1671,19 +1680,23 @@ HTML_MAIN = """
         #clipperJobsModalOverlay[style*="display: flex"],
         #clipperJobsModalOverlay[style*="display: block"] {
             display: flex !important;
+            width: 100vw !important;
+            height: 100vh !important;
             pointer-events: auto !important;
             opacity: 1 !important;
             visibility: visible !important;
-            z-index: 9999 !important;
+            z-index: 999999 !important;
         }
         .modal-overlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]),
         #geminiModalOverlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]),
         #clipperJobsModalOverlay:not(.active):not(.open):not([style*="display: flex"]):not([style*="display: block"]) {
             display: none !important;
+            width: 0 !important;
+            height: 0 !important;
             pointer-events: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
-            z-index: -100 !important;
+            z-index: -99999 !important;
         }
         .modal-card {
             background: #1b1629;
@@ -2607,13 +2620,20 @@ HTML_MAIN = """
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Voice Character:</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+                                <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; margin: 0;">Voice Character:</label>
+                                <button type="button" id="btnPreviewExplainerVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                    <span id="previewExplainerVoiceIcon">🔊</span> <span id="previewExplainerVoiceText">Preview / Read Aloud</span>
+                                </button>
+                            </div>
                             <select id="trimmerExplainerVoice" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
                                 <option value="Kore" selected>Kore (Hindi Deep Male)</option>
                                 <option value="Fenrir">Fenrir (Dramatic Intense)</option>
                                 <option value="Aoede">Aoede (Expressive Female)</option>
                                 <option value="Puck">Puck (Fast-Paced Punch)</option>
                                 <option value="Charon">Charon (Deep Mysterious)</option>
+                                <option value="Algenib">Algenib (Suspense Thriller)</option>
+                                <option value="Algieba">Algieba (Fast Action Female)</option>
                             </select>
                         </div>
                         <div>
@@ -2627,9 +2647,37 @@ HTML_MAIN = """
                         </div>
                         <div>
                             <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 20px; font-size: 13.5px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 14px rgba(124, 58, 237, 0.4);">
-                                <span id="btnPlanExplainerIcon">🎬</span>
+                                <span id="btnPlanExplainerIcon">🚀</span>
                                 <span id="btnPlanExplainerText">Generate Cinema Explainer Storyboard</span>
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Hidden audio element for 3-second Read Aloud voice preview -->
+                    <audio id="explainerVoicePreviewAudio" style="display: none;"></audio>
+
+                    <!-- Unified 5-Step Auto Explainer Pipeline Progress Tracker -->
+                    <div id="explainerPipelineTracker" style="display: none; background: rgba(0,0,0,0.35); border: 1px solid rgba(124, 58, 237, 0.4); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                            <span id="explainerPipelineStatusTitle" style="font-size: 12.5px; font-weight: 700; color: #e9d5ff;">⚡ Running Unified One-Click Explainer Pipeline...</span>
+                            <span id="explainerPipelineSpeedBadge" style="font-size: 11px; color: #fde047; font-weight: 700; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); padding: 2px 8px; border-radius: 10px;">Benchmarking Voice Speed...</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px;">
+                            <div id="pipeStep1" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                <b>1. Speed Test:</b> 100-Char Hindi
+                            </div>
+                            <div id="pipeStep2" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                <b>2. Storyboard:</b> Gemini Cuts
+                            </div>
+                            <div id="pipeStep3" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                <b>3. Word Budget:</b> Exact Scene Sync
+                            </div>
+                            <div id="pipeStep4" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                <b>4. Auto TTS:</b> Hindi + BGM
+                            </div>
+                            <div id="pipeStep5" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                <b>5. Timeline:</b> Ready to Export
+                            </div>
                         </div>
                     </div>
 
@@ -2650,8 +2698,28 @@ HTML_MAIN = """
                                 <span id="trimmerExplainerBadgeWps" style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: 2.35 w/s</span>
                                 <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: 2049 words</span>
                                 <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
-                                    <span>⚡</span> <span>Inject All Cuts into Timeline</span>
+                                    <span>⚡</span> <span>Re-Inject Cuts</span>
                                 </button>
+                                <button type="button" id="btnQuickExportFromExplainer" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #7c3aed); border: none; color: white; padding: 6px 16px; font-size: 12.5px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);">
+                                    <span>🎬</span> <span>Export Final Video</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Pre-Rendered Hindi Voiceover + BGM Audio Bar -->
+                        <div id="explainerReadyAudioBar" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
+                                <span style="font-size: 18px;">🎧</span>
+                                <div>
+                                    <div style="font-size: 12.5px; font-weight: 700; color: #6ee7b7;">Pre-Rendered Hindi Voiceover + Ducked Suspense BGM Ready!</div>
+                                    <div style="font-size: 11px; color: #a7f3d0;">Automatically synthesized &amp; mapped to timeline cuts. Ready for instant 1-click export.</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <audio id="explainerReadyAudioPlayer" controls style="height: 32px; width: 220px;"></audio>
+                                <a id="btnDownloadExplainerReadyMp3" href="#" download="hindi_explainer_voiceover.mp3" class="btn-populate" style="font-size: 11.5px; padding: 5px 12px; text-decoration: none; color: #6ee7b7; border-color: #10b981; font-weight: 700;">
+                                    ⬇️ Save Voiceover MP3
+                                </a>
                             </div>
                         </div>
 
@@ -2666,7 +2734,7 @@ HTML_MAIN = """
                         <!-- Auto-Injection Guidance Banner -->
                         <div id="trimmerExplainerAutoInjectNotice" style="margin-top: 12px; padding: 10px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; font-size: 12px; color: #a7f3d0; display: flex; align-items: center; gap: 8px;">
                             <span>💡</span>
-                            <span><b>Instant Auto-Cut:</b> Drag &amp; drop or select your movie file below. All narrative keeper cuts and calibrated Hindi voiceover script will be automatically injected into the timeline!</span>
+                            <span><b>Direct Export Ready:</b> Keeper cuts, calibrated Hindi script, and voiceover audio are mapped to the timeline. Select your source video below and click <b>Export Final Video</b>!</span>
                         </div>
                     </div>
                 </div>
@@ -2811,7 +2879,12 @@ HTML_MAIN = """
                         <div id="trimmerTtsOptionsContainer" style="display: none; background: rgba(0,0,0,0.25); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 12px;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
                                 <div>
-                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Voice:</label>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+                                        <label style="font-size: 11px; color: var(--text-muted); margin: 0;">Voice:</label>
+                                        <button type="button" id="btnPreviewTrimmerTtsVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                            <span id="previewTrimmerTtsVoiceIcon">🔊</span> <span id="previewTrimmerTtsVoiceText">Preview / Read Aloud</span>
+                                        </button>
+                                    </div>
                                     <select id="trimmerTtsVoiceSelect" class="form-control" style="width: 100%; padding: 6px 8px; font-size: 12px;">
                                         <option value="Kore">Kore (Hindi Deep Male)</option>
                                         <option value="Fenrir">Fenrir (Dramatic Intense Male)</option>
@@ -2842,7 +2915,7 @@ HTML_MAIN = """
                             <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 60px; font-size: 12px; resize: vertical;" placeholder="Script automatically generated by Gemini or enter your own custom narration..."></textarea>
                             
                             <!-- In-browser Narration Audio Preview -->
-                            <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                            <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 8px; align-items: center; justify-content: space-between; gap: 10px;">
                                 <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
                                     <span style="font-size: 14px;">🎧</span>
                                     <audio id="trimmerNarrationAudioPlayer" controls style="height: 30px; flex-grow: 1;"></audio>
@@ -2857,7 +2930,7 @@ HTML_MAIN = """
                     <!-- Export Button -->
                     <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 700; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
                         <span id="btnExportIcon">🎬</span>
-                        <span id="btnExportText">Export &amp; Download Video (Zero Server Upload &bull; In-Browser Slicing)</span>
+                        <span id="btnExportText">Export Final Video (Zero Server Upload &bull; In-Browser Slicing)</span>
                     </button>
                 </div>
 
@@ -3195,9 +3268,33 @@ HTML_MAIN = """
         let tempVideoServerFilename = null;
         let clientExtractedFrames = [];
 
+        // Force-strip any invisible blocking backdrops/overlays and enforce touch responsiveness
+        window.forceClearBlockingOverlays = function() {
+            try {
+                document.querySelectorAll('.modal-overlay, #geminiModalOverlay, #chatDrawerBackdrop').forEach(el => {
+                    if (!el.classList.contains('active') && !el.classList.contains('open')) {
+                        el.style.setProperty('display', 'none', 'important');
+                        el.style.setProperty('pointer-events', 'none', 'important');
+                        el.style.setProperty('opacity', '0', 'important');
+                        el.style.setProperty('visibility', 'hidden', 'important');
+                        el.style.setProperty('z-index', '-99999', 'important');
+                        el.style.setProperty('width', '0', 'important');
+                        el.style.setProperty('height', '0', 'important');
+                    }
+                });
+                document.querySelectorAll('.mode-tab, button, input, select, textarea, .form-control, .btn-upload, .btn-populate').forEach(el => {
+                    el.style.setProperty('pointer-events', 'auto', 'important');
+                    el.style.setProperty('touch-action', 'manipulation');
+                    if (!el.style.position) el.style.position = 'relative';
+                    if (!el.style.zIndex) el.style.zIndex = '9999';
+                });
+            } catch (e) {}
+        };
+
         // Tab Switching Engine (Globally accessible on window)
         window.switchWorkspaceTab = function(activeTab) {
             try {
+                window.forceClearBlockingOverlays();
                 // Map aliases (e.g. copilot, copilot-tab, trimmer-tab)
                 const targetKey = (activeTab === 'copilot' || activeTab === 'copilot-tab') ? 'gemini' : (activeTab === 'trimmer-tab' ? 'trimmer' : activeTab);
                 const tabs = {
@@ -5838,6 +5935,14 @@ HTML_MAIN = """
             if (!storyboard || !storyboard.keeper_clips || storyboard.keeper_clips.length === 0) return;
             const clips = storyboard.keeper_clips;
 
+            // Ensure timeline has a valid total duration even before the local video file is picked
+            if (trimmerTotalDuration <= 0) {
+                const maxClipEnd = clips.reduce((m, c) => Math.max(m, parseFloat(c.end) || 0), 0);
+                trimmerTotalDuration = parseFloat(storyboard.duration)
+                    || (storyboard.youtube_info && parseFloat(storyboard.youtube_info.duration))
+                    || Math.max(3600, maxClipEnd + 60);
+            }
+
             nextClipId = 1;
             trimmerKeeperClips = clips.map((c, idx) => {
                 let s = Math.max(0, parseFloat(c.start) || 0);
@@ -5866,7 +5971,11 @@ HTML_MAIN = """
             trimmerActiveClipIndex = 0;
 
             if (trimmerNarrationScript) {
-                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\\n\\n');
+                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\n\n');
+            }
+
+            if (storyboard.narration_audio_url) {
+                currentNarrationAudioUrl = storyboard.narration_audio_url;
             }
 
             const ttsBgmRadio = document.querySelector('input[name="trimmerAudioMode"][value="tts_bgm"]');
@@ -5886,14 +5995,17 @@ HTML_MAIN = """
             updateTrimmerStats();
             updateTrimmerDeck();
 
-            if (trimmerKeeperClips.length > 0) {
-                trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+            if (trimmerKeeperClips.length > 0 && trimmerPlayer && trimmerPlayer.src) {
+                try { trimmerPlayer.currentTime = trimmerKeeperClips[0].start; } catch (e) {}
             }
 
             const totalKept = trimmerKeeperClips.reduce((acc, c) => acc + c.duration, 0);
             const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
             if (noticeEl) {
-                noticeEl.innerHTML = `✅ <b>Injected into Timeline:</b> ${trimmerKeeperClips.length} keeper cuts (${formatSecs(totalKept)}) with synchronized narration script! Discarded all filler scenes.`;
+                const audioStatus = currentNarrationAudioUrl
+                    ? ` &bull; <span style="color:#fde047;">🎧 Pre-rendered Hindi Voiceover + BGM mapped!</span>`
+                    : '';
+                noticeEl.innerHTML = `✅ <b>Direct Export Ready (Injected into Timeline):</b> ${trimmerKeeperClips.length} keeper cuts (${formatSecs(totalKept)}) with synchronized narration script${audioStatus} Simply select your source movie file (if not loaded) and click <b>Export Final Video</b>!`;
                 noticeEl.style.background = 'rgba(16, 185, 129, 0.2)';
                 noticeEl.style.borderColor = '#10b981';
             }
@@ -6369,28 +6481,222 @@ HTML_MAIN = """
             });
         }
 
-        // CINEMA EXPLAINER STORYBOARD COPILOT (PURE STORY-FIRST DYNAMIC PACING)
+        // ==============================================================
+        // VOICE SELECTION & 3-SECOND LIVE PREVIEW (READ ALOUD)
+        // ==============================================================
+        const btnPreviewExplainerVoice = document.getElementById('btnPreviewExplainerVoice');
+        const previewExplainerVoiceIcon = document.getElementById('previewExplainerVoiceIcon');
+        const previewExplainerVoiceText = document.getElementById('previewExplainerVoiceText');
+        const btnPreviewTrimmerTtsVoice = document.getElementById('btnPreviewTrimmerTtsVoice');
+        const previewTrimmerTtsVoiceIcon = document.getElementById('previewTrimmerTtsVoiceIcon');
+        const previewTrimmerTtsVoiceText = document.getElementById('previewTrimmerTtsVoiceText');
+        const explainerVoicePreviewAudio = document.getElementById('explainerVoicePreviewAudio');
+
+        async function playThreeSecVoicePreview(voiceSelectEl, toneSelectEl, btnEl, iconEl, textEl) {
+            if (!btnEl) return;
+            const voice = voiceSelectEl ? voiceSelectEl.value : 'Kore';
+            const tone = toneSelectEl ? toneSelectEl.value : 'Narrative Deep Storytelling';
+
+            // If currently playing, stop
+            if (explainerVoicePreviewAudio && !explainerVoicePreviewAudio.paused) {
+                explainerVoicePreviewAudio.pause();
+                explainerVoicePreviewAudio.currentTime = 0;
+                if (iconEl) iconEl.textContent = '🔊';
+                if (textEl) textEl.textContent = 'Preview / Read Aloud';
+                return;
+            }
+
+            btnEl.disabled = true;
+            if (iconEl) iconEl.textContent = '⏳';
+            if (textEl) textEl.textContent = `Loading ${voice}...`;
+
+            try {
+                const res = await fetch('/api/tts/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        voice_name: voice,
+                        tone_style: tone,
+                        language: 'Hindi',
+                        channel_id: window.currentActiveChannelId || 'default'
+                    })
+                });
+                const data = await res.json();
+                if (!data.success || !data.audio_url) {
+                    throw new Error(data.error || 'Failed to synthesize voice preview.');
+                }
+
+                if (explainerVoicePreviewAudio) {
+                    explainerVoicePreviewAudio.src = data.audio_url;
+                    if (iconEl) iconEl.textContent = '⏹️';
+                    if (textEl) textEl.textContent = `Playing ${voice}...`;
+                    explainerVoicePreviewAudio.onended = () => {
+                        if (iconEl) iconEl.textContent = '🔊';
+                        if (textEl) textEl.textContent = 'Preview / Read Aloud';
+                    };
+                    await explainerVoicePreviewAudio.play();
+                }
+            } catch (err) {
+                alert('Voice Preview Error: ' + err.message);
+                if (iconEl) iconEl.textContent = '🔊';
+                if (textEl) textEl.textContent = 'Preview / Read Aloud';
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+
+        if (btnPreviewExplainerVoice) {
+            btnPreviewExplainerVoice.addEventListener('click', () => {
+                playThreeSecVoicePreview(
+                    trimmerExplainerVoice,
+                    trimmerExplainerTone,
+                    btnPreviewExplainerVoice,
+                    previewExplainerVoiceIcon,
+                    previewExplainerVoiceText
+                );
+            });
+        }
+
+        if (btnPreviewTrimmerTtsVoice) {
+            btnPreviewTrimmerTtsVoice.addEventListener('click', () => {
+                playThreeSecVoicePreview(
+                    trimmerTtsVoiceSelect,
+                    trimmerTtsToneSelect,
+                    btnPreviewTrimmerTtsVoice,
+                    previewTrimmerTtsVoiceIcon,
+                    previewTrimmerTtsVoiceText
+                );
+            });
+        }
+
+        // Keep voice & tone selects synced across Explainer Copilot & Export Settings
+        if (trimmerExplainerVoice && trimmerTtsVoiceSelect) {
+            trimmerExplainerVoice.addEventListener('change', () => {
+                trimmerTtsVoiceSelect.value = trimmerExplainerVoice.value;
+            });
+            trimmerTtsVoiceSelect.addEventListener('change', () => {
+                trimmerExplainerVoice.value = trimmerTtsVoiceSelect.value;
+            });
+        }
+        if (trimmerExplainerTone && trimmerTtsToneSelect) {
+            trimmerExplainerTone.addEventListener('change', () => {
+                trimmerTtsToneSelect.value = trimmerExplainerTone.value;
+            });
+        }
+        if (trimmerNarrationScript) {
+            trimmerNarrationScript.addEventListener('input', () => {
+                // If user manually edits narration script text, mark audio for fresh synthesis on export
+                currentNarrationAudioUrl = null;
+            });
+        }
+
+        // ==============================================================
+        // UNIFIED ONE-CLICK AUTO EXPLAINER PIPELINE (ALL 5 STEPS IN 1 CLICK)
+        // ==============================================================
+        const explainerPipelineTracker = document.getElementById('explainerPipelineTracker');
+        const explainerPipelineStatusTitle = document.getElementById('explainerPipelineStatusTitle');
+        const explainerPipelineSpeedBadge = document.getElementById('explainerPipelineSpeedBadge');
+        const explainerReadyAudioBar = document.getElementById('explainerReadyAudioBar');
+        const explainerReadyAudioPlayer = document.getElementById('explainerReadyAudioPlayer');
+        const btnDownloadExplainerReadyMp3 = document.getElementById('btnDownloadExplainerReadyMp3');
+        const btnQuickExportFromExplainer = document.getElementById('btnQuickExportFromExplainer');
+
+        function setPipelineStepState(stepNum, state, customLabel) {
+            const el = document.getElementById(`pipeStep${stepNum}`);
+            if (!el) return;
+            if (customLabel) el.innerHTML = customLabel;
+            if (state === 'active') {
+                el.style.background = 'rgba(168, 85, 247, 0.22)';
+                el.style.borderColor = '#a855f7';
+                el.style.color = '#f3e8ff';
+            } else if (state === 'done') {
+                el.style.background = 'rgba(16, 185, 129, 0.2)';
+                el.style.borderColor = '#10b981';
+                el.style.color = '#6ee7b7';
+            } else {
+                el.style.background = 'rgba(255,255,255,0.04)';
+                el.style.borderColor = 'rgba(255,255,255,0.1)';
+                el.style.color = '#94a3b8';
+            }
+        }
+
         if (btnTrimmerPlanExplainer) {
             btnTrimmerPlanExplainer.addEventListener('click', async () => {
                 const url = (trimmerExplainerYtUrl ? trimmerExplainerYtUrl.value : '').trim();
                 if (!url) {
-                    alert('Please enter a YouTube movie URL to generate the Cinema Explainer storyboard.');
+                    alert('Please enter a YouTube movie URL to run the One-Click Auto Explainer Pipeline.');
                     if (trimmerExplainerYtUrl) trimmerExplainerYtUrl.focus();
                     return;
                 }
 
+                const voiceName = trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore';
+                const toneStyle = trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling';
+                const durVal = trimmerExplainerDuration ? trimmerExplainerDuration.value : 'dynamic';
+
                 btnTrimmerPlanExplainer.disabled = true;
                 if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span>';
-                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generating Cinema Storyboard...';
+                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 1/5: Benchmarking Voice Speed...';
+
+                if (explainerPipelineTracker) explainerPipelineTracker.style.display = 'block';
+                setPipelineStepState(1, 'active', '⏳ <b>1. Speed Test:</b> 100-Char Hindi...');
+                setPipelineStepState(2, 'pending', '<b>2. Storyboard:</b> Gemini Cuts');
+                setPipelineStepState(3, 'pending', '<b>3. Word Budget:</b> Exact Scene Sync');
+                setPipelineStepState(4, 'pending', '<b>4. Auto TTS:</b> Hindi + BGM');
+                setPipelineStepState(5, 'pending', '<b>5. Timeline:</b> Ready to Export');
 
                 try {
-                    const durVal = trimmerExplainerDuration ? trimmerExplainerDuration.value : 'dynamic';
+                    // ----------------------------------------------------------
+                    // STEP 1: Live Speed Test (100-Character Hindi Benchmark)
+                    // ----------------------------------------------------------
+                    if (explainerPipelineStatusTitle) {
+                        explainerPipelineStatusTitle.textContent = `⚡ Step 1/5: Benchmarking "${voiceName}" on 100-character Hindi sample...`;
+                    }
+                    let measuredWps = 2.35;
+                    let measuredCps = 12.5;
+                    try {
+                        const calRes = await fetch('/api/tts/calibrate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                voice_name: voiceName,
+                                tone_style: toneStyle,
+                                language: 'Hindi',
+                                force_live: true
+                            })
+                        });
+                        const calData = await calRes.json();
+                        if (calData.success && calData.result) {
+                            measuredWps = parseFloat(calData.result.wps) || 2.35;
+                            measuredCps = parseFloat(calData.result.cps) || 12.5;
+                        }
+                    } catch (calErr) {
+                        console.warn('Calibration benchmark notice:', calErr);
+                    }
+
+                    setPipelineStepState(1, 'done', `✅ <b>1. Speed:</b> ${measuredWps.toFixed(2)} w/s (${measuredCps.toFixed(1)} c/s)`);
+                    if (explainerPipelineSpeedBadge) {
+                        explainerPipelineSpeedBadge.textContent = `${voiceName}: ${measuredWps.toFixed(2)} WPS • ${measuredCps.toFixed(1)} CPS`;
+                    }
+
+                    // ----------------------------------------------------------
+                    // STEP 2 & STEP 3: Storyboard Extraction + Strict Word Budgeting
+                    // ----------------------------------------------------------
+                    setPipelineStepState(2, 'active', '⏳ <b>2. Storyboard:</b> Extracting Cuts...');
+                    setPipelineStepState(3, 'active', '⏳ <b>3. Word Budget:</b> Syncing Script...');
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 2-3/5: Extracting Storyboard & Script...';
+                    if (explainerPipelineStatusTitle) {
+                        explainerPipelineStatusTitle.textContent = `🎬 Step 2 & 3/5: Gemini extracting dynamic cuts & word-budgeted Hindi script (@ ${measuredWps.toFixed(2)} WPS)...`;
+                    }
+
                     const payload = {
                         youtube_url: url,
                         target_duration: durVal === 'dynamic' ? 'dynamic' : (parseInt(durVal) || 'dynamic'),
-                        voice_name: trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore',
-                        tone_style: trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling',
-                        language: 'Hindi'
+                        voice_name: voiceName,
+                        tone_style: toneStyle,
+                        language: 'Hindi',
+                        calibrated_wps: measuredWps,
+                        calibrated_cps: measuredCps,
+                        channel_id: window.currentActiveChannelId || 'default'
                     };
 
                     const res = await fetch('/api/trimmer/plan_explainer', {
@@ -6409,23 +6715,88 @@ HTML_MAIN = """
                         throw new Error(data.error);
                     }
 
+                    data.calibrated_wps = data.calibrated_wps || measuredWps;
+                    data.calibrated_cps = measuredCps;
                     currentExplainerStoryboard = data;
+
+                    setPipelineStepState(2, 'done', `✅ <b>2. Storyboard:</b> ${data.total_clips || (data.keeper_clips || []).length} Cuts`);
+                    setPipelineStepState(3, 'done', `✅ <b>3. Word Budget:</b> ${data.total_words || 0} Words`);
+
                     renderExplainerStoryboardUI(data);
 
-                    if (trimmerTotalDuration > 0) {
-                        applyExplainerStoryboardToTimeline(data);
-                        alert(`Cinema Explainer Ready!\nAnalyzed "${data.title}" and auto-injected ${data.total_clips} dynamic cuts totaling ${formatSecs(data.total_duration_sec)} into your timeline with millisecond-synced Hindi voiceover!`);
-                    } else {
-                        const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
-                        if (noticeEl) {
-                            noticeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // ----------------------------------------------------------
+                    // STEP 4: Auto-Generate Full Hindi Voiceover + Ducked Suspense BGM
+                    // ----------------------------------------------------------
+                    setPipelineStepState(4, 'active', '⏳ <b>4. Auto TTS:</b> Synthesizing MP3...');
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 4/5: Synthesizing Hindi Voiceover + BGM...';
+                    if (explainerPipelineStatusTitle) {
+                        explainerPipelineStatusTitle.textContent = `🎙️ Step 4/5: Synthesizing full Hindi voiceover (${voiceName}) + ducked suspense BGM...`;
+                    }
+
+                    const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\n\n');
+                    if (fullScriptText) {
+                        const ttsRes = await fetch('/api/tts/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                script: fullScriptText,
+                                voice_name: voiceName,
+                                tone_style: toneStyle,
+                                language: 'Hindi',
+                                audio_mode: 'tts_bgm',
+                                include_bgm: true,
+                                channel_id: window.currentActiveChannelId || 'default'
+                            })
+                        });
+                        const ttsData = await ttsRes.json();
+                        if (ttsData.success && ttsData.audio_url) {
+                            currentNarrationAudioUrl = ttsData.audio_url;
+                            data.narration_audio_url = ttsData.audio_url;
+                            currentExplainerStoryboard.narration_audio_url = ttsData.audio_url;
+
+                            if (explainerReadyAudioBar) explainerReadyAudioBar.style.display = 'flex';
+                            if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = ttsData.audio_url;
+                            if (btnDownloadExplainerReadyMp3) {
+                                btnDownloadExplainerReadyMp3.href = ttsData.audio_url;
+                                btnDownloadExplainerReadyMp3.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                            }
+
+                            if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
+                            if (trimmerNarrationAudioPlayer) trimmerNarrationAudioPlayer.src = ttsData.audio_url;
+                            if (btnQuickDownloadAudio) {
+                                btnQuickDownloadAudio.href = ttsData.audio_url;
+                                btnQuickDownloadAudio.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                            }
+                            if (btnDownloadNarrationAudio) {
+                                btnDownloadNarrationAudio.href = ttsData.audio_url;
+                                btnDownloadNarrationAudio.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                                btnDownloadNarrationAudio.style.display = 'inline-flex';
+                            }
+                            setPipelineStepState(4, 'done', '✅ <b>4. Auto TTS:</b> Voiceover + BGM Ready');
+                        } else {
+                            setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Ready on Export');
                         }
                     }
+
+                    // ----------------------------------------------------------
+                    // STEP 5: Instant Timeline Injection & Direct Export Ready
+                    // ----------------------------------------------------------
+                    setPipelineStepState(5, 'active', '⏳ <b>5. Timeline:</b> Injecting...');
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 5/5: Injecting into Timeline...';
+                    applyExplainerStoryboardToTimeline(data);
+                    setPipelineStepState(5, 'done', '✅ <b>5. Timeline:</b> Injected & Export Ready!');
+
+                    if (explainerPipelineStatusTitle) {
+                        explainerPipelineStatusTitle.innerHTML = `✅ <b>All 5 Steps Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)}) + Hindi Voiceover mapped to timeline. Hit <b>Export Final Video</b>!`;
+                    }
                 } catch (err) {
-                    alert('Cinema Explainer Error: ' + err.message);
+                    alert('Cinema Explainer Pipeline Error: ' + err.message);
+                    if (explainerPipelineStatusTitle) {
+                        explainerPipelineStatusTitle.textContent = '⚠️ Pipeline Error: ' + err.message;
+                    }
                 } finally {
                     btnTrimmerPlanExplainer.disabled = false;
-                    if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🎬';
+                    if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🚀';
                     if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generate Cinema Explainer Storyboard';
                 }
             });
@@ -6437,11 +6808,22 @@ HTML_MAIN = """
                     alert('Please generate a Cinema Explainer storyboard first using a YouTube URL.');
                     return;
                 }
-                if (trimmerTotalDuration <= 0) {
-                    alert('Please select or drag your movie video file below first.');
+                applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
+            });
+        }
+
+        if (btnQuickExportFromExplainer) {
+            btnQuickExportFromExplainer.addEventListener('click', () => {
+                if (!trimmerLocalFile) {
+                    alert('Your storyboard cuts and Hindi voiceover audio are ready and mapped!\nPlease select your local movie video file in the dropzone below so the browser can slice and export your final video.');
+                    if (trimmerDropzone) trimmerDropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (trimmerVideoInput) trimmerVideoInput.click();
                     return;
                 }
-                applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
+                if (btnExportFinalVideo) {
+                    btnExportFinalVideo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    btnExportFinalVideo.click();
+                }
             });
         }
 
@@ -6898,7 +7280,7 @@ HTML_MAIN = """
                 } finally {
                     btnExportFinalVideo.disabled = false;
                     if (btnExportIcon) btnExportIcon.textContent = '🎬';
-                    if (btnExportText) btnExportText.textContent = 'Export & Download Video (Zero Server Upload • In-Browser Slicing)';
+                    if (btnExportText) btnExportText.textContent = 'Export Final Video (Zero Server Upload • In-Browser Slicing)';
                 }
             });
         }
@@ -6908,6 +7290,8 @@ HTML_MAIN = """
         // ==============================================
         function initializeApp() {
             try {
+                window.forceClearBlockingOverlays();
+
                 // Bind all tabs with mobile touch and desktop click listeners
                 bindTabButton('tabTrimmerMode', 'trimmer');
                 bindTabButton('tabGeminiMode', 'gemini');
@@ -6918,12 +7302,8 @@ HTML_MAIN = """
                 bindTabButton('trimmer-tab', 'trimmer');
                 bindTabButton('copilot-tab', 'gemini');
 
-                // Auto-activate timeline trimmer tab:
-                // Mobile devices ALWAYS default to 'trimmer' so user lands straight onto movie editing timeline
-                const isMobile = window.innerWidth <= 960 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
-                const savedTab = localStorage.getItem('active_studio_tab');
-                const defaultTab = isMobile ? 'trimmer' : (savedTab || 'trimmer');
-                window.switchWorkspaceTab(defaultTab);
+                // Strictly default active tab to #trimmerSection on initial page load
+                window.switchWorkspaceTab('trimmer');
             } catch (e) {
                 console.warn("Tab binding warning:", e);
             }
@@ -8656,64 +9036,80 @@ def clipper_get_voices():
     })
 
 
+@app.route('/api/tts/preview', methods=['POST'])
 @app.route('/api/clipper/tts/preview', methods=['POST'])
 def clipper_tts_preview():
-    data = request.get_json(force=True, silent=True) or {}
-    voice = (data.get('voice') or 'Kore').strip()
-    tone = (data.get('tone') or 'Suspense / Thriller').strip()
-    language = (data.get('language') or 'Hindi').strip()
-    custom_text = (data.get('text') or '').strip()
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        voice = (data.get('voice') or data.get('voice_name') or 'Kore').strip()
+        tone = (data.get('tone') or data.get('tone_style') or 'Narrative Deep Storytelling').strip()
+        language = (data.get('language') or 'Hindi').strip()
+        custom_text = (data.get('text') or '').strip()
+        ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
 
-    sample_text = custom_text or (
-        "नमस्ते! मैं जेमिनी 3.8 फ्लैश टीटीएस हूँ। यह आवाज आपकी सिनेमाई यूट्यूब शॉर्ट्स के लिए बिल्कुल तैयार है!"
-        if language.lower().startswith('hi') else
-        "Hello! I am Gemini 3.8 Flash TTS. This voice is calibrated and ready for your cinematic YouTube Shorts!"
-    )
-    unique_id = uuid.uuid4().hex[:6]
-    filename = f"preview_{voice}_{unique_id}.mp3"
-    output_path = os.path.join(clipper_engine.TEMP_DIR, filename)
+        sample_text = custom_text or (
+            "नमस्ते! यह आवाज़ आपकी सिनेमाई कहानी के लिए बिल्कुल तैयार है!"
+            if language.lower().startswith('hi') else
+            "Hello! This voice is calibrated and ready for your cinematic movie explainer!"
+        )
+        unique_id = uuid.uuid4().hex[:6]
+        filename = f"preview_{voice}_{unique_id}.mp3"
+        output_path = os.path.join(clipper_engine.TEMP_DIR, filename)
 
-    ok = clipper_engine.generate_gemini_tts_audio(
-        text=sample_text,
-        output_path=output_path,
-        voice_name=voice,
-        tone_style=tone,
-        language=language
-    )
-    if ok and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-        return jsonify({
-            'success': True,
-            'audio_url': f'/api/clipper/tts_sample/{filename}',
-            'voice': voice,
-            'tone': tone
-        })
-    return jsonify({'success': False, 'error': 'Failed to generate voice preview audio'}), 500
+        ok = clipper_engine.generate_gemini_tts_audio(
+            text=sample_text,
+            output_path=output_path,
+            voice_name=voice,
+            tone_style=tone,
+            language=language,
+            channel_id=ch_id
+        )
+        if ok and os.path.exists(output_path) and os.path.getsize(output_path) > 500:
+            return jsonify({
+                'success': True,
+                'audio_url': f'/api/clipper/tts_sample/{filename}',
+                'voice': voice,
+                'tone': tone
+            }), 200
+        return jsonify({'success': False, 'error': 'Failed to generate voice preview audio'}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
+@app.route('/api/tts/calibrate', methods=['POST'])
 @app.route('/api/clipper/tts/calibrate', methods=['POST'])
 def clipper_tts_calibrate():
-    data = request.get_json(force=True, silent=True) or {}
-    voice = (data.get('voice') or 'Kore').strip()
-    tone = (data.get('tone') or 'Suspense / Thriller').strip()
-    language = (data.get('language') or 'Hindi').strip()
-    job_id = (data.get('job_id') or '').strip()
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        voice = (data.get('voice') or data.get('voice_name') or 'Kore').strip()
+        tone = (data.get('tone') or data.get('tone_style') or 'Narrative Deep Storytelling').strip()
+        language = (data.get('language') or 'Hindi').strip()
+        job_id = (data.get('job_id') or '').strip()
+        force_live = bool(data.get('force_live', False))
 
-    result = clipper_engine.calibrate_voice_speed(voice_name=voice, tone_style=tone, language=language)
-    if job_id:
-        try:
-            ckpt = clipper_engine.load_job_checkpoint(job_id)
-            if ckpt:
-                ckpt['wps'] = result['wps']
-                ckpt['voice_name'] = voice
-                ckpt['tone_style'] = tone
-                clipper_engine.save_job_checkpoint(job_id, ckpt)
-        except Exception as ce:
-            print(f"Failed to persist calibration to job {job_id}: {ce}")
+        result = clipper_engine.calibrate_voice_speed(
+            voice_name=voice,
+            tone_style=tone,
+            language=language,
+            force_live=force_live
+        )
+        if job_id:
+            try:
+                ckpt = clipper_engine.load_job_checkpoint(job_id)
+                if ckpt:
+                    ckpt['wps'] = result['wps']
+                    ckpt['voice_name'] = voice
+                    ckpt['tone_style'] = tone
+                    clipper_engine.save_job_checkpoint(job_id, ckpt)
+            except Exception as ce:
+                print(f"Failed to persist calibration to job {job_id}: {ce}")
 
-    return jsonify({
-        'success': True,
-        'result': result
-    })
+        return jsonify({
+            'success': True,
+            'result': result
+        }), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
 @app.route('/api/clipper/tts_sample/<path:filename>')

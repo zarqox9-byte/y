@@ -1407,35 +1407,49 @@ def calculate_smart_916_crop(video_path: str) -> str:
 # =====================================================================
 # 5. HIGH-QUALITY NEURAL VOICEOVER GENERATION (EDGE-TTS)
 # =====================================================================
-async def _edge_tts_generate_async(text: str, output_path: str, voice: str):
+async def _edge_tts_generate_async(text: str, output_path: str, voice: str, rate: str = "+0%", pitch: str = "+0Hz"):
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
     await communicate.save(output_path)
 
 
-def generate_voiceover_audio(text: str, output_path: str, language: str = "Hindi") -> bool:
+VOICE_PROFILE_MAP = {
+    "Kore": {"hi_voice": "hi-IN-MadhurNeural", "en_voice": "en-US-ChristopherNeural", "rate": "+0%", "pitch": "-2Hz"},
+    "Fenrir": {"hi_voice": "hi-IN-MadhurNeural", "en_voice": "en-US-EricNeural", "rate": "-4%", "pitch": "-6Hz"},
+    "Puck": {"hi_voice": "hi-IN-MadhurNeural", "en_voice": "en-US-GuyNeural", "rate": "+8%", "pitch": "+2Hz"},
+    "Algenib": {"hi_voice": "hi-IN-MadhurNeural", "en_voice": "en-US-RogerNeural", "rate": "-2%", "pitch": "-4Hz"},
+    "Charon": {"hi_voice": "hi-IN-MadhurNeural", "en_voice": "en-US-SteffanNeural", "rate": "-7%", "pitch": "-9Hz"},
+    "Aoede": {"hi_voice": "hi-IN-SwaraNeural", "en_voice": "en-US-JennyNeural", "rate": "+2%", "pitch": "+0Hz"},
+    "Algieba": {"hi_voice": "hi-IN-SwaraNeural", "en_voice": "en-US-AriaNeural", "rate": "+7%", "pitch": "+2Hz"},
+}
+
+
+def generate_voiceover_audio(text: str, output_path: str, language: str = "Hindi", voice_name: str = "Kore") -> bool:
     """
-    Generates high-quality neural voiceover audio using Edge-TTS.
-    Hindi: hi-IN-MadhurNeural (charismatic male storyteller)
-    English: en-US-ChristopherNeural (authoritative, engaging narrator)
+    Generates high-quality neural voiceover audio using Edge-TTS with per-character voice profiles.
+    Hindi: hi-IN-MadhurNeural / hi-IN-SwaraNeural with tailored pitch & rate
+    English: en-US-ChristopherNeural / en-US-JennyNeural with tailored pitch & rate
     """
     if not text or not text.strip():
         logger.warning("Empty script text provided for voiceover generation.")
         return False
 
-    voice = "hi-IN-MadhurNeural" if language.lower().startswith("hi") else "en-US-ChristopherNeural"
-    logger.info(f"Generating voiceover using voice '{voice}' for script: {text[:60]}...")
+    profile = VOICE_PROFILE_MAP.get(voice_name, VOICE_PROFILE_MAP["Kore"])
+    is_hindi = language.lower().startswith("hi")
+    voice = profile["hi_voice"] if is_hindi else profile["en_voice"]
+    rate = profile.get("rate", "+0%")
+    pitch = profile.get("pitch", "+0Hz")
+    logger.info(f"Generating voiceover using voice '{voice}' (Profile: {voice_name}, rate={rate}, pitch={pitch}) for script: {text[:60]}...")
 
     try:
-        # Use asyncio to execute edge_tts
-        asyncio.run(_edge_tts_generate_async(text.strip(), output_path, voice))
+        asyncio.run(_edge_tts_generate_async(text.strip(), output_path, voice, rate=rate, pitch=pitch))
         if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
             logger.info(f"Voiceover successfully generated at: {output_path}")
             return True
     except Exception as e:
         logger.error(f"Primary voiceover generation failed: {e}. Trying alternative voice...")
         try:
-            alt_voice = "hi-IN-SwaraNeural" if language.lower().startswith("hi") else "en-US-JennyNeural"
+            alt_voice = "hi-IN-SwaraNeural" if is_hindi else "en-US-JennyNeural"
             asyncio.run(_edge_tts_generate_async(text.strip(), output_path, alt_voice))
             if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
                 return True
@@ -1449,31 +1463,32 @@ def generate_voiceover_audio(text: str, output_path: str, language: str = "Hindi
 # GEMINI 3.8 / 3.1 FLASH TTS STUDIO & WPS TIMING CALIBRATION
 # =====================================================================
 GEMINI_TTS_VOICES = [
-    {"name": "Kore", "gender": "Female", "tag": "Authoritative & Dramatic", "desc": "Firm, cinematic storyteller with clear diction"},
-    {"name": "Fenrir", "gender": "Male", "tag": "Deep Movie Trailer", "desc": "Commanding, booming baritone for epic climaxes"},
-    {"name": "Puck", "gender": "Male", "tag": "Dynamic & Expressive", "desc": "Energetic, engaging narrator with rich inflection"},
+    {"name": "Kore", "gender": "Male", "tag": "Hindi Deep Storyteller", "desc": "Firm, cinematic storyteller with clear diction"},
+    {"name": "Fenrir", "gender": "Male", "tag": "Dramatic Intense", "desc": "Commanding, booming baritone for epic climaxes"},
+    {"name": "Puck", "gender": "Male", "tag": "Fast-Paced Punch", "desc": "Energetic, engaging narrator with rapid inflection"},
     {"name": "Algenib", "gender": "Male", "tag": "Suspense & Thriller", "desc": "Gravelly, intense tone for dark mysteries"},
-    {"name": "Charon", "gender": "Male", "tag": "Dark & Brooding", "desc": "Somber, heavy voice for horror and high tension"},
-    {"name": "Aoede", "gender": "Female", "tag": "Sophisticated & Clear", "desc": "Melodic, crisp delivery for thoughtful recaps"},
+    {"name": "Charon", "gender": "Male", "tag": "Deep Mysterious", "desc": "Somber, heavy voice for horror and high tension"},
+    {"name": "Aoede", "gender": "Female", "tag": "Expressive Female", "desc": "Melodic, crisp delivery for thoughtful recaps"},
     {"name": "Algieba", "gender": "Female", "tag": "Fast-Paced Action", "desc": "Sharp, intense delivery for rapid action cuts"}
 ]
 
 TONE_PROMPT_PRESETS = {
     "Movie Trailer": "Say in Hindi in a booming, dramatic movie trailer voice: ",
+    "Movie Trailer Dramatic": "Say in Hindi in a booming, dramatic movie trailer voice: ",
     "Suspense / Thriller": "Say in Hindi in a tense, gripping suspense thriller voice with dramatic pauses: ",
     "Narrative Deep": "Say in Hindi in a deep, rich cinematic storytelling voice: ",
+    "Narrative Deep Storytelling": "Say in Hindi in a deep, rich cinematic storytelling voice: ",
     "Fast-Paced Action": "Say in Hindi in an urgent, fast-paced action voice: ",
-    "Emotional Drama": "Say in Hindi in an emotional, poignant voice: "
+    "Fast-Paced Action Punch": "Say in Hindi in an urgent, fast-paced action voice: ",
+    "Emotional Drama": "Say in Hindi in an emotional, poignant voice: ",
+    "Emotional Cinema Drama": "Say in Hindi in an emotional, poignant voice: "
 }
 
-CALIBRATION_100_WORDS_HINDI = (
-    "यह एक रोमांचक कहानी की शुरुआत है जहाँ हर तरफ खतरा मंडरा रहा है। "
-    "जंगल के सन्नाटे में दूर से आती एक रहस्यमयी आवाज ने सबका ध्यान खींचा। "
-    "नायक ने धीरे-धीरे अपने कदम आगे बढ़ाए ताकि दुश्मन को उसकी मौजूदगी का अहसास ना हो। "
-    "अचानक पेड़ों के पीछे से एक साया निकला और माहौल में गहरा सन्नाटा छा गया। "
-    "क्या वह इस चुनौती का सामना कर पाएगा या फिर अंधेरा उसे हमेशा के लिए निगल जाएगा? "
-    "समय तेजी से बीत रहा था और हर एक सेकंड उसके लिए बेहद कीमती साबित हो रहा था।"
+CALIBRATION_100_CHARS_HINDI = (
+    "यह एक रोमांचक कहानी की शुरुआत है जहाँ हर तरफ खतरा मंडरा रहा है और जंगल के सन्नाटे में रहस्यमयी आवाज गूंज रही है।"
 )
+
+CALIBRATION_100_WORDS_HINDI = CALIBRATION_100_CHARS_HINDI
 
 
 def generate_gemini_tts_audio(
@@ -1556,38 +1571,36 @@ def generate_gemini_tts_audio(
     except Exception as ge:
         logger.warning(f"Gemini TTS generation notice: {ge}. Cascading to Edge-TTS fallback...")
 
-    # 2. Resilient fallback to Edge-TTS
-    logger.info("Falling back to high-quality Edge-TTS neural engine...")
-    return generate_voiceover_audio(text, output_path, language=language)
+    # 2. Resilient fallback to Edge-TTS with character voice profile
+    logger.info(f"Falling back to high-quality Edge-TTS neural engine for voice '{voice_name}'...")
+    return generate_voiceover_audio(text, output_path, language=language, voice_name=voice_name)
 
 
-_CALIBRATION_CACHE: Dict[str, Dict[str, Any]] = {
-    "Kore_Narrative Deep Storytelling_Hindi": {"status": "calibrated", "voice": "Kore", "tone": "Narrative Deep Storytelling", "word_count": 94, "duration": 40.54, "wps": 2.32, "audio_url": None, "message": "Pre-calibrated benchmark (2.32 WPS)"},
-    "Kore_Suspense / Thriller_Hindi": {"status": "calibrated", "voice": "Kore", "tone": "Suspense / Thriller", "word_count": 94, "duration": 39.17, "wps": 2.40, "audio_url": None, "message": "Pre-calibrated benchmark (2.40 WPS)"},
-    "Fenrir_Narrative Deep Storytelling_Hindi": {"status": "calibrated", "voice": "Fenrir", "tone": "Narrative Deep Storytelling", "word_count": 94, "duration": 41.20, "wps": 2.28, "audio_url": None, "message": "Pre-calibrated benchmark (2.28 WPS)"},
-    "Puck_Suspense / Thriller_Hindi": {"status": "calibrated", "voice": "Puck", "tone": "Suspense / Thriller", "word_count": 94, "duration": 38.30, "wps": 2.45, "audio_url": None, "message": "Pre-calibrated benchmark (2.45 WPS)"},
-}
+_CALIBRATION_CACHE: Dict[str, Dict[str, Any]] = {}
+
 
 def calibrate_voice_speed(
     voice_name: str = "Kore",
     tone_style: str = "Suspense / Thriller",
     language: str = "Hindi",
-    custom_text: Optional[str] = None
+    custom_text: Optional[str] = None,
+    force_live: bool = False
 ) -> Dict[str, Any]:
     """
-    Synthesizes canonical 100-word text using selected voice and tone style.
+    Synthesizes canonical ~100-character Hindi benchmark text using selected voice and tone style.
     Measures exact audio duration via ffprobe/ffmpeg.
-    Calculates Words-Per-Second (WPS = 100 / duration).
+    Calculates Words-Per-Second (WPS) and Characters-Per-Second (CPS).
     Returns calibration metrics and sample audio path.
     """
     cache_key = f"{voice_name}_{tone_style}_{language}"
-    if not custom_text and cache_key in _CALIBRATION_CACHE:
+    if not custom_text and not force_live and cache_key in _CALIBRATION_CACHE:
         logger.info(f"Using cached calibration benchmark for {cache_key}: {_CALIBRATION_CACHE[cache_key]['wps']} WPS")
         return _CALIBRATION_CACHE[cache_key]
 
-    sample_text = (custom_text or CALIBRATION_100_WORDS_HINDI).strip()
+    sample_text = (custom_text or CALIBRATION_100_CHARS_HINDI).strip()
     words = sample_text.split()
     word_count = len(words)
+    char_count = len(sample_text)
 
     unique_id = uuid.uuid4().hex[:6]
     sample_filename = f"calib_{voice_name}_{unique_id}.mp3"
@@ -1601,20 +1614,31 @@ def calibrate_voice_speed(
         language=language
     )
     if not ok or not os.path.exists(sample_path):
-        return {
+        default_wps = 2.40
+        if voice_name == "Puck" or voice_name == "Algieba":
+            default_wps = 2.60
+        elif voice_name == "Fenrir" or voice_name == "Charon":
+            default_wps = 2.22
+        default_dur = round(word_count / default_wps, 2)
+        default_cps = round(char_count / max(default_dur, 1.0), 2)
+        res_obj = {
             "status": "fallback",
             "voice": voice_name,
             "tone": tone_style,
             "word_count": word_count,
-            "duration": 42.0,
-            "wps": 2.4,
+            "char_count": char_count,
+            "duration": default_dur,
+            "wps": default_wps,
+            "cps": default_cps,
             "audio_url": None,
-            "message": "Used calibrated benchmark default (2.40 WPS)"
+            "message": f"Benchmark {default_wps} words/sec ({default_cps} chars/sec)"
         }
+        _CALIBRATION_CACHE[cache_key] = res_obj
+        return res_obj
 
     # Measure exact duration
     ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
-    dur = 42.0
+    dur = round(word_count / 2.4, 2)
     try:
         cmd = [
             ffprobe_bin, "-v", "error",
@@ -1623,25 +1647,36 @@ def calibrate_voice_speed(
             sample_path
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
-        dur = float(res.stdout.strip())
+        if res.stdout.strip():
+            dur = float(res.stdout.strip())
     except Exception as e:
         logger.warning(f"Could not probe calibration duration: {e}. Calculating from mp3 size...")
-        dur = max(10.0, word_count / 2.4)
+        try:
+            # 192kbps = 24000 bytes/sec
+            fsize = os.path.getsize(sample_path)
+            dur = max(2.5, fsize / 24000.0)
+        except Exception:
+            dur = max(3.0, word_count / 2.4)
 
-    wps = round(word_count / max(dur, 1.0), 2)
-    logger.info(f"Calibration successful: {word_count} words in {dur:.2f}s => {wps} WPS for {voice_name} ({tone_style})")
+    wps = round(word_count / max(dur, 0.5), 2)
+    cps = round(char_count / max(dur, 0.5), 2)
+    logger.info(f"Calibration successful: {word_count} words ({char_count} chars) in {dur:.2f}s => {wps} WPS ({cps} CPS) for {voice_name} ({tone_style})")
 
-    return {
+    res_obj = {
         "status": "success",
         "voice": voice_name,
         "tone": tone_style,
         "word_count": word_count,
+        "char_count": char_count,
         "duration": round(dur, 2),
         "wps": wps,
+        "cps": cps,
         "filename": sample_filename,
         "audio_url": f"/api/clipper/tts_sample/{sample_filename}",
-        "message": f"Calibrated {wps} words/sec ({dur:.1f}s sample)"
+        "message": f"Calibrated {wps} words/sec • {cps} chars/sec ({dur:.1f}s on 100-char Hindi sample)"
     }
+    _CALIBRATION_CACHE[cache_key] = res_obj
+    return res_obj
 
 
 def balance_script_for_cuts(
