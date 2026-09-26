@@ -2797,7 +2797,7 @@ HTML_MAIN = """
                     </div>
 
                     <!-- Center: Frame Stepping / Transport -->
-                    <div style="display: flex; gap: 6px; align-items: center;">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                         <button type="button" id="btnTrimmerPrevClip" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="Previous Keeper Clip">⏮️</button>
                         <button type="button" id="btnTrimmerStepBack" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="-1 Second">⏪ -1s</button>
                         <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 6px 14px; font-size: 13px; font-weight: 700; background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #38bdf8;">▶️ Play</button>
@@ -2806,7 +2806,7 @@ HTML_MAIN = """
                     </div>
 
                     <!-- Right: Gemini Auto-Cut Trigger -->
-                    <div style="display: flex; gap: 8px; align-items: center;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <select id="trimmerFocusSelect" class="form-control" style="width: auto; padding: 6px 10px; font-size: 12px;">
                             <option value="Key Dramatic Highlights">✨ Dramatic Turning Points</option>
                             <option value="Action &amp; Climax Moments">💥 Action &amp; Climax Scenes</option>
@@ -6025,7 +6025,7 @@ HTML_MAIN = """
             trimmerActiveClipIndex = 0;
 
             if (trimmerNarrationScript) {
-                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\n\n');
+                trimmerNarrationScript.value = storyboard.full_script || clips.map(c => c.narration || '').filter(Boolean).join('\\n\\n');
             }
 
             if (storyboard.narration_audio_url) {
@@ -6787,7 +6787,7 @@ HTML_MAIN = """
                         explainerPipelineStatusTitle.textContent = `🎙️ Step 4/5: Synthesizing full Hindi voiceover (${voiceName}) + ducked suspense BGM...`;
                     }
 
-                    const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\n\n');
+                    const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\\n\\n');
                     if (fullScriptText) {
                         const ttsRes = await fetch('/api/tts/generate', {
                             method: 'POST',
@@ -6869,7 +6869,7 @@ HTML_MAIN = """
         if (btnQuickExportFromExplainer) {
             btnQuickExportFromExplainer.addEventListener('click', () => {
                 if (!trimmerLocalFile) {
-                    alert('Your storyboard cuts and Hindi voiceover audio are ready and mapped!\nPlease select your local movie video file in the dropzone below so the browser can slice and export your final video.');
+                    alert('Your storyboard cuts and Hindi voiceover audio are ready and mapped!\\nPlease select your local movie video file in the dropzone below so the browser can slice and export your final video.');
                     if (trimmerDropzone) trimmerDropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     if (trimmerVideoInput) trimmerVideoInput.click();
                     return;
@@ -7011,7 +7011,7 @@ HTML_MAIN = """
             }
 
             if (progressCb) progressCb(0.88, 'Stitching cuts and muxing synchronized audio...');
-            ffmpeg.FS('writeFile', 'concat.txt', concatLines.join('\n'));
+            ffmpeg.FS('writeFile', 'concat.txt', concatLines.join('\\n'));
 
             if (hasCustomAudio) {
                 // Stitch video cuts and mux synchronized neural Hindi narration + ducked BGM
