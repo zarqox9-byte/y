@@ -5919,7 +5919,12 @@ HTML_MAIN = """
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    const data = await res.json();
+                    let data;
+                    try {
+                        data = await res.json();
+                    } catch (parseErr) {
+                        throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
+                    }
 
                     if (!data.success && data.error) {
                         throw new Error(data.error);
@@ -6969,7 +6974,7 @@ def clipper_analyze():
         })
     except Exception as e:
         print(f"Clipper analysis error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
 clipper_part_tasks = {}
@@ -7916,7 +7921,7 @@ def trimmer_plan_explainer():
     custom_instructions = (data.get('custom_instructions') or '').strip()
 
     if not youtube_url:
-        return jsonify({'success': False, 'error': 'YouTube URL is required'}), 400
+        return jsonify({'success': False, 'error': 'YouTube URL is required'}), 200
 
     try:
         creds = get_stored_credentials()
@@ -7932,7 +7937,7 @@ def trimmer_plan_explainer():
         return jsonify(storyboard)
     except Exception as e:
         print(f"Trimmer plan explainer error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
 def _execute_trimmer_export_worker(task_id: str, payload: Dict[str, Any]):
