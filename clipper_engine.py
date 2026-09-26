@@ -3342,20 +3342,27 @@ def execute_audio_master_1to1_pipeline(
         final_keeper_clips: List[Dict[str, Any]] = []
         slot_span = src_dur / float(max(1, len(synced_clips)))
         cursor_time = 0.0
+        audio_cursor = 0.0
 
         for idx, item in enumerate(synced_clips, 1):
             rb = item["raw_beat"]
             d_audio = item["d_audio"]
             narr = item["narration"]
 
-            proposed_start = float(rb.get("start", (idx - 1) * slot_span))
-            # Keep chronological non-overlapping order within source movie bounds
+            remaining_audio_dur = sum(float(x["d_audio"]) + 0.3 for x in synced_clips[idx:])
+            slot_default_start = (idx - 1) * slot_span + min(2.0, slot_span * 0.05)
+            proposed_start = float(rb.get("start", slot_default_start))
+            # Keep chronological non-overlapping order within source movie bounds without end-bunching
             min_start = cursor_time
-            max_start = max(min_start, src_dur - d_audio - 0.1)
+            max_start = max(min_start, src_dur - d_audio - remaining_audio_dur - 0.1)
             cut_start = round(max(min_start, min(max_start, proposed_start)), 3)
             cut_end = round(cut_start + d_audio, 3)
             cut_dur = round(cut_end - cut_start, 3)  # Strictly equals d_audio!
-            cursor_time = round(cut_end + 0.2, 3)
+            cursor_time = round(cut_end + 0.3, 3)
+
+            audio_start = round(audio_cursor, 3)
+            audio_end = round(audio_cursor + d_audio, 3)
+            audio_cursor = audio_end
 
             final_keeper_clips.append({
                 "id": idx,
@@ -3367,6 +3374,8 @@ def execute_audio_master_1to1_pipeline(
                 "end_ts": format_seconds_to_timestamp(cut_end),
                 "duration": cut_dur,
                 "audio_duration": d_audio,
+                "audio_start": audio_start,
+                "audio_end": audio_end,
                 "sync_drift_sec": 0.0,
                 "title": sanitize_actor_names_to_character_roles(str(rb.get("title") or f"Scene {idx}"), language),
                 "reason": sanitize_actor_names_to_character_roles(str(rb.get("reason") or "Audio-Master 1:1 locked scene"), language),

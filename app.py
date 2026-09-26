@@ -2921,25 +2921,28 @@ HTML_MAIN = """
                                     <span id="trimmerExplainerBadgeWps" style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: --</span>
                                     <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: --</span>
                                     <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
-                                        <span>⚡</span> <span>Sync to CapCut Timeline</span>
+                                        <span>▶️</span> <span>Play Synced Preview</span>
                                     </button>
-                                    <button type="button" id="btnQuickExportFromExplainer" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #7c3aed); border: none; color: white; padding: 6px 16px; font-size: 12.5px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
-                                        <span>🎬</span> <span>Export Final Video</span>
+                                    <button type="button" id="btnQuickExportFromExplainer" class="btn-upload" style="background: linear-gradient(135deg, #10b981, #0284c7); border: none; color: white; padding: 6px 16px; font-size: 12.5px; font-weight: 800; border-radius: 6px; display: flex; align-items: center; gap: 6px; box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35);">
+                                        <span>⬇️</span> <span>Download Synced Explainer Video (.mp4)</span>
                                     </button>
                                 </div>
                             </div>
 
-                            <!-- Pre-Rendered Voiceover + BGM Audio Bar -->
+                            <!-- Unified Master Audio-Video Sync Bar (No Disjointed Audio Player) -->
                             <div id="explainerReadyAudioBar" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                                 <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
-                                    <span style="font-size: 18px;">🎧</span>
+                                    <span style="font-size: 18px;">🔗</span>
                                     <div>
-                                        <div style="font-size: 12.5px; font-weight: 700; color: #6ee7b7;">Pre-Rendered Voiceover + Ducked Suspense BGM Ready!</div>
-                                        <div style="font-size: 11px; color: #a7f3d0;">Automatically synthesized &amp; mapped to timeline cuts.</div>
+                                        <div style="font-size: 12.5px; font-weight: 700; color: #6ee7b7;">1:1 Master Synced Voiceover + Ducked Suspense BGM Locked to Video!</div>
+                                        <div style="font-size: 11px; color: #a7f3d0;">Native movie audio 100% muted &bull; Timeline video &amp; narration play together with 0.00s offset.</div>
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                    <audio id="explainerReadyAudioPlayer" controls style="height: 32px; width: 220px;"></audio>
+                                    <audio id="explainerReadyAudioPlayer" preload="auto" style="display: none;"></audio>
+                                    <button type="button" id="btnPlayMasterSyncedPreview" class="btn-populate" style="font-size: 11.5px; padding: 5px 12px; background: rgba(6, 182, 212, 0.2); color: #38bdf8; border-color: #06b6d4; font-weight: 700;">
+                                        ▶️ Play Synced Video + Voiceover
+                                    </button>
                                     <a id="btnDownloadExplainerReadyMp3" href="#" download="explainer_voiceover.mp3" class="btn-populate" style="font-size: 11.5px; padding: 5px 12px; text-decoration: none; color: #6ee7b7; border-color: #10b981; font-weight: 700;">
                                         ⬇️ Save Voiceover MP3
                                     </a>
@@ -2952,7 +2955,7 @@ HTML_MAIN = """
 
                             <div id="trimmerExplainerAutoInjectNotice" style="margin-top: 12px; padding: 10px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; font-size: 12px; color: #a7f3d0; display: flex; align-items: center; gap: 8px;">
                                 <span>💡</span>
-                                <span><b>Step 5 Unlocked Below:</b> Scrub the CapCut timeline playhead, review the synchronized narrative script below the player, and click <b>Export Final Video</b>!</span>
+                                <span><b>Step 5 Master Sync Ready Below:</b> Click <b>Play</b> to preview muted keeper cuts + Hindi voiceover in 1:1 lockstep, or click <b>⬇️ Download Synced Explainer Video (.mp4)</b>!</span>
                             </div>
                         </div>
                     </div>
@@ -2964,27 +2967,28 @@ HTML_MAIN = """
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="background: #0284c7; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 5</span>
-                                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #e0f2fe;">CapCut-Style Timeline Slider, Synchronized Script &amp; Direct Local Export</h4>
+                                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #e0f2fe;">Master 1:1 Audio-Video Sync Player, CapCut Timeline &amp; Direct MP4 Download</h4>
                             </div>
-                            <span style="font-size: 11.5px; color: #7dd3fc;">Drag red playhead line to scrub &bull; Original movie audio muted on TTS+BGM export</span>
+                            <span style="font-size: 11.5px; color: #6ee7b7; font-weight: 700;">🔇 Original Movie Audio 100% Muted &bull; 🔗 1-Click Play/Pause Master Sync</span>
                         </div>
 
-                        <!-- Main HTML5 Video Player Area -->
+                        <!-- Main HTML5 Video Player Area (Muted by default so only synced narration + BGM plays) -->
                         <div style="position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 14px;">
-                            <video id="trimmerPlayer" playsinline preload="auto" style="width: 100%; max-height: 440px; display: block; object-fit: contain; margin: 0 auto; background: #000;"></video>
-                            <div style="position: absolute; top: 12px; left: 14px; display: flex; gap: 8px; z-index: 5;">
+                            <video id="trimmerPlayer" muted playsinline preload="auto" style="width: 100%; max-height: 440px; display: block; object-fit: contain; margin: 0 auto; background: #000; cursor: pointer;"></video>
+                            <div style="position: absolute; top: 12px; left: 14px; display: flex; gap: 8px; z-index: 5; flex-wrap: wrap;">
                                 <span id="trimmerHudClipBadge" style="background: rgba(0,0,0,0.75); color: #38bdf8; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.4);">Clip 1 of 1</span>
                                 <span id="trimmerHudResBadge" style="background: rgba(0,0,0,0.75); color: #a7f3d0; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4);">Native Resolution</span>
+                                <span id="trimmerHudSyncBadge" style="background: rgba(16, 185, 129, 0.85); color: #052e16; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px;">🔇 Native Audio Muted • 1:1 Voice Sync</span>
                             </div>
                             <div style="position: absolute; top: 12px; right: 14px; display: flex; gap: 8px; z-index: 5;">
-                                <span id="trimmerHudTimeBadge" style="background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2);">00:00:00 / 00:00:00</span>
+                                <span id="trimmerHudTimeBadge" style="background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2);">00:00 / 00:00</span>
                             </div>
                         </div>
 
                         <!-- CapCut-Style Interactive Timeline Slider & Draggable Playhead -->
                         <div style="background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: #9ca3af; flex-wrap: wrap; gap: 8px;">
-                                <span>🎞️ <b>CapCut Timeline Track</b> &bull; Drag or tap playhead to scrub scenes</span>
+                                <span>🎞️ <b>CapCut 1:1 Synced Timeline Track</b> &bull; Drag or tap playhead to scrub video &amp; narration together</span>
                                 <span id="trimmerTimelinePlayheadTime" style="color: #38bdf8; font-weight: 700; font-family: monospace;">Playhead: 00:00:00</span>
                             </div>
 
@@ -3016,7 +3020,7 @@ HTML_MAIN = """
                             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                                 <button type="button" id="btnTrimmerPrevClip" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏮️</button>
                                 <button type="button" id="btnTrimmerStepBack" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏪ -1s</button>
-                                <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 5px 14px; font-size: 12.5px; font-weight: 700; background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #38bdf8;">▶️ Play</button>
+                                <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 6px 16px; font-size: 13px; font-weight: 800; background: rgba(16, 185, 129, 0.25); border-color: #10b981; color: #6ee7b7;">▶️ Play Synced Video + Audio</button>
                                 <button type="button" id="btnTrimmerStepFwd" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">+1s ⏩</button>
                                 <button type="button" id="btnTrimmerNextClip" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏭️</button>
                             </div>
@@ -3039,8 +3043,8 @@ HTML_MAIN = """
                         <div style="background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
                                 <div>
-                                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f3e8ff;">📜 Synchronized Narrative Script &amp; Scene Cuts (Click Any Scene to Scrub Player)</h4>
-                                    <div style="font-size: 11px; color: #94a3b8;">Each scene card shows its exact timestamp window and word-budgeted narration matched to your Step 2 voice speed.</div>
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f3e8ff;">📜 Synchronized Narrative Script &amp; Scene Cuts (Click Any Scene to Scrub Video + Voiceover)</h4>
+                                    <div style="font-size: 11px; color: #94a3b8;">Each scene cut switches at the exact millisecond its narration finishes (0.00s drift across the full montage).</div>
                                 </div>
                                 <button type="button" id="btnGenerateNarrationOnly" style="background: rgba(124, 58, 237, 0.25); border: 1px solid #7c3aed; color: #e9d5ff; font-size: 11.5px; font-weight: 700; padding: 5px 12px; border-radius: 6px; cursor: pointer;">
                                     🎙️ Re-Synthesize Voiceover MP3
@@ -3054,18 +3058,19 @@ HTML_MAIN = """
                             <label for="trimmerNarrationScript" style="font-size: 11.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 4px;">Full Continuous Story Narration Script (Editable before Export):</label>
                             <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 95px; font-size: 12.5px; line-height: 1.5; resize: vertical;" placeholder="Your mathematically bounded PardaCine story narration script will appear here automatically..."></textarea>
 
-                            <!-- In-browser Narration Audio Preview -->
-                            <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 8px; align-items: center; justify-content: space-between; gap: 10px;">
+                            <!-- Hidden Master Synced Narration Audio Element + Status Bar -->
+                            <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; padding: 8px 12px; margin-top: 8px; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
                                 <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
-                                    <span style="font-size: 14px;">🎧</span>
-                                    <audio id="trimmerNarrationAudioPlayer" controls style="height: 30px; flex-grow: 1;"></audio>
+                                    <span style="font-size: 15px;">🔗</span>
+                                    <span style="font-size: 12px; color: #6ee7b7; font-weight: 700;">Master Audio-Video Controller Linked (1:1 Frame Sync • Native Movie Sound Muted)</span>
+                                    <audio id="trimmerNarrationAudioPlayer" preload="auto" style="display: none;"></audio>
                                 </div>
                                 <a id="btnQuickDownloadAudio" href="#" download class="btn-populate" style="font-size: 11px; padding: 4px 10px; text-decoration: none; color: #c4b5fd; border-color: #7c3aed; white-space: nowrap;">⬇️ Download MP3</a>
                             </div>
                         </div>
 
-                        <!-- Client-Side Audio Muxing Mode & Single Export Button -->
-                        <div style="background: #181524; border: 1px solid #7c3aed; border-radius: 10px; padding: 16px 18px;">
+                        <!-- Client-Side Audio Muxing Mode & Single Prominent Download Button -->
+                        <div style="background: #181524; border: 1px solid #10b981; border-radius: 10px; padding: 16px 18px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
                                 <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px;">
                                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -3103,10 +3108,10 @@ HTML_MAIN = """
                                 </div>
                             </div>
 
-                            <!-- Single Export Final Video Button -->
-                            <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 800; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
-                                <span id="btnExportIcon">🎬</span>
-                                <span id="btnExportText">Export Final Video</span>
+                            <!-- Prominent Direct Download Synced Explainer Video Button -->
+                            <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #10b981, #0284c7); padding: 15px; font-size: 16px; font-weight: 800; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);">
+                                <span id="btnExportIcon">⬇️</span>
+                                <span id="btnExportText">Download Synced Explainer Video (.mp4)</span>
                             </button>
                         </div>
                     </div>
@@ -3114,13 +3119,13 @@ HTML_MAIN = """
                 </div><!-- End #sequentialSteps3To5Container -->
 
                 <!-- Export Progress & Download Card -->
-                <div id="trimmerExportCard" style="display: none; background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                <div id="trimmerExportCard" style="display: none; background: #0f172a; border: 1px solid #10b981; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span id="trimmerExportStepText" style="font-size: 14px; font-weight: 600; color: #e0f2fe;">Processing Export...</span>
-                        <span id="trimmerExportPercentText" style="font-size: 14px; font-weight: 700; color: #38bdf8;">0%</span>
+                        <span id="trimmerExportStepText" style="font-size: 14px; font-weight: 600; color: #e0f2fe;">Auto-Merging Synced Video &amp; Narration...</span>
+                        <span id="trimmerExportPercentText" style="font-size: 14px; font-weight: 700; color: #10b981;">0%</span>
                     </div>
                     <div style="width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
-                        <div id="trimmerExportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #06b6d4, #38bdf8); transition: width 0.3s ease;"></div>
+                        <div id="trimmerExportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #38bdf8); transition: width 0.3s ease;"></div>
                     </div>
 
                     <!-- Completed Video Preview & Download -->
@@ -3130,11 +3135,11 @@ HTML_MAIN = """
                                 <video id="trimmerExportedPlayer" controls playsinline style="width: 100%; max-height: 280px; border-radius: 8px; background: #000; object-fit: contain;"></video>
                             </div>
                             <div>
-                                <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 16px;">✅ Export Ready!</h4>
+                                <h4 style="margin: 0 0 8px 0; color: #10b981; font-size: 16px;">✅ Synced Explainer Video (.mp4) Ready!</h4>
                                 <div id="trimmerExportMetaDetails" style="font-size: 13px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.6;"></div>
                                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                    <a id="btnDownloadExportedVideo" href="#" download class="btn-upload" style="text-decoration: none; padding: 10px 18px; font-size: 13px; background: #10b981; display: inline-flex; align-items: center; gap: 6px;">
-                                        <span>⬇️</span> <span>Download Sliced MP4</span>
+                                    <a id="btnDownloadExportedVideo" href="#" download class="btn-upload" style="text-decoration: none; padding: 11px 20px; font-size: 13.5px; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); display: inline-flex; align-items: center; gap: 6px;">
+                                        <span>⬇️</span> <span>Download Synced Explainer Video (.mp4)</span>
                                     </a>
                                     <a id="btnDownloadNarrationAudio" href="#" download class="btn-upload" style="text-decoration: none; padding: 10px 18px; font-size: 13px; background: #7c3aed; display: none; align-items: center; gap: 6px;">
                                         <span>🎵</span> <span>Download Hindi Narration (MP3)</span>
@@ -6160,37 +6165,235 @@ HTML_MAIN = """
             }
         }
 
+        const btnPlayMasterSyncedPreview = document.getElementById('btnPlayMasterSyncedPreview');
+        window.mergedExplainerVideoUrl = null;
+        window.mergedExplainerVideoBlob = null;
+        window.mergedExplainerVideoFilename = 'synced_explainer_video.mp4';
+        window.isAutoMergingExplainer = false;
+
+        function invalidateMergedExplainerCache() {
+            window.mergedExplainerVideoUrl = null;
+            window.mergedExplainerVideoBlob = null;
+        }
+
+        function getActiveAudioMode() {
+            const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
+            return audioModeInput ? audioModeInput.value : 'tts_bgm';
+        }
+
+        function hasCustomSyncedAudio() {
+            return Boolean(getActiveAudioMode() !== 'original' && currentNarrationAudioUrl);
+        }
+
+        function enforceOriginalMovieAudioMute() {
+            if (!trimmerPlayer) return;
+            // Strip/mute 100% of native movie sound track unless explicitly in 'original' audio mode
+            const shouldMute = (getActiveAudioMode() !== 'original');
+            trimmerPlayer.muted = shouldMute;
+            if (shouldMute) {
+                trimmerPlayer.volume = 0;
+            } else {
+                trimmerPlayer.volume = 1;
+            }
+        }
+
+        function recalculateCumulativeAudioOffsets() {
+            let cum = 0.0;
+            trimmerKeeperClips.forEach((c) => {
+                const d = Math.max(0.3, parseFloat(c.audio_duration) || parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 1.0);
+                c.duration = Number(d.toFixed(2));
+                c.start = Number(Math.max(0, parseFloat(c.start) || 0).toFixed(2));
+                c.end = Number((c.start + c.duration).toFixed(2));
+                c.audioStart = Number(cum.toFixed(2));
+                cum += c.duration;
+                c.audioEnd = Number(cum.toFixed(2));
+            });
+        }
+
+        function getAudioOffsetForTimelineTime(videoTime, clipIndexHint) {
+            if (!trimmerKeeperClips || trimmerKeeperClips.length === 0) return 0;
+            recalculateCumulativeAudioOffsets();
+            let idx = (typeof clipIndexHint === 'number' && clipIndexHint >= 0 && clipIndexHint < trimmerKeeperClips.length)
+                ? clipIndexHint
+                : trimmerKeeperClips.findIndex(c => videoTime >= c.start - 0.05 && videoTime <= c.end + 0.05);
+            if (idx === -1) {
+                const nextIdx = trimmerKeeperClips.findIndex(c => c.start > videoTime);
+                idx = nextIdx !== -1 ? nextIdx : (trimmerKeeperClips.length - 1);
+            }
+            const clip = trimmerKeeperClips[idx];
+            const rel = Math.max(0, Math.min(clip.duration, videoTime - clip.start));
+            return Number((clip.audioStart + rel).toFixed(2));
+        }
+
+        function syncAudioToTimelinePlayhead(videoTime, clipIndexHint) {
+            enforceOriginalMovieAudioMute();
+            const targetAudioTime = getAudioOffsetForTimelineTime(videoTime, clipIndexHint);
+            if (trimmerNarrationAudioPlayer && currentNarrationAudioUrl) {
+                try {
+                    if (Math.abs((trimmerNarrationAudioPlayer.currentTime || 0) - targetAudioTime) > 0.04) {
+                        trimmerNarrationAudioPlayer.currentTime = targetAudioTime;
+                    }
+                } catch (e) {}
+            }
+            if (explainerReadyAudioPlayer && currentNarrationAudioUrl) {
+                try {
+                    explainerReadyAudioPlayer.currentTime = targetAudioTime;
+                } catch (e) {}
+            }
+            return targetAudioTime;
+        }
+
+        function updateMasterSyncPlayButtonsUI(isPlaying) {
+            if (btnTrimmerPlayPause) {
+                btnTrimmerPlayPause.innerHTML = isPlaying ? '⏸️ Pause (Master Sync)' : '▶️ Play (Master Sync)';
+            }
+            if (btnPlayMasterSyncedPreview) {
+                btnPlayMasterSyncedPreview.innerHTML = isPlaying
+                    ? '⏸️ Pause Master Synced Preview'
+                    : '▶️ Play Master Synced Preview (Video + Voice)';
+            }
+        }
+
+        function isMasterSyncPlaying() {
+            const videoPlaying = Boolean(trimmerPlayer && trimmerPlayer.src && !trimmerPlayer.paused && !trimmerPlayer.ended);
+            const audioPlaying = Boolean(hasCustomSyncedAudio() && trimmerNarrationAudioPlayer && !trimmerNarrationAudioPlayer.paused && !trimmerNarrationAudioPlayer.ended);
+            return videoPlaying || audioPlaying;
+        }
+
+        function pauseMasterSyncPlayback() {
+            if (trimmerPlayer && !trimmerPlayer.paused) {
+                try { trimmerPlayer.pause(); } catch (e) {}
+            }
+            if (trimmerNarrationAudioPlayer && !trimmerNarrationAudioPlayer.paused) {
+                try { trimmerNarrationAudioPlayer.pause(); } catch (e) {}
+            }
+            if (explainerReadyAudioPlayer && !explainerReadyAudioPlayer.paused) {
+                try { explainerReadyAudioPlayer.pause(); } catch (e) {}
+            }
+            updateMasterSyncPlayButtonsUI(false);
+        }
+
+        function startMasterSyncPlayback(startFromClipIdx) {
+            if (!trimmerKeeperClips || trimmerKeeperClips.length === 0) return;
+            recalculateCumulativeAudioOffsets();
+            enforceOriginalMovieAudioMute();
+
+            if (typeof startFromClipIdx === 'number' && startFromClipIdx >= 0 && startFromClipIdx < trimmerKeeperClips.length) {
+                trimmerActiveClipIndex = startFromClipIdx;
+                const targetClip = trimmerKeeperClips[trimmerActiveClipIndex];
+                if (trimmerPlayer && trimmerPlayer.src) {
+                    try { trimmerPlayer.currentTime = targetClip.start; } catch (e) {}
+                }
+                syncAudioToTimelinePlayhead(targetClip.start, trimmerActiveClipIndex);
+            } else {
+                const activeClip = trimmerKeeperClips[trimmerActiveClipIndex] || trimmerKeeperClips[0];
+                let curVidTime = (trimmerPlayer && trimmerPlayer.src) ? trimmerPlayer.currentTime : activeClip.start;
+                if (curVidTime < activeClip.start - 0.1 || curVidTime >= activeClip.end - 0.05) {
+                    curVidTime = activeClip.start;
+                    if (trimmerPlayer && trimmerPlayer.src) {
+                        try { trimmerPlayer.currentTime = curVidTime; } catch (e) {}
+                    }
+                }
+                syncAudioToTimelinePlayhead(curVidTime, trimmerActiveClipIndex);
+            }
+
+            if (hasCustomSyncedAudio() && trimmerNarrationAudioPlayer) {
+                if (trimmerNarrationAudioPlayer.src !== currentNarrationAudioUrl && !trimmerNarrationAudioPlayer.src.endsWith(currentNarrationAudioUrl)) {
+                    trimmerNarrationAudioPlayer.src = currentNarrationAudioUrl;
+                }
+                trimmerNarrationAudioPlayer.play().catch(() => {});
+            }
+
+            if (trimmerPlayer && trimmerPlayer.src) {
+                trimmerPlayer.play().catch(() => {});
+            }
+
+            updateMasterSyncPlayButtonsUI(true);
+            renderTrimmerTimelineUI();
+            updateTrimmerDeck();
+            updateTrimmerStats();
+        }
+
+        function toggleMasterSyncPlayback() {
+            if (isMasterSyncPlaying()) {
+                pauseMasterSyncPlayback();
+            } else {
+                startMasterSyncPlayback();
+            }
+        }
+
+        if (btnPlayMasterSyncedPreview) {
+            btnPlayMasterSyncedPreview.addEventListener('click', () => {
+                if (trimmerPlayer) {
+                    trimmerPlayer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                toggleMasterSyncPlayback();
+            });
+        }
+
         function applyExplainerStoryboardToTimeline(storyboard) {
             if (!storyboard || !storyboard.keeper_clips || storyboard.keeper_clips.length === 0) return;
             const clips = storyboard.keeper_clips;
+            pauseMasterSyncPlayback();
+            invalidateMergedExplainerCache();
+
+            const storyboardSourceDur = parseFloat(storyboard.duration)
+                || (storyboard.youtube_info && parseFloat(storyboard.youtube_info.duration))
+                || 0;
 
             // Ensure timeline has a valid total duration even before the local video file is picked
             if (trimmerTotalDuration <= 0) {
                 const maxClipEnd = clips.reduce((m, c) => Math.max(m, parseFloat(c.end) || 0), 0);
-                trimmerTotalDuration = parseFloat(storyboard.duration)
-                    || (storyboard.youtube_info && parseFloat(storyboard.youtube_info.duration))
-                    || Math.max(3600, maxClipEnd + 60);
+                trimmerTotalDuration = storyboardSourceDur || Math.max(3600, maxClipEnd + 60);
             }
 
+            const numClips = clips.length;
+            const usableMovieSpan = Math.max(120, trimmerTotalDuration * 0.94);
+            const movieFloor = Math.min(15, trimmerTotalDuration * 0.02);
+
             nextClipId = 1;
+            let prevEnd = 0;
             trimmerKeeperClips = clips.map((c, idx) => {
+                // STRICT 1:1 DURATION LOCK: Never shrink or clamp the clip's audio_duration!
+                const exactDur = Number(Math.max(
+                    0.5,
+                    parseFloat(c.audio_duration) || parseFloat(c.duration) || ((parseFloat(c.end) || 0) - (parseFloat(c.start) || 0)) || 10.0
+                ).toFixed(2));
+
                 let s = Math.max(0, parseFloat(c.start) || 0);
-                let e = parseFloat(c.end) || (s + 60);
-                if (trimmerTotalDuration > 0) {
-                    if (s >= trimmerTotalDuration) s = Math.max(0, trimmerTotalDuration - 30);
-                    if (e > trimmerTotalDuration) e = trimmerTotalDuration;
+                if (storyboardSourceDur > 0 && trimmerTotalDuration > 0 && Math.abs(trimmerTotalDuration - storyboardSourceDur) > 5) {
+                    s = (s / storyboardSourceDur) * Math.max(1, trimmerTotalDuration - exactDur);
                 }
-                const dur = Math.max(0.5, e - s);
+
+                if (trimmerTotalDuration > exactDur + 2) {
+                    const maxStart = Math.max(0, trimmerTotalDuration - exactDur - 0.5);
+                    if (s > maxStart) {
+                        const slotSpan = usableMovieSpan / Math.max(1, numClips);
+                        s = Math.min(maxStart, movieFloor + idx * slotSpan);
+                    }
+                    if (s < prevEnd && prevEnd + exactDur <= maxStart) {
+                        s = prevEnd + 0.2;
+                    }
+                    s = Math.max(0, Math.min(maxStart, s));
+                }
+
+                s = Number(s.toFixed(2));
+                const e = Number((s + exactDur).toFixed(2));
+                prevEnd = e;
+
                 return {
                     id: nextClipId++,
                     start: s,
                     end: e,
-                    duration: dur,
+                    duration: exactDur,
+                    audio_duration: exactDur,
                     title: c.title || `Scene ${idx + 1}`,
                     reason: c.reason || c.phase || 'Narrative Keeper Cut',
                     narration: c.narration || ''
                 };
-            }).filter(c => c.end > c.start + 0.3);
+            });
+
+            recalculateCumulativeAudioOffsets();
 
             if (trimmerKeeperClips.length === 0) {
                 resetTrimmerClips();
@@ -6205,6 +6408,8 @@ HTML_MAIN = """
 
             if (storyboard.narration_audio_url) {
                 currentNarrationAudioUrl = storyboard.narration_audio_url;
+                if (trimmerNarrationAudioPlayer) trimmerNarrationAudioPlayer.src = currentNarrationAudioUrl;
+                if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = currentNarrationAudioUrl;
             }
 
             const ttsBgmRadio = document.querySelector('input[name="trimmerAudioMode"][value="tts_bgm"]');
@@ -6212,6 +6417,8 @@ HTML_MAIN = """
                 ttsBgmRadio.checked = true;
                 if (trimmerTtsOptionsContainer) trimmerTtsOptionsContainer.style.display = 'block';
             }
+
+            enforceOriginalMovieAudioMute();
 
             if (trimmerTtsVoiceSelect && storyboard.voice_name) {
                 trimmerTtsVoiceSelect.value = storyboard.voice_name;
@@ -6224,30 +6431,42 @@ HTML_MAIN = """
             updateTrimmerStats();
             updateTrimmerDeck();
 
-            if (trimmerKeeperClips.length > 0 && trimmerPlayer && trimmerPlayer.src) {
-                try { trimmerPlayer.currentTime = trimmerKeeperClips[0].start; } catch (e) {}
+            if (trimmerKeeperClips.length > 0) {
+                if (trimmerPlayer && trimmerPlayer.src) {
+                    try { trimmerPlayer.currentTime = trimmerKeeperClips[0].start; } catch (e) {}
+                }
+                syncAudioToTimelinePlayhead(trimmerKeeperClips[0].start, 0);
             }
 
             const totalKept = trimmerKeeperClips.reduce((acc, c) => acc + c.duration, 0);
             const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
             if (noticeEl) {
                 const audioStatus = currentNarrationAudioUrl
-                    ? ` &bull; <span style="color:#fde047;">🎧 Pre-rendered Hindi Voiceover + BGM mapped!</span>`
+                    ? ` &bull; <span style="color:#fde047;">🎧 1:1 Master-Synced Hindi Voiceover + BGM Locked (0.00s Offset)!</span>`
                     : '';
-                noticeEl.innerHTML = `✅ <b>Direct Export Ready (Injected into Timeline):</b> ${trimmerKeeperClips.length} keeper cuts (${formatSecs(totalKept)}) with synchronized narration script${audioStatus} Simply select your source movie file (if not loaded) and click <b>Export Final Video</b>!`;
+                noticeEl.innerHTML = `✅ <b>1:1 Master Sync Ready:</b> ${trimmerKeeperClips.length} keeper cuts (${formatSecs(totalKept)})${audioStatus} Click <b>▶️ Play (Master Sync)</b> to preview video + voiceover together, or click <b>⬇️ Download Synced Explainer Video (.mp4)</b>!`;
                 noticeEl.style.background = 'rgba(16, 185, 129, 0.2)';
                 noticeEl.style.borderColor = '#10b981';
             }
+
+            if (trimmerLocalFile && currentNarrationAudioUrl && typeof window.triggerAutoMergeSyncedExplainer === 'function') {
+                window.triggerAutoMergeSyncedExplainer();
+            }
         }
 
-        // Toggle TTS voiceover options UI when audio mode changes
+        // Toggle TTS voiceover options UI & native video mute when audio mode changes
         document.querySelectorAll('input[name="trimmerAudioMode"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const mode = e.target.value;
+                invalidateMergedExplainerCache();
+                enforceOriginalMovieAudioMute();
                 if (mode === 'tts' || mode === 'tts_bgm') {
                     trimmerTtsOptionsContainer.style.display = 'block';
                 } else {
                     trimmerTtsOptionsContainer.style.display = 'none';
+                    if (trimmerNarrationAudioPlayer && !trimmerNarrationAudioPlayer.paused) {
+                        trimmerNarrationAudioPlayer.pause();
+                    }
                 }
             });
         });
@@ -6293,16 +6512,19 @@ HTML_MAIN = """
 
         async function handleTrimmerVideoFile(file) {
             trimmerLocalFile = file;
+            invalidateMergedExplainerCache();
             const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
             
-            // 0-second instant local playback
+            // 0-second instant local playback with muted native track
             const objectUrl = URL.createObjectURL(file);
             trimmerPlayer.src = objectUrl;
+            enforceOriginalMovieAudioMute();
             
             trimmerPlayer.onloadedmetadata = () => {
                 trimmerTotalDuration = trimmerPlayer.duration || 60;
                 trimmerVideoWidth = trimmerPlayer.videoWidth || 1920;
                 trimmerVideoHeight = trimmerPlayer.videoHeight || 1080;
+                enforceOriginalMovieAudioMute();
                 
                 // Aspect Ratio calculation
                 const ratio = (trimmerVideoWidth / Math.max(1, trimmerVideoHeight)).toFixed(2);
@@ -6329,12 +6551,16 @@ HTML_MAIN = """
         }
 
         function resetTrimmerClips() {
+            pauseMasterSyncPlayback();
+            invalidateMergedExplainerCache();
             nextClipId = 1;
             trimmerKeeperClips = [{
                 id: nextClipId++,
                 start: 0,
                 end: trimmerTotalDuration,
                 duration: trimmerTotalDuration,
+                audioStart: 0,
+                audioEnd: trimmerTotalDuration,
                 title: 'Full Original Sequence',
                 reason: 'Uncut source clip'
             }];
@@ -6353,6 +6579,8 @@ HTML_MAIN = """
             if (!trimmerClipsContainer) return;
             trimmerClipsContainer.innerHTML = '';
             if (trimmerTotalDuration <= 0) return;
+
+            recalculateCumulativeAudioOffsets();
 
             const colors = [
                 'linear-gradient(135deg, #0284c7, #2563eb)',
@@ -6390,16 +6618,12 @@ HTML_MAIN = """
                 block.style.whiteSpace = 'nowrap';
                 block.style.textOverflow = 'ellipsis';
                 block.style.cursor = 'pointer';
-                block.title = `${clip.title || 'Clip ' + (idx + 1)}: ${formatSecs(clip.start)} - ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)`;
+                block.title = `${clip.title || 'Clip ' + (idx + 1)}: Movie ${formatSecs(clip.start)}-${formatSecs(clip.end)} | Audio ${formatSecs(clip.audioStart || 0)}-${formatSecs(clip.audioEnd || clip.duration)} (${clip.duration.toFixed(1)}s)`;
                 block.textContent = `#${idx + 1} (${clip.duration.toFixed(0)}s)`;
 
                 block.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    trimmerActiveClipIndex = idx;
-                    trimmerPlayer.currentTime = clip.start;
-                    trimmerPlayer.play();
-                    renderTrimmerTimelineUI();
-                    updateTrimmerDeck();
+                    startMasterSyncPlayback(idx);
                 });
 
                 trimmerClipsContainer.appendChild(block);
@@ -6407,12 +6631,12 @@ HTML_MAIN = """
         }
 
         function updateTrimmerStats() {
-            const keptTotal = trimmerKeeperClips.reduce((acc, c) => acc + (c.end - c.start), 0);
+            const keptTotal = trimmerKeeperClips.reduce((acc, c) => acc + c.duration, 0);
             const fillerTotal = Math.max(0, trimmerTotalDuration - keptTotal);
             const fillerPct = trimmerTotalDuration > 0 ? ((fillerTotal / trimmerTotalDuration) * 100).toFixed(1) : 0;
 
             if (trimmerStatOrig) trimmerStatOrig.textContent = `⏱️ Original: ${formatSecs(trimmerTotalDuration)}`;
-            if (trimmerStatKept) trimmerStatKept.textContent = `✂️ Kept: ${formatSecs(keptTotal)}`;
+            if (trimmerStatKept) trimmerStatKept.textContent = `✂️ Kept (1:1 Audio Sync): ${formatSecs(keptTotal)}`;
             if (trimmerStatRemoved) trimmerStatRemoved.textContent = `🗑️ Filler Discarded: ${formatSecs(fillerTotal)} (${fillerPct}%)`;
             if (trimmerStatCount) trimmerStatCount.textContent = `🎬 Keeper Clips: ${trimmerKeeperClips.length}`;
             if (trimmerHudClipBadge) trimmerHudClipBadge.textContent = `Clip ${trimmerActiveClipIndex + 1} of ${trimmerKeeperClips.length}`;
@@ -6421,6 +6645,7 @@ HTML_MAIN = """
         function updateTrimmerDeck() {
             if (!trimmerClipsDeck) return;
             trimmerClipsDeck.innerHTML = '';
+            recalculateCumulativeAudioOffsets();
             trimmerKeeperClips.forEach((clip, idx) => {
                 const card = document.createElement('div');
                 card.style.display = 'flex';
@@ -6441,8 +6666,11 @@ HTML_MAIN = """
                             <span style="font-size: 11px; color: #94a3b8;">(${clip.reason || 'Keeper Cut'})</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 11.5px; font-weight: 700; color: #bae6fd; background: rgba(0,0,0,0.35); padding: 3px 8px; border-radius: 4px; font-family: monospace;">
-                                ${formatSecs(clip.start)} ➔ ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)
+                            <span style="font-size: 11px; font-weight: 700; color: #6ee7b7; background: rgba(16,185,129,0.15); padding: 3px 7px; border-radius: 4px; font-family: monospace;" title="Cumulative Narration Audio Timestamp">
+                                🎧 ${formatSecs(clip.audioStart || 0)}-${formatSecs(clip.audioEnd || clip.duration)}
+                            </span>
+                            <span style="font-size: 11.5px; font-weight: 700; color: #bae6fd; background: rgba(0,0,0,0.35); padding: 3px 8px; border-radius: 4px; font-family: monospace;" title="Source Movie Timestamp">
+                                🎬 ${formatSecs(clip.start)} ➔ ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)
                             </span>
                             <button type="button" class="btn-populate" style="padding: 3px 8px; font-size: 11.5px;" onclick="event.stopPropagation(); playKeeperClipByIndex(${idx})">▶️</button>
                             <button type="button" class="btn-populate" style="padding: 3px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="event.stopPropagation(); deleteKeeperClipByIndex(${idx})">🗑️</button>
@@ -6457,11 +6685,7 @@ HTML_MAIN = """
 
         window.playKeeperClipByIndex = (idx) => {
             if (idx >= 0 && idx < trimmerKeeperClips.length) {
-                trimmerActiveClipIndex = idx;
-                trimmerPlayer.currentTime = trimmerKeeperClips[idx].start;
-                trimmerPlayer.play();
-                renderTrimmerTimelineUI();
-                updateTrimmerDeck();
+                startMasterSyncPlayback(idx);
             }
         };
 
@@ -6470,8 +6694,11 @@ HTML_MAIN = """
                 alert('You must have at least one keeper clip. Reset timeline if you want to restore full video.');
                 return;
             }
+            pauseMasterSyncPlayback();
+            invalidateMergedExplainerCache();
             trimmerKeeperClips.splice(idx, 1);
             currentNarrationAudioUrl = null;
+            recalculateCumulativeAudioOffsets();
             if (trimmerNarrationScript) {
                 const updatedScript = trimmerKeeperClips.map(c => c.narration || '').filter(Boolean).join('\\n\\n');
                 if (updatedScript) trimmerNarrationScript.value = updatedScript;
@@ -6479,7 +6706,9 @@ HTML_MAIN = """
             if (trimmerActiveClipIndex >= trimmerKeeperClips.length) {
                 trimmerActiveClipIndex = trimmerKeeperClips.length - 1;
             }
-            trimmerPlayer.currentTime = trimmerKeeperClips[trimmerActiveClipIndex].start;
+            if (trimmerPlayer && trimmerPlayer.src) {
+                trimmerPlayer.currentTime = trimmerKeeperClips[trimmerActiveClipIndex].start;
+            }
             renderTrimmerTimelineUI();
             updateTrimmerStats();
             updateTrimmerDeck();
@@ -6527,6 +6756,7 @@ HTML_MAIN = """
                 };
 
                 trimmerKeeperClips.splice(clipIdx, 1, clipA, clipB);
+                recalculateCumulativeAudioOffsets();
                 trimmerActiveClipIndex = clipIdx;
                 renderTrimmerTimelineUI();
                 updateTrimmerStats();
@@ -6545,24 +6775,51 @@ HTML_MAIN = """
             });
         }
 
-        // Transport Controls
+        // Unified Master Sync Transport Controls (One-Click Play/Pause for BOTH Video & Voiceover)
         if (btnTrimmerPlayPause) {
             btnTrimmerPlayPause.addEventListener('click', () => {
-                if (trimmerPlayer.paused) trimmerPlayer.play();
-                else trimmerPlayer.pause();
+                toggleMasterSyncPlayback();
             });
-            trimmerPlayer.addEventListener('play', () => btnTrimmerPlayPause.innerHTML = '⏸️ Pause');
-            trimmerPlayer.addEventListener('pause', () => btnTrimmerPlayPause.innerHTML = '▶️ Play');
+        }
+        if (trimmerPlayer) {
+            trimmerPlayer.addEventListener('click', () => {
+                toggleMasterSyncPlayback();
+            });
+            trimmerPlayer.addEventListener('play', () => {
+                enforceOriginalMovieAudioMute();
+                if (hasCustomSyncedAudio() && trimmerNarrationAudioPlayer && trimmerNarrationAudioPlayer.paused) {
+                    syncAudioToTimelinePlayhead(trimmerPlayer.currentTime, trimmerActiveClipIndex);
+                    trimmerNarrationAudioPlayer.play().catch(() => {});
+                }
+                updateMasterSyncPlayButtonsUI(true);
+            });
+            trimmerPlayer.addEventListener('pause', () => {
+                // Only pause audio if we aren't mid-transition between keeper clips
+                if (!window._isTransitioningKeeperClip && trimmerNarrationAudioPlayer && !trimmerNarrationAudioPlayer.paused) {
+                    trimmerNarrationAudioPlayer.pause();
+                }
+                if (!window._isTransitioningKeeperClip) {
+                    updateMasterSyncPlayButtonsUI(false);
+                }
+            });
         }
 
         if (btnTrimmerStepBack) {
             btnTrimmerStepBack.addEventListener('click', () => {
-                trimmerPlayer.currentTime = Math.max(0, trimmerPlayer.currentTime - 1);
+                const activeClip = trimmerKeeperClips[trimmerActiveClipIndex];
+                const minTime = activeClip ? activeClip.start : 0;
+                const nextTime = Math.max(minTime, (trimmerPlayer.currentTime || 0) - 1);
+                if (trimmerPlayer && trimmerPlayer.src) trimmerPlayer.currentTime = nextTime;
+                syncAudioToTimelinePlayhead(nextTime, trimmerActiveClipIndex);
             });
         }
         if (btnTrimmerStepFwd) {
             btnTrimmerStepFwd.addEventListener('click', () => {
-                trimmerPlayer.currentTime = Math.min(trimmerTotalDuration, trimmerPlayer.currentTime + 1);
+                const activeClip = trimmerKeeperClips[trimmerActiveClipIndex];
+                const maxTime = activeClip ? activeClip.end : trimmerTotalDuration;
+                const nextTime = Math.min(maxTime, (trimmerPlayer.currentTime || 0) + 1);
+                if (trimmerPlayer && trimmerPlayer.src) trimmerPlayer.currentTime = nextTime;
+                syncAudioToTimelinePlayhead(nextTime, trimmerActiveClipIndex);
             });
         }
         if (btnTrimmerPrevClip) {
@@ -6580,7 +6837,7 @@ HTML_MAIN = """
             });
         }
 
-        // CapCut-Style Draggable & Clickable Timeline Scrubber
+        // CapCut-Style Draggable & Clickable Timeline Scrubber (Syncs Video AND Narration Audio Immediately)
         if (trimmerTimelineTrack) {
             let isScrubbingTimeline = false;
 
@@ -6593,7 +6850,6 @@ HTML_MAIN = """
                 const targetTime = (relX / rect.width) * effDur;
 
                 if (trimmerPlayhead) trimmerPlayhead.style.left = `${pct}%`;
-                if (trimmerTimelinePlayheadTime) trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(targetTime)}`;
 
                 const foundIdx = trimmerKeeperClips.findIndex(c => targetTime >= c.start && targetTime <= c.end);
                 if (foundIdx !== -1) {
@@ -6601,12 +6857,21 @@ HTML_MAIN = """
                     if (trimmerPlayer && trimmerPlayer.src) {
                         try { trimmerPlayer.currentTime = targetTime; } catch (err) {}
                     }
-                } else if (snapGap && trimmerKeeperClips.length > 0) {
+                    const syncedAudioSec = syncAudioToTimelinePlayhead(targetTime, foundIdx);
+                    if (trimmerTimelinePlayheadTime) {
+                        trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(targetTime)} (Audio: ${formatSecs(syncedAudioSec)})`;
+                    }
+                } else if (trimmerKeeperClips.length > 0) {
                     const nextIdx = trimmerKeeperClips.findIndex(c => c.start > targetTime);
-                    const snapIdx = nextIdx !== -1 ? nextIdx : 0;
+                    const snapIdx = nextIdx !== -1 ? nextIdx : (trimmerKeeperClips.length - 1);
                     trimmerActiveClipIndex = snapIdx;
-                    if (trimmerPlayer && trimmerPlayer.src) {
-                        try { trimmerPlayer.currentTime = trimmerKeeperClips[snapIdx].start; } catch (err) {}
+                    const snapVideoTime = trimmerKeeperClips[snapIdx].start;
+                    if (snapGap && trimmerPlayer && trimmerPlayer.src) {
+                        try { trimmerPlayer.currentTime = snapVideoTime; } catch (err) {}
+                    }
+                    const syncedAudioSec = syncAudioToTimelinePlayhead(snapVideoTime, snapIdx);
+                    if (trimmerTimelinePlayheadTime) {
+                        trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(snapVideoTime)} (Audio: ${formatSecs(syncedAudioSec)})`;
                     }
                 }
                 renderTrimmerTimelineUI();
@@ -6616,7 +6881,7 @@ HTML_MAIN = """
             trimmerTimelineTrack.addEventListener('pointerdown', (e) => {
                 isScrubbingTimeline = true;
                 try { trimmerTimelineTrack.setPointerCapture(e.pointerId); } catch (err) {}
-                scrubTimelineAtClientX(e.clientX, false);
+                scrubTimelineAtClientX(e.clientX, true);
             });
 
             trimmerTimelineTrack.addEventListener('pointermove', (e) => {
@@ -6634,13 +6899,86 @@ HTML_MAIN = """
             trimmerTimelineTrack.addEventListener('pointercancel', () => { isScrubbingTimeline = false; });
         }
 
-        // SEAMLESS BACK-TO-BACK REAL-TIME PLAYBACK ENGINE
+        // MASTER 1:1 AUDIO-TO-VIDEO CLOCK & SEAMLESS BACK-TO-BACK PLAYBACK ENGINE
+        if (trimmerNarrationAudioPlayer) {
+            trimmerNarrationAudioPlayer.addEventListener('timeupdate', () => {
+                if (!hasCustomSyncedAudio() || trimmerNarrationAudioPlayer.paused || trimmerKeeperClips.length === 0) return;
+                enforceOriginalMovieAudioMute();
+                recalculateCumulativeAudioOffsets();
+
+                const audCur = trimmerNarrationAudioPlayer.currentTime || 0;
+                const totalAudioDur = trimmerKeeperClips[trimmerKeeperClips.length - 1].audioEnd || 1;
+
+                // Find the exact keeper clip whose [audioStart, audioEnd) window contains audCur
+                let targetIdx = trimmerKeeperClips.findIndex(c => audCur >= c.audioStart && audCur < c.audioEnd);
+                if (targetIdx === -1 && audCur >= totalAudioDur - 0.05) {
+                    // Completed full 1:1 narration timeline
+                    pauseMasterSyncPlayback();
+                    trimmerActiveClipIndex = 0;
+                    if (trimmerPlayer && trimmerPlayer.src) {
+                        try { trimmerPlayer.currentTime = trimmerKeeperClips[0].start; } catch (e) {}
+                    }
+                    syncAudioToTimelinePlayhead(trimmerKeeperClips[0].start, 0);
+                    renderTrimmerTimelineUI();
+                    updateTrimmerDeck();
+                    updateTrimmerStats();
+                    return;
+                }
+                if (targetIdx === -1) targetIdx = 0;
+
+                const targetClip = trimmerKeeperClips[targetIdx];
+                const clipElapsed = Math.max(0, Math.min(targetClip.duration, audCur - targetClip.audioStart));
+                const expectedVideoTime = targetClip.start + clipElapsed;
+
+                if (targetIdx !== trimmerActiveClipIndex) {
+                    window._isTransitioningKeeperClip = true;
+                    trimmerActiveClipIndex = targetIdx;
+                    if (trimmerPlayer && trimmerPlayer.src) {
+                        try {
+                            trimmerPlayer.currentTime = expectedVideoTime;
+                            if (trimmerPlayer.paused) trimmerPlayer.play().catch(() => {});
+                        } catch (e) {}
+                    }
+                    setTimeout(() => { window._isTransitioningKeeperClip = false; }, 80);
+                    renderTrimmerTimelineUI();
+                    updateTrimmerDeck();
+                    updateTrimmerStats();
+                } else if (trimmerPlayer && trimmerPlayer.src && !trimmerPlayer.seeking) {
+                    // Maintain strict 0.00s frame lock between video playhead and voiceover audio
+                    const drift = Math.abs((trimmerPlayer.currentTime || 0) - expectedVideoTime);
+                    if (drift > 0.25) {
+                        try { trimmerPlayer.currentTime = expectedVideoTime; } catch (e) {}
+                    }
+                }
+
+                if (trimmerTotalDuration > 0) {
+                    const playheadPct = Math.min(100, Math.max(0, (expectedVideoTime / trimmerTotalDuration) * 100));
+                    if (trimmerPlayhead) trimmerPlayhead.style.left = `${playheadPct}%`;
+                    if (trimmerTimelinePlayheadTime) {
+                        trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(expectedVideoTime)} (Audio: ${formatSecs(audCur)} / ${formatSecs(totalAudioDur)})`;
+                    }
+                    if (trimmerHudTimeBadge) {
+                        trimmerHudTimeBadge.textContent = `Clip #${targetIdx + 1}: ${formatSecs(audCur)} / ${formatSecs(totalAudioDur)} (1:1 Sync)`;
+                    }
+                }
+            });
+
+            trimmerNarrationAudioPlayer.addEventListener('ended', () => {
+                pauseMasterSyncPlayback();
+            });
+        }
+
         if (trimmerPlayer) {
             trimmerPlayer.addEventListener('timeupdate', () => {
                 if (trimmerTotalDuration <= 0 || trimmerKeeperClips.length === 0) return;
-                const cur = trimmerPlayer.currentTime;
+                enforceOriginalMovieAudioMute();
 
-                // Update playhead UI
+                // When custom 1:1 narration audio is actively playing, the audio clock drives exact clip switching above
+                if (hasCustomSyncedAudio() && trimmerNarrationAudioPlayer && !trimmerNarrationAudioPlayer.paused) {
+                    return;
+                }
+
+                const cur = trimmerPlayer.currentTime;
                 const playheadPct = Math.min(100, Math.max(0, (cur / trimmerTotalDuration) * 100));
                 if (trimmerPlayhead) trimmerPlayhead.style.left = `${playheadPct}%`;
                 if (trimmerTimelinePlayheadTime) trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(cur)}`;
@@ -6648,37 +6986,40 @@ HTML_MAIN = """
 
                 const activeClip = trimmerKeeperClips[trimmerActiveClipIndex];
                 if (activeClip) {
-                    // If reached end of active keeper clip: jump seamlessly to next keeper clip!
                     if (cur >= activeClip.end - 0.05) {
                         if (trimmerActiveClipIndex < trimmerKeeperClips.length - 1) {
+                            window._isTransitioningKeeperClip = true;
                             trimmerActiveClipIndex++;
-                            trimmerPlayer.currentTime = trimmerKeeperClips[trimmerActiveClipIndex].start;
+                            const nextClip = trimmerKeeperClips[trimmerActiveClipIndex];
+                            trimmerPlayer.currentTime = nextClip.start;
+                            syncAudioToTimelinePlayhead(nextClip.start, trimmerActiveClipIndex);
+                            setTimeout(() => { window._isTransitioningKeeperClip = false; }, 80);
                             renderTrimmerTimelineUI();
                             updateTrimmerDeck();
                             updateTrimmerStats();
                         } else {
-                            // End of all clips
-                            trimmerPlayer.pause();
+                            pauseMasterSyncPlayback();
                             trimmerActiveClipIndex = 0;
                             trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+                            syncAudioToTimelinePlayhead(trimmerKeeperClips[0].start, 0);
                             renderTrimmerTimelineUI();
                             updateTrimmerDeck();
                             updateTrimmerStats();
                         }
                     } else if (cur < activeClip.start - 0.1) {
-                        // Check if jumped into another clip or gap
                         const found = trimmerKeeperClips.findIndex(c => cur >= c.start && cur <= c.end);
                         if (found !== -1) {
                             trimmerActiveClipIndex = found;
+                            syncAudioToTimelinePlayhead(cur, found);
                             renderTrimmerTimelineUI();
                             updateTrimmerDeck();
                             updateTrimmerStats();
                         } else {
-                            // In gap: snap forward to next clip start
                             const next = trimmerKeeperClips.find(c => c.start > cur);
                             if (next) {
                                 trimmerActiveClipIndex = trimmerKeeperClips.indexOf(next);
                                 trimmerPlayer.currentTime = next.start;
+                                syncAudioToTimelinePlayhead(next.start, trimmerActiveClipIndex);
                                 renderTrimmerTimelineUI();
                                 updateTrimmerDeck();
                                 updateTrimmerStats();
@@ -6727,18 +7068,14 @@ HTML_MAIN = """
                             reason: c.reason,
                             narration: c.narration || ''
                         }));
+                        recalculateCumulativeAudioOffsets();
                         trimmerActiveClipIndex = 0;
 
                         if (data.script && trimmerNarrationScript) {
                             trimmerNarrationScript.value = data.script;
                         }
 
-                        trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
-                        trimmerPlayer.play();
-
-                        renderTrimmerTimelineUI();
-                        updateTrimmerStats();
-                        updateTrimmerDeck();
+                        startMasterSyncPlayback(0);
 
                         alert(`Gemini Auto-Cut Complete! Applied ${trimmerKeeperClips.length} PardaCine bounded cuts and discarded ${data.filler_removed_percent}% filler.`);
                     } else {
@@ -7266,13 +7603,30 @@ HTML_MAIN = """
                     return;
                 }
                 applyExplainerStoryboardToTimeline(currentExplainerStoryboard);
+                if (trimmerPlayer) {
+                    trimmerPlayer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                startMasterSyncPlayback(0);
             });
         }
 
+        function triggerInstantVideoDownload(url, filename) {
+            const tempLink = document.createElement('a');
+            tempLink.href = url;
+            tempLink.download = filename || 'synced_explainer_video.mp4';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+        }
+
         if (btnQuickExportFromExplainer) {
-            btnQuickExportFromExplainer.addEventListener('click', () => {
+            btnQuickExportFromExplainer.addEventListener('click', async () => {
+                if (window.mergedExplainerVideoUrl) {
+                    triggerInstantVideoDownload(window.mergedExplainerVideoUrl, window.mergedExplainerVideoFilename);
+                    return;
+                }
                 if (!trimmerLocalFile) {
-                    alert('Your storyboard cuts and Hindi voiceover audio are ready and mapped!\\nPlease select your local movie video file in the dropzone below so the browser can slice and export your final video.');
+                    alert('Your 1:1 storyboard cuts and Hindi voiceover audio are ready and locked!\\nPlease select your local movie video file in the dropzone so the browser can instantly mux and download your .mp4 video.');
                     if (trimmerDropzone) trimmerDropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     if (trimmerVideoInput) trimmerVideoInput.click();
                     return;
@@ -7312,8 +7666,8 @@ HTML_MAIN = """
                             script: scriptText,
                             keeper_clips: trimmerKeeperClips,
                             target_duration_sec: totalCutsDur > 0 ? totalCutsDur : undefined,
-                            calibrated_wps: window.lastCalibratedWps || 2.35,
-                            calibrated_cps: window.lastCalibratedCps || 12.5,
+                            calibrated_wps: window.calibratedVoiceWps || window.lastCalibratedWps || 2.35,
+                            calibrated_cps: window.calibratedVoiceCps || window.lastCalibratedCps || 12.5,
                             voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
                             tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
                             language: 'Hindi',
@@ -7326,20 +7680,25 @@ HTML_MAIN = """
                         throw new Error(data.error || 'Failed to synthesize narration audio.');
                     }
 
+                    invalidateMergedExplainerCache();
                     currentNarrationAudioUrl = data.audio_url;
                     if (data.script && trimmerNarrationScript) {
                         trimmerNarrationScript.value = data.script;
                     }
                     if (Array.isArray(data.keeper_clips) && data.keeper_clips.length > 0) {
                         trimmerKeeperClips = data.keeper_clips;
-                        renderTrimmerClipsList();
-                        renderCapCutRulerAndTracks();
+                        recalculateCumulativeAudioOffsets();
+                        renderTrimmerTimelineUI();
+                        updateTrimmerStats();
+                        updateTrimmerDeck();
                     }
 
                     if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
                     if (trimmerNarrationAudioPlayer) {
                         trimmerNarrationAudioPlayer.src = data.audio_url;
-                        trimmerNarrationAudioPlayer.play().catch(() => {});
+                    }
+                    if (explainerReadyAudioPlayer) {
+                        explainerReadyAudioPlayer.src = data.audio_url;
                     }
                     if (btnQuickDownloadAudio) {
                         btnQuickDownloadAudio.href = data.audio_url;
@@ -7349,6 +7708,9 @@ HTML_MAIN = """
                         btnDownloadNarrationAudio.href = data.audio_url;
                         btnDownloadNarrationAudio.download = data.filename || 'synced_narration_bgm.mp3';
                         btnDownloadNarrationAudio.style.display = 'inline-flex';
+                    }
+                    if (trimmerLocalFile) {
+                        window.triggerAutoMergeSyncedExplainer(false);
                     }
                 } catch (err) {
                     alert('TTS Audio Generation Error: ' + err.message);
@@ -7375,7 +7737,7 @@ HTML_MAIN = """
             if (progressCb) {
                 ffmpegInstance.setProgress(({ ratio }) => {
                     if (ratio >= 0 && ratio <= 1) {
-                        progressCb(ratio, `FFmpeg processing (${Math.round(ratio * 100)}%)...`);
+                        progressCb(ratio, `FFmpeg muxing (${Math.round(ratio * 100)}%)...`);
                     }
                 });
             }
@@ -7387,14 +7749,13 @@ HTML_MAIN = """
             const ffmpeg = await getFFmpeg(progressCb);
             const { fetchFile } = FFmpeg;
 
-            // Zero-Full-RAM Slicing: Mount sourceFile via WORKERFS on-demand byte reader instead of loading 1GB+ into MEMFS
             const mountDir = '/work';
             let mountedWorkerFs = false;
-            let inputVideoPath = '';
+            let inputVideoPath = 'source.mp4';
             try {
                 try { ffmpeg.FS('mkdir', mountDir); } catch (mkdirErr) {}
                 if (ffmpeg.FS.filesystems && ffmpeg.FS.filesystems.WORKERFS) {
-                    if (progressCb) progressCb(0.05, 'Mounting source video for zero-RAM on-demand segment slicing...');
+                    if (progressCb) progressCb(0.05, 'Mounting source video for segment slicing...');
                     ffmpeg.FS('mount', ffmpeg.FS.filesystems.WORKERFS, { files: [sourceFile] }, mountDir);
                     mountedWorkerFs = true;
                     inputVideoPath = `${mountDir}/${sourceFile.name}`;
@@ -7404,13 +7765,14 @@ HTML_MAIN = """
             }
 
             if (!mountedWorkerFs) {
-                // Never load huge multi-hundred-MB / 1GB+ files into WASM RAM buffer; delegate to native stream-seeking
-                throw new Error('WORKERFS direct disk mount unavailable; delegating to lightweight native stream-seeker to protect browser RAM.');
+                if (progressCb) progressCb(0.08, 'Loading local movie stream into WebAssembly muxer...');
+                ffmpeg.FS('writeFile', 'source.mp4', await fetchFile(sourceFile));
+                inputVideoPath = 'source.mp4';
             }
 
             let hasCustomAudio = false;
             if (audioMode !== 'original' && narrationAudioUrl) {
-                if (progressCb) progressCb(0.12, 'Loading 1:1 Audio-Master narration track...');
+                if (progressCb) progressCb(0.14, 'Loading 1:1 Audio-Master narration track...');
                 try {
                     ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(narrationAudioUrl));
                     hasCustomAudio = true;
@@ -7425,15 +7787,15 @@ HTML_MAIN = """
             for (let i = 0; i < count; i++) {
                 const c = keeperClips[i];
                 const s = Math.max(0, parseFloat(c.start) || 0).toFixed(2);
-                const dur = Math.max(0.3, parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 1.0).toFixed(2);
+                const dur = Math.max(0.3, parseFloat(c.audio_duration) || parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 1.0).toFixed(2);
                 const clipName = `c_${i}.mp4`;
 
                 if (progressCb) {
-                    const stepRatio = (i / count) * 0.70;
-                    progressCb(0.15 + stepRatio, `Slicing cut ${i + 1} of ${count} (${s}s • ${dur}s)...`);
+                    const stepRatio = (i / count) * 0.68;
+                    progressCb(0.16 + stepRatio, `Slicing keeper cut ${i + 1} of ${count} (${s}s • ${dur}s)...`);
                 }
 
-                // Slices keeper cuts directly from mounted File stream without re-encoding (-c copy)
+                // Fast input-seeking stream-copy (-c copy -an) strips 100% of native movie audio without re-encoding
                 if (audioMode === 'original' || !hasCustomAudio) {
                     await ffmpeg.run('-ss', s, '-t', dur, '-i', inputVideoPath, '-c', 'copy', clipName);
                 } else {
@@ -7443,13 +7805,21 @@ HTML_MAIN = """
                 concatLines.push(`file '${clipName}'`);
             }
 
-            if (progressCb) progressCb(0.88, 'Stitching cuts and muxing 1:1 Audio-Master track...');
+            // Immediately release source.mp4 from MEMFS before final concat muxing to keep memory footprint tiny
+            if (!mountedWorkerFs) {
+                try { ffmpeg.FS('unlink', 'source.mp4'); } catch (ulErr) {}
+            } else {
+                try { ffmpeg.FS('unmount', mountDir); } catch (umErr) {}
+            }
+
+            if (progressCb) progressCb(0.88, 'Muxing muted video cuts with 1:1 Hindi Voiceover + BGM...');
             ffmpeg.FS('writeFile', 'concat.txt', concatLines.join('\\n'));
 
             if (hasCustomAudio) {
                 await ffmpeg.run(
                     '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
                     '-i', 'audio.mp3',
+                    '-map', '0:v:0', '-map', '1:a:0',
                     '-c:v', 'copy',
                     '-c:a', 'aac', '-b:a', '192k',
                     '-shortest',
@@ -7463,18 +7833,17 @@ HTML_MAIN = """
                 );
             }
 
-            if (progressCb) progressCb(0.96, 'Extracting finished video...');
+            if (progressCb) progressCb(0.96, 'Finalizing synced .mp4 package...');
             const outData = ffmpeg.FS('readFile', 'output.mp4');
             const blob = new Blob([outData.buffer], { type: 'video/mp4' });
 
-            // Free virtual memory and unmount immediately
+            // Free virtual memory immediately
             try {
-                if (mountedWorkerFs) {
-                    try { ffmpeg.FS('unmount', mountDir); } catch (umErr) {}
+                try { ffmpeg.FS('unlink', 'concat.txt'); } catch (e) {}
+                try { ffmpeg.FS('unlink', 'output.mp4'); } catch (e) {}
+                if (hasCustomAudio) {
+                    try { ffmpeg.FS('unlink', 'audio.mp3'); } catch (e) {}
                 }
-                ffmpeg.FS('unlink', 'concat.txt');
-                ffmpeg.FS('unlink', 'output.mp4');
-                if (hasCustomAudio) ffmpeg.FS('unlink', 'audio.mp3');
                 for (let i = 0; i < count; i++) {
                     try { ffmpeg.FS('unlink', `c_${i}.mp4`); } catch (ce) {}
                 }
@@ -7538,7 +7907,7 @@ HTML_MAIN = """
                     };
 
                     recorder.onstop = () => {
-                        videoPlayer.muted = false;
+                        enforceOriginalMovieAudioMute();
                         const blob = new Blob(recordedChunks, { type: mimeType });
                         resolve(blob);
                     };
@@ -7561,7 +7930,7 @@ HTML_MAIN = """
 
                         const c = keeperClips[clipIdx];
                         if (progressCb) {
-                            progressCb(clipIdx / totalClips, `Recording cut ${clipIdx + 1}/${totalClips}: ${c.title || 'Scene'}`);
+                            progressCb(clipIdx / totalClips, `Muxing cut ${clipIdx + 1}/${totalClips}: ${c.title || 'Scene'}`);
                         }
 
                         videoPlayer.currentTime = c.start;
@@ -7596,193 +7965,229 @@ HTML_MAIN = """
             });
         }
 
-        if (btnExportFinalVideo) {
-            btnExportFinalVideo.addEventListener('click', async () => {
-                if (trimmerKeeperClips.length === 0) {
-                    alert('No keeper clips selected on timeline to export.');
-                    return;
-                }
-                if (!trimmerLocalFile) {
-                    alert('Please select or drag your source movie video into the Trimmer first.');
-                    return;
-                }
-
-                const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
-                const audioMode = audioModeInput ? audioModeInput.value : 'original';
-                const scriptText = trimmerNarrationScript ? trimmerNarrationScript.value.trim() : '';
-
-                btnExportFinalVideo.disabled = true;
-                if (btnExportIcon) btnExportIcon.textContent = '⏳';
-                if (btnExportText) btnExportText.textContent = 'Processing In-Browser...';
+        async function executeSyncedExplainerMerge(triggerDownloadOnComplete) {
+            if (window.mergedExplainerVideoUrl && window.mergedExplainerVideoBlob) {
                 if (trimmerExportCard) trimmerExportCard.style.display = 'block';
-                if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'none';
+                if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
+                if (triggerDownloadOnComplete) {
+                    triggerInstantVideoDownload(window.mergedExplainerVideoUrl, window.mergedExplainerVideoFilename);
+                }
+                return window.mergedExplainerVideoUrl;
+            }
 
-                function updateProgress(pct, msg) {
-                    if (trimmerExportProgressBar) trimmerExportProgressBar.style.width = `${pct}%`;
-                    if (trimmerExportPercentText) trimmerExportPercentText.textContent = `${pct}%`;
-                    if (trimmerExportStepText) trimmerExportStepText.textContent = msg;
+            if (window.isAutoMergingExplainer) {
+                return null;
+            }
+
+            if (trimmerKeeperClips.length === 0) {
+                if (triggerDownloadOnComplete) alert('No keeper clips selected on timeline to export.');
+                return null;
+            }
+            if (!trimmerLocalFile) {
+                if (triggerDownloadOnComplete) alert('Please select or drag your source movie video into Step 3 first.');
+                return null;
+            }
+
+            window.isAutoMergingExplainer = true;
+            const audioMode = getActiveAudioMode();
+            const scriptText = trimmerNarrationScript ? trimmerNarrationScript.value.trim() : '';
+
+            if (btnExportFinalVideo) btnExportFinalVideo.disabled = true;
+            if (btnExportIcon) btnExportIcon.textContent = '⏳';
+            if (btnExportText) btnExportText.textContent = 'Auto-Merging Synced Explainer Video (.mp4)...';
+            if (btnQuickExportFromExplainer) {
+                btnQuickExportFromExplainer.innerHTML = '⏳ Auto-Merging Synced Video (.mp4)...';
+            }
+            if (trimmerExportCard) trimmerExportCard.style.display = 'block';
+
+            function updateProgress(pct, msg) {
+                if (trimmerExportProgressBar) trimmerExportProgressBar.style.width = `${pct}%`;
+                if (trimmerExportPercentText) trimmerExportPercentText.textContent = `${pct}%`;
+                if (trimmerExportStepText) trimmerExportStepText.textContent = msg;
+            }
+
+            try {
+                let narrationAudioUrl = currentNarrationAudioUrl;
+
+                if (audioMode === 'tts' || audioMode === 'tts_bgm' || audioMode === 'cinema_explainer') {
+                    if (!narrationAudioUrl) {
+                        const totalCutsDur = trimmerKeeperClips.reduce((acc, c) => acc + (parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0), 0);
+                        updateProgress(10, `Synthesizing 1:1 Scene-Synced Neural Voiceover & Ducked BGM (${formatSecs(totalCutsDur)})...`);
+                        const ttsRes = await fetch('/api/tts/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                script: scriptText || 'कहानी की शुरुआत में नायक को रोमांचक सच्चाई का पता चलता है।',
+                                keeper_clips: trimmerKeeperClips,
+                                target_duration_sec: totalCutsDur > 0 ? totalCutsDur : undefined,
+                                calibrated_wps: window.calibratedVoiceWps || window.lastCalibratedWps || 2.35,
+                                calibrated_cps: window.calibratedVoiceCps || window.lastCalibratedCps || 12.5,
+                                voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
+                                tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
+                                language: 'Hindi',
+                                audio_mode: audioMode,
+                                include_bgm: (audioMode === 'tts_bgm' || audioMode === 'cinema_explainer')
+                            })
+                        });
+                        const ttsData = await ttsRes.json();
+                        if (!ttsData.success) {
+                            throw new Error(ttsData.error || 'Failed to synthesize narration audio.');
+                        }
+                        narrationAudioUrl = ttsData.audio_url;
+                        currentNarrationAudioUrl = narrationAudioUrl;
+                        if (ttsData.script && trimmerNarrationScript) {
+                            trimmerNarrationScript.value = ttsData.script;
+                        }
+                        if (Array.isArray(ttsData.keeper_clips) && ttsData.keeper_clips.length > 0) {
+                            trimmerKeeperClips = ttsData.keeper_clips;
+                            recalculateCumulativeAudioOffsets();
+                            renderTrimmerTimelineUI();
+                            updateTrimmerStats();
+                            updateTrimmerDeck();
+                        }
+                    }
+                    updateProgress(25, '1:1 Audio-Master ready! Muxing muted video cuts with voiceover...');
+                } else {
+                    updateProgress(20, 'Initializing lossless in-browser video muxer...');
                 }
 
-                try {
-                    let narrationAudioUrl = currentNarrationAudioUrl;
+                let exportedBlob = null;
+                let methodUsed = "FFmpeg.wasm (Lossless 1:1 Stream-Copy Muxer)";
 
-                    // 1. If audio mode is TTS / BGM and not generated yet or script changed, generate on server
-                    if (audioMode === 'tts' || audioMode === 'tts_bgm' || audioMode === 'cinema_explainer') {
-                        if (!narrationAudioUrl) {
-                            const totalCutsDur = trimmerKeeperClips.reduce((acc, c) => acc + (parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0), 0);
-                            updateProgress(10, `Synthesizing 1:1 Scene-Synced Neural Voiceover & Ducked BGM (${formatSecs(totalCutsDur)})...`);
-                            const ttsRes = await fetch('/api/tts/generate', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    script: scriptText || 'कहानी की शुरुआत में नायक को रोमांचक सच्चाई का पता चलता है।',
-                                    keeper_clips: trimmerKeeperClips,
-                                    target_duration_sec: totalCutsDur > 0 ? totalCutsDur : undefined,
-                                    calibrated_wps: window.lastCalibratedWps || 2.35,
-                                    calibrated_cps: window.lastCalibratedCps || 12.5,
-                                    voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
-                                    tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
-                                    language: 'Hindi',
-                                    audio_mode: audioMode,
-                                    include_bgm: (audioMode === 'tts_bgm' || audioMode === 'cinema_explainer')
-                                })
-                            });
-                            const ttsData = await ttsRes.json();
-                            if (!ttsData.success) {
-                                throw new Error(ttsData.error || 'Failed to synthesize narration audio.');
-                            }
-                            narrationAudioUrl = ttsData.audio_url;
-                            currentNarrationAudioUrl = narrationAudioUrl;
-                            if (ttsData.script && trimmerNarrationScript) {
-                                trimmerNarrationScript.value = ttsData.script;
-                            }
-                            if (Array.isArray(ttsData.keeper_clips) && ttsData.keeper_clips.length > 0) {
-                                trimmerKeeperClips = ttsData.keeper_clips;
-                                renderTrimmerClipsList();
-                                renderCapCutRulerAndTracks();
-                            }
-                        }
-                        updateProgress(25, '1:1 Audio-Master narration ready! Initializing zero-RAM segment slicer...');
-                    } else {
-                        updateProgress(20, 'Original audio mode selected. Initializing in-browser video slicer...');
-                    }
-
-                    // 2. Perform in-browser slicing (Primary: FFmpeg.wasm, Fallback: Canvas MediaRecorder)
-                    let exportedBlob = null;
-                    let methodUsed = "FFmpeg.wasm (Lossless Stream-Copy)";
-
-                    if (typeof FFmpeg !== 'undefined') {
-                        try {
-                            updateProgress(30, 'Starting in-browser WebAssembly engine...');
-                            exportedBlob = await runFFmpegWasmExport(
-                                trimmerLocalFile,
-                                trimmerKeeperClips,
-                                audioMode,
-                                narrationAudioUrl,
-                                (ratio, subMsg) => {
-                                    const p = Math.round(30 + ratio * 65);
-                                    updateProgress(Math.min(95, p), subMsg || `In-browser processing (${Math.round(ratio * 100)}%)...`);
-                                }
-                            );
-                        } catch (wasmErr) {
-                            console.warn('FFmpeg.wasm error, smoothly falling back to Canvas MediaRecorder:', wasmErr);
-                            exportedBlob = null;
-                        }
-                    }
-
-                    if (!exportedBlob) {
-                        methodUsed = "HTML5 Canvas MediaRecorder (Native)";
-                        updateProgress(35, 'Recording timeline clips directly in browser...');
-                        exportedBlob = await runCanvasMediaRecorderExport(
-                            trimmerPlayer,
+                if (typeof FFmpeg !== 'undefined') {
+                    try {
+                        updateProgress(30, 'Starting lossless WebAssembly stream muxer...');
+                        exportedBlob = await runFFmpegWasmExport(
+                            trimmerLocalFile,
                             trimmerKeeperClips,
                             audioMode,
                             narrationAudioUrl,
-                            (p, msg) => {
-                                updateProgress(Math.round(35 + p * 60), msg);
+                            (ratio, subMsg) => {
+                                const p = Math.round(30 + ratio * 65);
+                                updateProgress(Math.min(95, p), subMsg || `Muxing synced video (${Math.round(ratio * 100)}%)...`);
                             }
                         );
+                    } catch (wasmErr) {
+                        console.warn('FFmpeg.wasm error:', wasmErr);
+                        exportedBlob = null;
                     }
-
-                    if (!exportedBlob || exportedBlob.size === 0) {
-                        throw new Error('In-browser slicing produced empty output.');
-                    }
-
-                    updateProgress(100, 'Export complete! 100% processed locally on your device.');
-
-                    const finalUrl = URL.createObjectURL(exportedBlob);
-                    const outMb = (exportedBlob.size / (1024 * 1024)).toFixed(2);
-                    const totalSec = trimmerKeeperClips.reduce((a, c) => a + c.duration, 0);
-                    const safeTitle = (currentExplainerStoryboard && currentExplainerStoryboard.title)
-                        ? currentExplainerStoryboard.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30)
-                        : 'cinema_explainer';
-                    const outFilename = `${safeTitle}_${formatSecs(totalSec).replace(':', 'm')}.mp4`;
-
-                    if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
-                    if (trimmerExportedPlayer) trimmerExportedPlayer.src = finalUrl;
-                    if (btnDownloadExportedVideo) {
-                        btnDownloadExportedVideo.href = finalUrl;
-                        btnDownloadExportedVideo.download = outFilename;
-                    }
-
-                    if (btnDownloadNarrationAudio) {
-                        if (narrationAudioUrl) {
-                            btnDownloadNarrationAudio.href = narrationAudioUrl;
-                            btnDownloadNarrationAudio.download = `${safeTitle}_narration_bgm.mp3`;
-                            btnDownloadNarrationAudio.style.display = 'inline-flex';
-                        } else {
-                            btnDownloadNarrationAudio.style.display = 'none';
-                        }
-                    }
-
-                    if (trimmerExportMetaDetails) {
-                        trimmerExportMetaDetails.innerHTML = `
-                            <div><b>File:</b> ${outFilename}</div>
-                            <div><b>Engine:</b> ${methodUsed}</div>
-                            <div><b>Resolution:</b> ${trimmerVideoWidth}x${trimmerVideoHeight} (Original Aspect Ratio)</div>
-                            <div><b>Duration:</b> ${formatSecs(totalSec)} (${trimmerKeeperClips.length} keeper cuts)</div>
-                            <div><b>Size:</b> ${outMb} MB</div>
-                            <div><b>Audio Track:</b> ${audioMode === 'original' ? 'Original Movie Audio' : 'Neural Hindi Voiceover + Ducked Tension BGM'}</div>
-                            <div style="color: #6ee7b7; font-weight: 700; margin-top: 6px;">⚡ ZERO SERVER UPLOAD: 0MB uploaded to cloud &bull; 100% Private &amp; Instant</div>
-                        `;
-                    }
-
-                    // Auto-trigger download
-                    const tempLink = document.createElement('a');
-                    tempLink.href = finalUrl;
-                    tempLink.download = outFilename;
-                    document.body.appendChild(tempLink);
-                    tempLink.click();
-                    document.body.removeChild(tempLink);
-
-                    if (btnSendExportToYouTube) {
-                        btnSendExportToYouTube.onclick = () => {
-                            tabManualMode.click();
-                            try {
-                                const dt = new DataTransfer();
-                                const fileObj = new File([exportedBlob], outFilename, { type: 'video/mp4' });
-                                dt.items.add(fileObj);
-                                const videoFileInput = document.getElementById('videoFile');
-                                if (videoFileInput) videoFileInput.files = dt.files;
-                            } catch(e) {}
-                            document.getElementById('videoTitle').value = `${currentExplainerStoryboard ? currentExplainerStoryboard.title : 'Movie Explainer'} - Hindi Storytelling Recap`;
-                            const fileInfoEl = document.getElementById('videoFileInfo');
-                            if (fileInfoEl) {
-                                fileInfoEl.textContent = `Using Sliced Video: ${outFilename} (${outMb} MB)`;
-                                fileInfoEl.style.display = 'block';
-                            }
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        };
-                    }
-
-                } catch (err) {
-                    console.error('Client-side export error:', err);
-                    alert('Export Error: ' + err.message);
-                } finally {
-                    btnExportFinalVideo.disabled = false;
-                    if (btnExportIcon) btnExportIcon.textContent = '🎬';
-                    if (btnExportText) btnExportText.textContent = 'Export Final Video (Zero Server Upload • In-Browser Slicing)';
                 }
+
+                if (!exportedBlob && triggerDownloadOnComplete) {
+                    methodUsed = "HTML5 Stream Muxer (Fallback)";
+                    updateProgress(35, 'Muxing timeline clips directly in browser...');
+                    exportedBlob = await runCanvasMediaRecorderExport(
+                        trimmerPlayer,
+                        trimmerKeeperClips,
+                        audioMode,
+                        narrationAudioUrl,
+                        (p, msg) => {
+                            updateProgress(Math.round(35 + p * 60), msg);
+                        }
+                    );
+                }
+
+                if (!exportedBlob || exportedBlob.size === 0) {
+                    throw new Error('In-browser muxing produced empty output.');
+                }
+
+                updateProgress(100, '✅ Synced Explainer Video (.mp4) Ready for Instant Download!');
+
+                const finalUrl = URL.createObjectURL(exportedBlob);
+                const outMb = (exportedBlob.size / (1024 * 1024)).toFixed(2);
+                const totalSec = trimmerKeeperClips.reduce((a, c) => a + c.duration, 0);
+                const safeTitle = (currentExplainerStoryboard && currentExplainerStoryboard.title)
+                    ? currentExplainerStoryboard.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30)
+                    : 'cinema_explainer';
+                const outFilename = `${safeTitle}_${formatSecs(totalSec).replace(':', 'm')}.mp4`;
+
+                window.mergedExplainerVideoUrl = finalUrl;
+                window.mergedExplainerVideoBlob = exportedBlob;
+                window.mergedExplainerVideoFilename = outFilename;
+
+                if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
+                if (trimmerExportedPlayer) {
+                    trimmerExportedPlayer.src = finalUrl;
+                    trimmerExportedPlayer.muted = false;
+                }
+                if (btnDownloadExportedVideo) {
+                    btnDownloadExportedVideo.href = finalUrl;
+                    btnDownloadExportedVideo.download = outFilename;
+                    btnDownloadExportedVideo.innerHTML = '⬇️ Download Synced Explainer Video (.mp4)';
+                }
+
+                if (btnDownloadNarrationAudio) {
+                    if (narrationAudioUrl) {
+                        btnDownloadNarrationAudio.href = narrationAudioUrl;
+                        btnDownloadNarrationAudio.download = `${safeTitle}_narration_bgm.mp3`;
+                        btnDownloadNarrationAudio.style.display = 'inline-flex';
+                    } else {
+                        btnDownloadNarrationAudio.style.display = 'none';
+                    }
+                }
+
+                if (trimmerExportMetaDetails) {
+                    trimmerExportMetaDetails.innerHTML = `
+                        <div><b>File:</b> ${outFilename}</div>
+                        <div><b>Engine:</b> ${methodUsed}</div>
+                        <div><b>Resolution:</b> ${trimmerVideoWidth}x${trimmerVideoHeight} (Original Aspect Ratio)</div>
+                        <div><b>Duration:</b> ${formatSecs(totalSec)} (${trimmerKeeperClips.length} keeper cuts • Δ 0.00s offset)</div>
+                        <div><b>Size:</b> ${outMb} MB</div>
+                        <div><b>Audio Track:</b> ${audioMode === 'original' ? 'Original Movie Audio' : 'Neural Hindi Voiceover + Ducked Tension BGM (100% Native Audio Stripped)'}</div>
+                        <div style="color: #6ee7b7; font-weight: 700; margin-top: 6px;">⚡ AUTO-MERGED &amp; READY: Click Download to save immediately</div>
+                    `;
+                }
+
+                if (btnSendExportToYouTube) {
+                    btnSendExportToYouTube.onclick = () => {
+                        tabManualMode.click();
+                        try {
+                            const dt = new DataTransfer();
+                            const fileObj = new File([exportedBlob], outFilename, { type: 'video/mp4' });
+                            dt.items.add(fileObj);
+                            const videoFileInput = document.getElementById('videoFile');
+                            if (videoFileInput) videoFileInput.files = dt.files;
+                        } catch(e) {}
+                        document.getElementById('videoTitle').value = `${currentExplainerStoryboard ? currentExplainerStoryboard.title : 'Movie Explainer'} - Hindi Storytelling Recap`;
+                        const fileInfoEl = document.getElementById('videoFileInfo');
+                        if (fileInfoEl) {
+                            fileInfoEl.textContent = `Using Synced Explainer Video: ${outFilename} (${outMb} MB)`;
+                            fileInfoEl.style.display = 'block';
+                        }
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    };
+                }
+
+                if (triggerDownloadOnComplete) {
+                    triggerInstantVideoDownload(finalUrl, outFilename);
+                }
+                return finalUrl;
+            } catch (err) {
+                console.error('Client-side merge error:', err);
+                if (triggerDownloadOnComplete) {
+                    alert('Export Error: ' + err.message);
+                }
+                return null;
+            } finally {
+                window.isAutoMergingExplainer = false;
+                if (btnExportFinalVideo) btnExportFinalVideo.disabled = false;
+                if (btnExportIcon) btnExportIcon.textContent = '⬇️';
+                if (btnExportText) btnExportText.textContent = 'Download Synced Explainer Video (.mp4)';
+                if (btnQuickExportFromExplainer) {
+                    btnQuickExportFromExplainer.innerHTML = '⬇️ Download Synced Explainer Video (.mp4)';
+                }
+            }
+        }
+
+        window.triggerAutoMergeSyncedExplainer = (downloadImmediately = false) => {
+            setTimeout(() => {
+                executeSyncedExplainerMerge(Boolean(downloadImmediately));
+            }, 150);
+        };
+
+        if (btnExportFinalVideo) {
+            btnExportFinalVideo.addEventListener('click', async () => {
+                await executeSyncedExplainerMerge(true);
             });
         }
 
