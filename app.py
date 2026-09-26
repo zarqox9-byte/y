@@ -26,8 +26,6 @@ import gemini_engine
 import clipper_engine
 import channel_key_store
 
-clipper_jobs = {}
-
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "youtube_studio_pro_permanent_production_secret_2026")
 app.config.update(
@@ -67,10 +65,6 @@ ACCOUNTS_STORE_FILE = os.path.join(BASE_DIR, "user_accounts.json")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(gemini_engine.THUMBNAILS_DIR, exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_shorts"), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_temp"), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_jobs"), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, "clipper_cuts"), exist_ok=True)
 
 # Cloud deployment environment variable fallback
 if not os.path.exists(CLIENT_SECRETS_FILE) and os.environ.get("GOOGLE_CLIENT_SECRET_JSON"):
@@ -2093,14 +2087,9 @@ HTML_MAIN = """
         <!-- Right Main Workspace -->
         <section class="workspace">
             
-            <!-- Mode Switcher Tabs -->
+            <!-- Mode Switcher Tabs (Original Two Core Pillars) -->
             <div class="mode-nav-tabs">
-                <button type="button" class="mode-tab active-ai" id="tabTrimmerMode" onclick="switchWorkspaceTab('trimmer')">
-                    <span>⚡</span>
-                    <span>1-Minute Episodic Shorts Engine</span>
-                    <span class="tab-badge" style="background: linear-gradient(135deg, #10b981, #0ea5e9); color: white;">60S CAPCUT</span>
-                </button>
-                <button type="button" class="mode-tab" id="tabGeminiMode" onclick="switchWorkspaceTab('gemini')">
+                <button type="button" class="mode-tab active-ai" id="tabGeminiMode" onclick="switchWorkspaceTab('gemini')">
                     <span>✨</span>
                     <span>Gemini AI Studio Copilot</span>
                     <span class="tab-badge badge-ai">PRO MULTIMODAL</span>
@@ -2115,14 +2104,14 @@ HTML_MAIN = """
             <!-- ============================================== -->
             <!-- 1. GEMINI AI STUDIO COPILOT PANEL              -->
             <!-- ============================================== -->
-            <div class="card" id="geminiStudioSection" style="display: none;">
+            <div class="card" id="geminiStudioSection" style="display: block;">
                 <div class="ai-banner">
                     <div class="ai-banner-left">
                         <div class="ai-banner-title">
-                            <span>✨ Gemini 3.8 Flash Multimodal Video Ingestion</span>
+                            <span>✨ Gemini Multimodal Video Analysis &amp; Dynamic AI Thumbnail Suite</span>
                         </div>
                         <div class="ai-banner-desc">
-                            Upload any Short or Long-form video. Gemini analyzes spoken dialogue, narrative pacing, story hooks, and extracts 100% authentic character face thumbnails directly from your video stream.
+                            Upload any Short or Long-form video. Gemini deeply analyzes spoken dialogue, ground-truth plot, and expressions — generating a custom Slot 1 AI Dynamic Thumbnail (9:16 for Shorts, 16:9 for Long-form) plus 5 High-Emotion Local Video Frames (Slots 2–6).
                         </div>
                     </div>
                     <button class="btn-populate" id="btnOpenKeyModal" style="padding: 8px 14px; font-size: 13px;">
@@ -2133,25 +2122,25 @@ HTML_MAIN = """
                 <!-- Video Format Selector (Shorts vs Long Form) -->
                 <div class="form-group" style="margin-bottom: 16px;">
                     <div class="form-label" style="margin-bottom: 8px;">
-                        <span style="font-size: 14px; font-weight: 700; color: #f3e8ff;">🎯 Video Target Format & SEO Engine:</span>
-                        <span style="font-size: 11px; color: #c084fc;">Select format to activate tailored algorithm rules</span>
+                        <span style="font-size: 14px; font-weight: 700; color: #f3e8ff;">🎯 Video Target Format &amp; Aspect Ratio Engine:</span>
+                        <span style="font-size: 11px; color: #c084fc;">Auto-configures algorithm rules &amp; 9:16 vs 16:9 thumbnail rendering</span>
                     </div>
                     <div class="format-selector-grid">
                         <div class="format-card active" id="formatCardShort" onclick="selectVideoFormat('Short')">
                             <div class="format-card-header">
                                 <span class="format-icon">📱</span>
-                                <span class="format-badge-pill">High Velocity Hook</span>
+                                <span class="format-badge-pill">9:16 Vertical Ratio</span>
                             </div>
-                            <div class="format-card-title">YouTube Shorts</div>
-                            <div class="format-card-desc">&lt; 60s Vertical &bull; Curiosity hook &lt; 50 chars &bull; 2 viral hashtags &bull; 8-12 search tags</div>
+                            <div class="format-card-title">YouTube Shorts / Reels</div>
+                            <div class="format-card-desc">Strict 9:16 Thumbnail &bull; Curiosity hook &lt; 50 chars &bull; 2 viral hashtags &bull; 8-12 search tags</div>
                         </div>
                         <div class="format-card" id="formatCardLong" onclick="selectVideoFormat('Long')">
                             <div class="format-card-header">
                                 <span class="format-icon">🎬</span>
-                                <span class="format-badge-pill" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">Deep Search Ranking</span>
+                                <span class="format-badge-pill" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">16:9 Cinematic Ratio</span>
                             </div>
                             <div class="format-card-title">Long Form Video</div>
-                            <div class="format-card-desc">Standard Landscape &bull; [Hook] | [High Volume Keyword] &bull; 3-paragraph summary &bull; 15-20 search tags</div>
+                            <div class="format-card-desc">Strict 16:9 Thumbnail &bull; [Hook] | [High Volume Keyword] &bull; 3-paragraph summary &bull; 15-20 search tags</div>
                         </div>
                     </div>
                 </div>
@@ -2162,10 +2151,10 @@ HTML_MAIN = """
                         <input type="file" id="aiVideoFileInput" accept="video/mp4,video/x-matroska,video/quicktime,video/webm">
                         <svg class="ai-icon" viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
                         <div style="font-size: 18px; font-weight: 700; color: #f3e8ff; margin-bottom: 6px;">
-                            Drag & Drop Video to Ingest with Gemini AI
+                            Drag &amp; Drop Video to Ingest with Gemini AI
                         </div>
                         <div style="font-size: 13px; color: #c084fc;">
-                            Supports MP4, MKV, WebM, MOV &bull; Seconds to Hours &bull; Shorts & Long-Form
+                            Supports MP4, MKV, WebM, MOV &bull; Seconds to Hours &bull; Shorts (9:16) &amp; Long-Form (16:9)
                         </div>
                         <div class="selected-file-info" id="aiVideoFileInfo" style="color: #e9d5ff; font-weight: 600;"></div>
                     </div>
@@ -2183,7 +2172,7 @@ HTML_MAIN = """
                 <!-- Run AI Button -->
                 <button class="btn-ai-analyze" id="btnRunAiAnalysis">
                     <svg style="width: 20px; height: 20px; fill: white;" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"/></svg>
-                    <span>Analyze Video & Generate Human-Grade Metadata</span>
+                    <span>Analyze Video &amp; Generate AI Thumbnail + Metadata</span>
                 </button>
 
                 <!-- Dynamic Stepper Progress -->
@@ -2195,23 +2184,23 @@ HTML_MAIN = """
                     <div class="ai-steps-list">
                         <div class="ai-step-item" id="step1">
                             <span class="step-circle">1</span>
-                            <span>Extracting 100% Authentic Character Face Keyframes (Canvas & Stream Decoder)</span>
+                            <span>Extracting 5 High-Emotion Local Video Keyframes (Slots 2 to 6)</span>
                         </div>
                         <div class="ai-step-item" id="step2">
                             <span class="step-circle">2</span>
-                            <span>Uploading Video to Gemini 3.8 Flash Multimodal Engine</span>
+                            <span>Uploading Video Stream to Gemini Multimodal Engine</span>
                         </div>
                         <div class="ai-step-item" id="step3">
                             <span class="step-circle">3</span>
-                            <span>Analyzing Spoken Dialogue, Audio Tone, Story Beats & Expressions</span>
+                            <span>Analyzing Ground-Truth Plot, Facial Expressions &amp; Climactic Context</span>
                         </div>
                         <div class="ai-step-item" id="step4">
                             <span class="step-circle">4</span>
-                            <span>Formulating High-CTR Viral Titles & Rich SEO Description</span>
+                            <span>Generating Slot 1 Dynamic AI Thumbnail (9:16 / 16:9) &amp; Search-Grounded Titles</span>
                         </div>
                         <div class="ai-step-item" id="step5">
                             <span class="step-circle">5</span>
-                            <span>Ranking Optimal Authentic Thumbnail & Finalizing Metadata</span>
+                            <span>Auto-Selecting Slot 1 AI Thumbnail &amp; Finalizing Metadata</span>
                         </div>
                     </div>
                 </div>
@@ -2227,8 +2216,8 @@ HTML_MAIN = """
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <span style="font-size: 24px;">🎯</span>
                                 <div>
-                                    <div style="font-size: 11px; text-transform: uppercase; color: #c084fc; font-weight: 700; letter-spacing: 0.5px;">Target Format Strategy</div>
-                                    <div id="aiTargetFormatBadge" style="font-size: 15px; font-weight: 800; color: #fff;">YouTube Shorts</div>
+                                    <div style="font-size: 11px; text-transform: uppercase; color: #c084fc; font-weight: 700; letter-spacing: 0.5px;">Target Format &amp; Ratio</div>
+                                    <div id="aiTargetFormatBadge" style="font-size: 15px; font-weight: 800; color: #fff;">YouTube Shorts (9:16)</div>
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 12px;">
@@ -2249,7 +2238,7 @@ HTML_MAIN = """
                                 <span style="font-size: 24px;">⚡</span>
                                 <div>
                                     <div style="font-size: 11px; text-transform: uppercase; color: #ffba08; font-weight: 700; letter-spacing: 0.5px;">Engine Model</div>
-                                    <div style="font-size: 14px; font-weight: 700; color: #fff;">Gemini 2.5 Flash</div>
+                                    <div style="font-size: 14px; font-weight: 700; color: #fff;">Gemini 2.5 Flash + Imagen</div>
                                 </div>
                             </div>
                         </div>
@@ -2259,19 +2248,19 @@ HTML_MAIN = """
                     <div class="result-group">
                         <div class="result-group-title">
                             <span>Viral Title Recommendations (Click card to select)</span>
-                            <span style="font-size: 12px; color: #a855f7;">Ranked by Estimated CTR & Punchline</span>
+                            <span style="font-size: 12px; color: #a855f7;">Ranked by Estimated CTR &amp; Punchline</span>
                         </div>
                         <div class="title-cards-grid" id="titleCardsGrid"></div>
                     </div>
 
-                    <!-- Authentic Video Thumbnails Picker -->
+                    <!-- Enhanced Thumbnail Generation Suite (Slot 1 AI Dynamic + Slots 2-6 High-Emotion Local Frames) -->
                     <div class="result-group">
-                        <div class="result-group-title">
-                            <span>100% Authentic Character Face Thumbnail Picker</span>
-                            <span style="font-size: 12px; color: #2ba640;">✔ Guaranteed 100% Match from Real Video Stream</span>
+                        <div class="result-group-title" style="flex-wrap: wrap; gap: 8px;">
+                            <span>✨ Enhanced Thumbnail Suite: Slot 1 AI Dynamic (Default Selected) + Slots 2–6 High-Emotion Local Frames</span>
+                            <span id="aiThumbAspectRatioBadge" style="font-size: 11.5px; background: rgba(16, 185, 129, 0.2); color: #4ade80; border: 1px solid rgba(16, 185, 129, 0.45); padding: 3px 10px; border-radius: 6px; font-weight: 800;">✔ 9:16 Vertical Auto-Detected</span>
                         </div>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 10px 0;">
-                            These frames were extracted directly from the uploaded video. Click any frame to set it as your official YouTube video thumbnail.
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 12px 0;">
+                            <strong>Slot 1 (Default Selected)</strong> is dynamically generated by Gemini AI with dramatic lighting, high contrast, and suspenseful expression tailored to this specific video. <strong>Slots 2 to 6</strong> are 5 native high-emotion keyframes extracted directly from your video stream.
                         </p>
                         <div class="thumbnail-gallery-grid" id="thumbnailGalleryGrid"></div>
 
@@ -2279,7 +2268,7 @@ HTML_MAIN = """
                         <div style="background: #171624; border: 1px solid rgba(255, 186, 8, 0.35); border-radius: 10px; padding: 16px; margin-top: 14px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                                 <span style="font-size: 13px; font-weight: 800; color: #ffba08; display: flex; align-items: center; gap: 8px;">
-                                    <span>🎨</span> Thumbnail Directive & Art Direction
+                                    <span>🎨</span> Thumbnail Directive &amp; Art Direction
                                 </span>
                                 <span style="font-size: 11px; color: var(--text-muted);">High CTR visual composition</span>
                             </div>
@@ -2321,7 +2310,7 @@ HTML_MAIN = """
                     <!-- Tags Cloud -->
                     <div class="result-group">
                         <div class="result-group-title">
-                            <span>Targeted Search & Discovery Keywords</span>
+                            <span>Targeted Search &amp; Discovery Keywords</span>
                             <span id="aiTagCount" style="font-size: 12px; color: var(--text-muted);">SEO tags</span>
                         </div>
                         <div class="tags-wrapper" id="aiTagsDisplay"></div>
@@ -2331,11 +2320,11 @@ HTML_MAIN = """
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
                         <div class="stat-box" style="text-align: left; padding: 14px;">
                             <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Recommended Category</div>
-                            <div id="aiCategoryName" style="font-size: 16px; font-weight: 700; color: white; margin-top: 4px;">People & Blogs</div>
+                            <div id="aiCategoryName" style="font-size: 16px; font-weight: 700; color: white; margin-top: 4px;">People &amp; Blogs</div>
                             <div id="aiCategoryId" style="font-size: 11px; color: #a855f7; margin-top: 2px;">ID: 22</div>
                         </div>
                         <div class="stat-box" style="text-align: left; padding: 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Audience & Format</div>
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Audience &amp; Format</div>
                             <div id="aiVideoTypeBadge" style="font-size: 16px; font-weight: 700; color: white; margin-top: 4px;">Long-form Video</div>
                             <div id="aiKidsBadge" style="font-size: 11px; color: #2ba640; margin-top: 2px;">General Audience (Not for kids)</div>
                         </div>
@@ -2363,215 +2352,7 @@ HTML_MAIN = """
             </div>
 
             <!-- ============================================== -->
-            <!-- 2. LIGHTWEIGHT 1-MINUTE EPISODIC SHORTS ENGINE -->
-            <!-- ============================================== -->
-            <div class="card" id="trimmerSection" style="display: block; padding: 24px; background: var(--bg-surface); border-radius: var(--card-radius); border: 1px solid var(--border-color);">
-
-                <!-- Hero Banner -->
-                <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(14, 165, 233, 0.16)); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 12px; padding: 16px 20px; margin-bottom: 18px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
-                                <span style="font-size: 22px;">⚡</span>
-                                <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #f8fafc;">1-Minute Episodic Shorts Engine</h3>
-                                <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 4px;">CAPCUT OPTIMIZED • 60S</span>
-                                <span style="background: rgba(14, 165, 233, 0.2); color: #7dd3fc; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(14, 165, 233, 0.4);">140–150 WORDS HINDI SCRIPT</span>
-                                <span style="background: rgba(168, 85, 247, 0.2); color: #e9d5ff; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.4);">10–12 DYNAMIC CUTS (4–6S)</span>
-                            </div>
-                            <p style="margin: 0; font-size: 12.5px; color: #cbd5e1; line-height: 1.45;">
-                                Paste the official YouTube URL for ground-truth plot &amp; subtitles, select your local movie file for fast keyframe slicing, and generate chronological 60-second episodic Shorts (Part 1, Part 2, Part 3...) with muted video ready for CapCut.
-                            </p>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span id="activePartHeaderBadge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800;">
-                                🎬 Ready: PART 1 (60s)
-                            </span>
-                            <button type="button" id="btnResetToPart1" style="display: none; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 6px 10px; border-radius: 6px; font-size: 11.5px; cursor: pointer;">
-                                🔄 Reset to Part 1
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Episodic Parts Switcher Bar (when multiple parts generated) -->
-                    <div id="episodicPartsHistoryBar" style="display: none; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); gap: 8px; flex-wrap: wrap; align-items: center;">
-                        <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700;">Generated Episodic Parts:</span>
-                        <div id="episodicPartsPillsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
-                    </div>
-                </div>
-
-                <!-- INPUT SECTION (FIELD 1: YOUTUBE URL + FIELD 2: LOCAL VIDEO FILE) -->
-                <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-bottom: 16px;">
-
-                        <!-- FIELD 1: YouTube Official URL -->
-                        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 14px;">
-                            <label for="trimmerExplainerYtUrl" style="display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 700; color: #7dd3fc; margin-bottom: 8px;">
-                                <span>1️⃣ Field 1: YouTube Official URL</span>
-                                <span style="font-size: 10.5px; color: #94a3b8; font-weight: 600;">Plot, Characters &amp; Subtitles Only</span>
-                            </label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="url" id="trimmerExplainerYtUrl" class="form-control" placeholder="https://www.youtube.com/watch?v=... (Official Movie / Video URL)" style="flex: 1; margin-bottom: 0; font-size: 13px; padding: 10px 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(56, 189, 248, 0.4); color: #fff; border-radius: 8px;">
-                                <button type="button" id="btnPasteEpisodicUrl" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #bae6fd; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;">
-                                    📋 Paste
-                                </button>
-                            </div>
-                            <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
-                                Used exclusively for ground-truth storyline, character-only identification, and subtitle extraction (zero server video download).
-                            </div>
-                        </div>
-
-                        <!-- FIELD 2: Local Video File Selector -->
-                        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 14px;">
-                            <label for="trimmerVideoInput" style="display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 700; color: #6ee7b7; margin-bottom: 8px;">
-                                <span>2️⃣ Field 2: Local Video File Selector</span>
-                                <span style="font-size: 10.5px; color: #94a3b8; font-weight: 600;">Direct Fast Keyframe Slicing</span>
-                            </label>
-                            <div id="trimmerDropzone" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(0,0,0,0.45); border: 1px dashed rgba(16, 185, 129, 0.55); border-radius: 8px; padding: 8px 12px; cursor: pointer;">
-                                <input type="file" id="trimmerVideoInput" accept="video/mp4,video/webm,video/x-matroska,video/quicktime,video/*" style="font-size: 12.5px; color: #e2e8f0; width: 100%; cursor: pointer;">
-                            </div>
-                            <div id="localVideoStatusBadge" style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
-                                📂 Select your local movie file (.mp4/.mkv/.webm) for direct 60-second muted keyframe slicing.
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <!-- PRIMARY ACTION: ANALYZE & GENERATE PART 1 (60s) -->
-                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                        <button type="button" id="btnPlanCinemaExplainer" class="btn-upload" style="flex: 1; min-width: 260px; padding: 13px 22px; font-size: 14.5px; font-weight: 800; background: linear-gradient(135deg, #10b981, #0284c7); border: none; border-radius: 10px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
-                            <span id="btnGeneratePartIcon">🎬</span>
-                            <span id="btnGeneratePartLabel">Analyze &amp; Generate Part 1 (60s)</span>
-                        </button>
-                    </div>
-
-                    <!-- Progress Status Bar -->
-                    <div id="trimmerExplainerStatus" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); color: #bae6fd; font-size: 12.5px; font-weight: 600;">
-                        ⏳ Analyzing ground-truth subtitles &amp; generating Part 1 (60s)...
-                    </div>
-                </div>
-
-                <!-- OUTPUT INTERFACE (3 CORE BUTTONS + SCRIPT + 60S SLICED VIDEO PREVIEW & 10-12 CUTS) -->
-                <div id="episodicOutputSection" style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 12px; padding: 20px;">
-
-                    <!-- Output Metadata Header -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <span id="outPartBadge" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 6px;">
-                                PART 1 • 60S SHORT
-                            </span>
-                            <strong id="outMovieTitle" style="font-size: 15px; color: #f8fafc;">Ready to Generate Part 1 (60s)</strong>
-                        </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 11.5px;">
-                            <span id="outWindowBadge" style="background: rgba(56, 189, 248, 0.15); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); padding: 3px 9px; border-radius: 6px; font-weight: 700;">
-                                ⏱️ Window: 00:00 - 10:00
-                            </span>
-                            <span id="outCutsBadge" style="background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.35); padding: 3px 9px; border-radius: 6px; font-weight: 700;">
-                                ✂️ 12 Cuts (4–6s • Total 60.0s)
-                            </span>
-                            <span id="outWordsBadge" style="background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 9px; border-radius: 6px; font-weight: 700;">
-                                📝 145 Words (Character-Only Hindi)
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- 3 PROMINENT OUTPUT INTERFACE ACTION BUTTONS -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 18px;">
-                        <!-- Button 1: Copy Hindi Story Script -->
-                        <button type="button" id="btnCopyHindiScript" class="btn-populate" style="padding: 13px 16px; font-size: 13.5px; font-weight: 800; background: rgba(56, 189, 248, 0.18); border: 1px solid #38bdf8; color: #e0f2fe; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <span>📋</span>
-                            <span id="btnCopyHindiScriptText">Copy Hindi Story Script</span>
-                        </button>
-
-                        <!-- Button 2: Download 1-Minute Sliced Video (.mp4) -->
-                        <button type="button" id="btnDownloadSlicedMp4" class="btn-upload" style="padding: 13px 16px; font-size: 13.5px; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); border: none; color: #ffffff; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <span>⬇️</span>
-                            <span id="btnDownloadSlicedMp4Text">Download 1-Minute Sliced Video (.mp4)</span>
-                        </button>
-
-                        <!-- Button 3: Generate Next Part (Part 2 / Next 60s) -->
-                        <button type="button" id="btnGenerateNextPart" class="btn-populate" style="padding: 13px 16px; font-size: 13.5px; font-weight: 800; background: linear-gradient(135deg, #7c3aed, #db2777); border: none; color: #ffffff; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <span>▶️</span>
-                            <span id="btnGenerateNextPartText">Generate Next Part (Part 2 / Next 60s)</span>
-                        </button>
-                    </div>
-
-                    <!-- Slicing / Export Progress Banner -->
-                    <div id="sliceExportProgressBox" style="display: none; margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: #a7f3d0; font-weight: 700; margin-bottom: 6px;">
-                            <span id="sliceExportStepText">Slicing 10–12 keyframes (muted audio for CapCut)...</span>
-                            <span id="sliceExportPctText">0%</span>
-                        </div>
-                        <div style="width: 100%; height: 7px; background: rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden;">
-                            <div id="sliceExportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #38bdf8); transition: width 0.25s ease;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Two-Column Workspace: Hindi Suspense Script + 1-Minute Muted Video Preview & 10-12 Cuts -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px;">
-
-                        <!-- Left Column: 60s Hindi Suspense Script (140-150 Words) -->
-                        <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; display: flex; flex-direction: column;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-                                <label for="trimmerGeneratedScriptBox" style="font-size: 13px; font-weight: 700; color: #f8fafc; margin: 0;">
-                                    📜 Authentic 60s Hindi Suspense Script (CapCut / External TTS)
-                                </label>
-                                <span id="scriptLiveWordCount" style="font-size: 11px; color: #34d399; font-weight: 700;">
-                                    0 words (Target: 140–150 words)
-                                </span>
-                            </div>
-                            <textarea id="trimmerGeneratedScriptBox" rows="11" placeholder="Click 'Analyze & Generate Part 1 (60s)' above. Gemini will extract the real movie plot & subtitles and write a 140–150 word Hindi suspense script using character-only names..." style="width: 100%; flex: 1; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 8px; padding: 12px; color: #f1f5f9; font-size: 13.5px; line-height: 1.65; resize: vertical;"></textarea>
-                            <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-                                <span>🔒 Character-Only Policy: Zero real celebrity/actor names</span>
-                                <span id="outSourceEngineLabel" style="color: #7dd3fc;">Source: Grounded Transcript + Gemini</span>
-                            </div>
-                        </div>
-
-                        <!-- Right Column: 1-Minute Muted Video Preview & 10-12 Dynamic Cuts -->
-                        <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; display: flex; flex-direction: column;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-                                <span style="font-size: 13px; font-weight: 700; color: #f8fafc;">
-                                    🎞️ 1-Minute Muted Video Preview &amp; Scene Cuts
-                                </span>
-                                <span style="font-size: 11px; color: #fbbf24; font-weight: 700;">
-                                    🔇 Audio Muted (-an) • CapCut Ready
-                                </span>
-                            </div>
-
-                            <div style="position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1);">
-                                <video id="trimmerPreviewVideo" muted playsinline controls style="width: 100%; height: 100%; object-fit: contain;"></video>
-                                <div id="previewCutOverlayBadge" style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.78); color: #34d399; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; pointer-events: none;">
-                                    🔇 Muted Preview • 10–12 Cuts (~60s)
-                                </div>
-                            </div>
-
-                            <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-                                <button type="button" id="btnPlay60sPreview" style="flex: 1; background: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.45); color: #6ee7b7; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
-                                    ▶️ Play 60s Muted Cut Sequence
-                                </button>
-                                <button type="button" id="btnSendShortToUploader" style="background: rgba(255, 0, 85, 0.18); border: 1px solid rgba(255, 0, 85, 0.45); color: #fda4af; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
-                                    📤 Send to YouTube Uploader
-                                </button>
-                            </div>
-
-                            <!-- 10-12 Scene Cuts Scrollable List -->
-                            <div style="font-size: 11.5px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">
-                                Chronological Visual Cuts (10–12 Cuts • 4–6s Each • Total ~60s):
-                            </div>
-                            <div id="episodicCutsList" style="max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
-                                <div style="font-size: 12px; color: #64748b; text-align: center; padding: 18px;">
-                                    10 to 12 chronological scene cuts (4–6s each) will appear here after clicking "Analyze &amp; Generate Part 1 (60s)".
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <!-- ============================================== -->
-            <!-- 4. STANDARD MANUAL STUDIO FORM PANEL           -->
+            <!-- 2. STANDARD MANUAL STUDIO FORM PANEL           -->
             <!-- ============================================== -->
             <div class="card" id="manualStudioSection" style="display: none;">
                 <div class="workspace-header">
@@ -2903,12 +2684,9 @@ HTML_MAIN = """
         window.switchWorkspaceTab = function(activeTab) {
             try {
                 window.forceClearBlockingOverlays();
-                // Map aliases (e.g. copilot, copilot-tab, trimmer-tab)
-                const targetKey = (activeTab === 'copilot' || activeTab === 'copilot-tab') ? 'gemini' : (activeTab === 'trimmer-tab' ? 'trimmer' : activeTab);
+                const targetKey = (activeTab === 'manual') ? 'manual' : 'gemini';
                 const tabs = {
                     'gemini': { tab: document.getElementById('tabGeminiMode'), sec: document.getElementById('geminiStudioSection'), activeCls: 'active-ai' },
-                    'clipper': { tab: document.getElementById('tabClipperMode'), sec: document.getElementById('clipperSection'), activeCls: 'active-ai' },
-                    'trimmer': { tab: document.getElementById('tabTrimmerMode'), sec: document.getElementById('trimmerSection'), activeCls: 'active-ai' },
                     'manual': { tab: document.getElementById('tabManualMode'), sec: document.getElementById('manualStudioSection'), activeCls: 'active-manual' }
                 };
 
@@ -3337,7 +3115,7 @@ HTML_MAIN = """
             extractClientVideoFrames(file);
         }
 
-        // Extracts high-resolution keyframes directly from video stream
+        // Extracts 5 high-emotion candidate frames from browser decoder as fallback for Slots 2-6
         async function extractClientVideoFrames(file) {
             clientExtractedFrames = [];
             const objectUrl = URL.createObjectURL(file);
@@ -3350,12 +3128,21 @@ HTML_MAIN = """
             const duration = clientVideo.duration || 10;
             const width = clientVideo.videoWidth || 1280;
             const height = clientVideo.videoHeight || 720;
+
+            // Auto-detect format (Shorts 9:16 vs Long-form 16:9) from native video geometry & duration
+            if (width < height) {
+                selectVideoFormat('Short');
+            } else if (width > height && duration > 90) {
+                selectVideoFormat('Long');
+            }
+
+            const targetAspect = (currentSelectedFormat === 'Short' || width < height) ? '9:16' : '16:9';
             clientCanvas.width = width;
             clientCanvas.height = height;
             const ctx = clientCanvas.getContext('2d');
 
-            // Sample 6 timestamps across the video (e.g. 8%, 20%, 36%, 52%, 70%, 88%)
-            const fractions = [0.08, 0.20, 0.36, 0.52, 0.70, 0.88];
+            // Sample 5 high-emotion timestamps across the video for Slots 2 to 6
+            const fractions = [0.14, 0.30, 0.48, 0.66, 0.84];
             const timestamps = fractions.map(f => Math.min(duration - 0.2, Math.max(0.5, duration * f)));
 
             for (let i = 0; i < timestamps.length; i++) {
@@ -3371,15 +3158,16 @@ HTML_MAIN = """
                 const mins = Math.floor(ts / 60);
                 const secs = Math.floor(ts % 60);
                 const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                const label = i === 1 ? 'Primary Character Face' : (i === 3 ? 'Peak Action Scene' : `Authentic Scene (${timeStr})`);
+                const label = `High-Emotion Frame #${i + 1} (${timeStr})`;
 
-                // Send frame to server to store in uploads/thumbnails
+                // Send frame to server to crop to strict 9:16 or 16:9 and store in uploads/thumbnails
                 try {
                     const fd = new FormData();
                     fd.append('image_file', blob, `frame_${i+1}_${timeStr.replace(':', 'm')}s.jpg`);
                     fd.append('timestamp', timeStr);
                     fd.append('seconds', ts);
                     fd.append('label', label);
+                    fd.append('aspect_ratio', targetAspect);
 
                     const res = await fetch('/api/save_thumbnail_frame', { method: 'POST', body: fd });
                     const frameData = await res.json();
@@ -3464,15 +3252,25 @@ HTML_MAIN = """
             if (el) { el.classList.remove('active'); el.classList.add('completed'); }
         }
 
-        // Render Gemini Results
+        // Render Gemini Results (Slot 1 AI Dynamic Thumbnail + Slots 2-6 High-Emotion Local Video Frames)
         function renderGeminiResults(data) {
             geminiResultsBox.style.display = 'block';
 
+            const aspectRatio = data.thumbnail_aspect_ratio || (data.format_type === 'Short' ? '9:16' : '16:9');
+            const isVertical = (aspectRatio === '9:16');
+
             // Target Format & Primary Context Display
             const fmtEl = document.getElementById('aiTargetFormatBadge');
-            if (fmtEl) fmtEl.textContent = (data.format_type === 'Long' ? '🎬 Long Form Video' : '📱 YouTube Shorts');
+            if (fmtEl) fmtEl.textContent = (data.format_type === 'Long' ? `🎬 Long Form Video (${aspectRatio})` : `📱 YouTube Shorts (${aspectRatio})`);
             const ctxEl = document.getElementById('aiPrimaryContext');
             if (ctxEl) ctxEl.textContent = data.primary_context || 'Autonomous Evaluation';
+
+            const ratioBadge = document.getElementById('aiThumbAspectRatioBadge');
+            if (ratioBadge) {
+                ratioBadge.textContent = isVertical
+                    ? '✔ 9:16 Vertical Auto-Detected (720×1280)'
+                    : '✔ 16:9 Cinematic Auto-Detected (1280×720)';
+            }
 
             // 0. AI Mood & Language Classification
             const moodEl = document.getElementById('aiDetectedMood');
@@ -3503,25 +3301,54 @@ HTML_MAIN = """
             document.getElementById('videoTitle').value = primaryTitle;
             document.getElementById('titleCounter').textContent = `${primaryTitle.length} / 100`;
 
-            // 2. Thumbnails Picker & Thumbnail Directive
+            // 2. Enhanced Thumbnail Suite: Slot 1 (AI Dynamic Default Selected) + Slots 2-6 (High-Emotion Local Frames)
             const gallery = document.getElementById('thumbnailGalleryGrid');
-            const allThumbnails = (clientExtractedFrames.length > 0) ? clientExtractedFrames : (data.extracted_thumbnails || []);
+            let serverThumbnails = Array.isArray(data.extracted_thumbnails) ? [...data.extracted_thumbnails] : [];
+            if (serverThumbnails.length < 6 && clientExtractedFrames.length > 0) {
+                for (let i = 0; i < clientExtractedFrames.length && serverThumbnails.length < 6; i++) {
+                    const cf = clientExtractedFrames[i];
+                    if (cf && cf.filename && !serverThumbnails.some(st => st.filename === cf.filename)) {
+                        serverThumbnails.push({
+                            ...cf,
+                            slot: serverThumbnails.length + 1,
+                            is_ai_generated: false,
+                            is_recommended: false,
+                            selected: false,
+                            aspect_ratio: aspectRatio
+                        });
+                    }
+                }
+            }
+            const allThumbnails = serverThumbnails.slice(0, 6);
 
             if (allThumbnails.length > 0) {
+                gallery.style.gridTemplateColumns = isVertical
+                    ? 'repeat(auto-fit, minmax(150px, 1fr))'
+                    : 'repeat(auto-fit, minmax(210px, 1fr))';
+
                 gallery.innerHTML = allThumbnails.map((th, idx) => {
-                    const isRec = idx === 0 || th.is_recommended;
+                    const slotNum = th.slot || (idx + 1);
+                    const isSlot1 = (idx === 0 || Boolean(th.is_ai_generated));
+                    const cardAspectCss = isVertical ? '9/16' : '16/9';
+                    const topBadgeHtml = isSlot1
+                        ? `<span class="thumb-ai-rec-badge" style="background: linear-gradient(135deg, #ec4899, #8b5cf6); box-shadow: 0 2px 10px rgba(236,72,153,0.45);">✨ SLOT 1: AI DYNAMIC (${aspectRatio})</span>`
+                        : `<span class="thumb-ai-rec-badge" style="background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(56, 189, 248, 0.5); color: #38bdf8;">🎬 SLOT ${slotNum}: LOCAL FRAME</span>`;
+                    const bottomBadgeText = isSlot1
+                        ? (th.label || 'AI Dynamic Visual')
+                        : `${th.timestamp || 'Frame'} • ${th.label || ('High-Emotion #' + (slotNum - 1))}`;
+
                     return `
-                        <div class="thumb-candidate-card ${isRec ? 'selected gemini-best' : ''}" onclick="selectThumbnailFrame(this, '${th.url}', '${th.filename}')">
-                            <img src="${th.url}" alt="Frame">
-                            ${isRec ? '<span class="thumb-ai-rec-badge">⭐ 100% Authentic Face Match</span>' : ''}
-                            <span class="thumb-badge">${th.timestamp || 'Frame'}</span>
+                        <div class="thumb-candidate-card ${isSlot1 ? 'selected gemini-best' : ''}" style="aspect-ratio: ${cardAspectCss};" onclick="selectThumbnailFrame(this, '${th.url}', '${th.filename}', '${aspectRatio}')">
+                            <img src="${th.url}" alt="Slot ${slotNum} Thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
+                            ${topBadgeHtml}
+                            <span class="thumb-badge">${escapeHtml(bottomBadgeText)}</span>
                             <span class="thumb-highlight-badge">✔ Selected</span>
                         </div>
                     `;
                 }).join('');
 
-                // Select first
-                selectThumbnailFrame(gallery.firstElementChild, allThumbnails[0].url, allThumbnails[0].filename);
+                // Auto-select Slot 1 (AI Dynamic Thumbnail) by default
+                selectThumbnailFrame(gallery.firstElementChild, allThumbnails[0].url, allThumbnails[0].filename, aspectRatio);
             } else {
                 gallery.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No thumbnails extracted. You can upload a custom one.</div>';
             }
@@ -3531,7 +3358,7 @@ HTML_MAIN = """
             const overlayEl = document.getElementById('aiThumbOverlayText');
             if (overlayEl) overlayEl.textContent = thumbDir.text_overlay || 'WATCH THIS';
             const sceneEl = document.getElementById('aiThumbSceneDir');
-            if (sceneEl) sceneEl.textContent = thumbDir.visual_scene_direction || 'High emotion close-up frame with clear lighting';
+            if (sceneEl) sceneEl.textContent = thumbDir.visual_scene_direction || 'High emotion close-up frame with dramatic lighting';
             const colorEl = document.getElementById('aiThumbColorTheme');
             if (colorEl) colorEl.textContent = thumbDir.recommended_color_theme || 'High contrast background with bold font';
 
@@ -3565,7 +3392,7 @@ HTML_MAIN = """
             document.getElementById('aiCategoryId').textContent = `Category ID: ${data.category_id || 24}`;
             document.getElementById('categorySelect').value = String(data.category_id || 24);
 
-            document.getElementById('aiVideoTypeBadge').textContent = (data.video_type === 'Short' ? 'YouTube Short' : 'Long-form Video');
+            document.getElementById('aiVideoTypeBadge').textContent = (data.video_type === 'Short' ? `YouTube Short (${aspectRatio})` : `Long-form Video (${aspectRatio})`);
             document.getElementById('aiKidsBadge').textContent = data.made_for_kids ? 'Audience: Made for Kids' : 'Audience: General (Not for kids)';
             document.getElementById('madeForKids').checked = Boolean(data.made_for_kids);
 
@@ -3588,7 +3415,7 @@ HTML_MAIN = """
             document.getElementById('titleCounter').textContent = `${text.length} / 100`;
         }
 
-        function selectThumbnailFrame(card, url, filename) {
+        function selectThumbnailFrame(card, url, filename, aspectRatio) {
             if (!card) return;
             document.querySelectorAll('.thumb-candidate-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
@@ -3597,8 +3424,14 @@ HTML_MAIN = """
             document.getElementById('selectedThumbnailFilename').value = filename;
 
             // Update preview box in manual studio
+            const thumbPreviewBox = document.getElementById('thumbPreviewBox');
             const thumbPreviewImg = document.getElementById('thumbPreviewImg');
             const thumbPlaceholder = document.getElementById('thumbPlaceholder');
+            if (thumbPreviewBox && aspectRatio) {
+                thumbPreviewBox.style.aspectRatio = (aspectRatio === '9:16') ? '9/16' : '16/9';
+                thumbPreviewBox.style.maxWidth = (aspectRatio === '9:16') ? '220px' : '100%';
+                thumbPreviewBox.style.margin = (aspectRatio === '9:16') ? '10px auto 0 auto' : '10px 0 0 0';
+            }
             thumbPreviewImg.src = url;
             thumbPreviewImg.style.display = 'block';
             thumbPlaceholder.style.display = 'none';
@@ -4217,743 +4050,6 @@ HTML_MAIN = """
             }, 1000);
         }
 
-        // ==============================================================
-        // LIGHTWEIGHT 1-MINUTE EPISODIC SHORTS ENGINE (JAVASCRIPT)
-        // ==============================================================
-        let episodicCurrentPart = 1;
-        let episodicNextStartSec = 0.0;
-        let episodicPreviousSummary = '';
-        let episodicPartsHistory = {}; // part_number -> storyboard object
-        let episodicSlicedBlobs = {};  // part_number -> { blob, url, filename }
-        let localSourceFile = null;
-        let localSourceObjectUrl = null;
-        let localSourceDuration = 0.0;
-        let localSourceWidth = 1920;
-        let localSourceHeight = 1080;
-        let localServerFilename = null;
-        let previewSequenceActive = false;
-        let previewActiveCutIdx = 0;
-
-        const ytUrlInput = document.getElementById('trimmerExplainerYtUrl');
-        const btnPasteEpisodicUrl = document.getElementById('btnPasteEpisodicUrl');
-        const localVideoInput = document.getElementById('trimmerVideoInput');
-        const localVideoStatusBadge = document.getElementById('localVideoStatusBadge');
-        const btnGeneratePart = document.getElementById('btnPlanCinemaExplainer');
-        const btnGeneratePartLabel = document.getElementById('btnGeneratePartLabel');
-        const btnGeneratePartIcon = document.getElementById('btnGeneratePartIcon');
-        const btnResetToPart1 = document.getElementById('btnResetToPart1');
-        const activePartHeaderBadge = document.getElementById('activePartHeaderBadge');
-        const episodicStatusBox = document.getElementById('trimmerExplainerStatus');
-        const episodicPartsHistoryBar = document.getElementById('episodicPartsHistoryBar');
-        const episodicPartsPillsContainer = document.getElementById('episodicPartsPillsContainer');
-
-        const outPartBadge = document.getElementById('outPartBadge');
-        const outMovieTitle = document.getElementById('outMovieTitle');
-        const outWindowBadge = document.getElementById('outWindowBadge');
-        const outCutsBadge = document.getElementById('outCutsBadge');
-        const outWordsBadge = document.getElementById('outWordsBadge');
-        const outSourceEngineLabel = document.getElementById('outSourceEngineLabel');
-
-        const btnCopyHindiScript = document.getElementById('btnCopyHindiScript');
-        const btnCopyHindiScriptText = document.getElementById('btnCopyHindiScriptText');
-        const btnDownloadSlicedMp4 = document.getElementById('btnDownloadSlicedMp4');
-        const btnDownloadSlicedMp4Text = document.getElementById('btnDownloadSlicedMp4Text');
-        const btnGenerateNextPart = document.getElementById('btnGenerateNextPart');
-        const btnGenerateNextPartText = document.getElementById('btnGenerateNextPartText');
-
-        const scriptTextarea = document.getElementById('trimmerGeneratedScriptBox');
-        const scriptLiveWordCount = document.getElementById('scriptLiveWordCount');
-        const previewVideo = document.getElementById('trimmerPreviewVideo');
-        const previewCutOverlayBadge = document.getElementById('previewCutOverlayBadge');
-        const btnPlay60sPreview = document.getElementById('btnPlay60sPreview');
-        const btnSendShortToUploader = document.getElementById('btnSendShortToUploader');
-        const episodicCutsList = document.getElementById('episodicCutsList');
-
-        const sliceExportProgressBox = document.getElementById('sliceExportProgressBox');
-        const sliceExportStepText = document.getElementById('sliceExportStepText');
-        const sliceExportPctText = document.getElementById('sliceExportPctText');
-        const sliceExportProgressBar = document.getElementById('sliceExportProgressBar');
-
-        function formatClock(sec) {
-            const s = Math.max(0, Math.round(Number(sec) || 0));
-            const h = Math.floor(s / 3600);
-            const m = Math.floor((s % 3600) / 60);
-            const rem = s % 60;
-            if (h > 0) {
-                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
-            }
-            return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
-        }
-
-        function countWords(str) {
-            const clean = String(str || '').trim();
-            if (!clean) return 0;
-            return clean.split(/\\s+/).filter(Boolean).length;
-        }
-
-        function updateLiveWordCounter() {
-            if (!scriptTextarea || !scriptLiveWordCount) return;
-            const wc = countWords(scriptTextarea.value);
-            scriptLiveWordCount.textContent = `${wc} words (Target: 140–150 words)`;
-            scriptLiveWordCount.style.color = (wc >= 135 && wc <= 155) ? '#34d399' : '#fbbf24';
-        }
-
-        if (scriptTextarea) {
-            scriptTextarea.addEventListener('input', updateLiveWordCounter);
-        }
-
-        if (btnPasteEpisodicUrl && ytUrlInput) {
-            btnPasteEpisodicUrl.addEventListener('click', async () => {
-                try {
-                    const txt = await navigator.clipboard.readText();
-                    if (txt) ytUrlInput.value = txt.trim();
-                } catch (e) {
-                    ytUrlInput.focus();
-                }
-            });
-        }
-
-        // Field 2: Local Video File Selection (Instant Browser Load — Zero Full-Movie Upload Required)
-        if (localVideoInput) {
-            localVideoInput.addEventListener('change', (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file) return;
-                localSourceFile = file;
-                localServerFilename = null;
-                episodicSlicedBlobs = {}; // Reset cached slices for new source video
-
-                if (localSourceObjectUrl) {
-                    try { URL.revokeObjectURL(localSourceObjectUrl); } catch (err) {}
-                }
-                localSourceObjectUrl = URL.createObjectURL(file);
-
-                if (previewVideo) {
-                    previewVideo.muted = true;
-                    previewVideo.volume = 0;
-                    previewVideo.src = localSourceObjectUrl;
-                    previewVideo.onloadedmetadata = () => {
-                        localSourceDuration = Number(previewVideo.duration) || 0;
-                        localSourceWidth = Number(previewVideo.videoWidth) || 1920;
-                        localSourceHeight = Number(previewVideo.videoHeight) || 1080;
-                        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-                        if (localVideoStatusBadge) {
-                            localVideoStatusBadge.innerHTML = `<span style="color:#34d399;font-weight:700;">✅ Loaded Local File:</span> ${escapeHtml(file.name)} (${localSourceWidth}x${localSourceHeight} • ${formatClock(localSourceDuration)} • ${sizeMb} MB)`;
-                        }
-                    };
-                }
-            });
-        }
-
-        // Keep preview video 100% muted at all times (optimized for CapCut)
-        if (previewVideo) {
-            previewVideo.muted = true;
-            previewVideo.addEventListener('volumechange', () => {
-                if (!previewVideo.muted || previewVideo.volume > 0) {
-                    previewVideo.muted = true;
-                    previewVideo.volume = 0;
-                }
-            });
-            previewVideo.addEventListener('timeupdate', () => {
-                if (!previewSequenceActive) return;
-                const activeData = episodicPartsHistory[episodicCurrentPart];
-                const cuts = (activeData && activeData.keeper_clips) || [];
-                if (!cuts.length) return;
-                const curCut = cuts[previewActiveCutIdx];
-                if (!curCut) return;
-                if (previewVideo.currentTime >= curCut.end - 0.08) {
-                    if (previewActiveCutIdx + 1 < cuts.length) {
-                        previewActiveCutIdx += 1;
-                        const nxt = cuts[previewActiveCutIdx];
-                        previewVideo.currentTime = nxt.start;
-                        if (previewCutOverlayBadge) {
-                            previewCutOverlayBadge.textContent = `🔇 Cut #${nxt.id}/${cuts.length} ${nxt.beat || ''} (${formatClock(nxt.start)} - ${formatClock(nxt.end)})`;
-                        }
-                        highlightActiveCutRow(previewActiveCutIdx);
-                    } else {
-                        previewSequenceActive = false;
-                        previewVideo.pause();
-                        if (btnPlay60sPreview) btnPlay60sPreview.innerHTML = '▶️ Play 60s Muted Cut Sequence';
-                    }
-                }
-            });
-        }
-
-        function highlightActiveCutRow(activeIdx) {
-            document.querySelectorAll('.episodic-cut-row').forEach((row, idx) => {
-                row.style.borderColor = (idx === activeIdx) ? '#10b981' : 'rgba(255,255,255,0.08)';
-                row.style.background = (idx === activeIdx) ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255,255,255,0.03)';
-            });
-        }
-
-        if (btnPlay60sPreview) {
-            btnPlay60sPreview.addEventListener('click', () => {
-                const activeData = episodicPartsHistory[episodicCurrentPart];
-                const cuts = (activeData && activeData.keeper_clips) || [];
-                if (!previewVideo || (!localSourceObjectUrl && !previewVideo.src)) {
-                    alert('Please select your local video file in Field 2 first to preview the 1-minute sliced scenes.');
-                    return;
-                }
-                if (previewSequenceActive && !previewVideo.paused) {
-                    previewSequenceActive = false;
-                    previewVideo.pause();
-                    btnPlay60sPreview.innerHTML = '▶️ Play 60s Muted Cut Sequence';
-                    return;
-                }
-                // If already sliced into a standalone 60s MP4, play it directly
-                if (episodicSlicedBlobs[episodicCurrentPart] && episodicSlicedBlobs[episodicCurrentPart].url) {
-                    previewSequenceActive = false;
-                    if (previewVideo.src !== episodicSlicedBlobs[episodicCurrentPart].url) {
-                        previewVideo.src = episodicSlicedBlobs[episodicCurrentPart].url;
-                    }
-                    previewVideo.muted = true;
-                    previewVideo.currentTime = 0;
-                    previewVideo.play().catch(() => {});
-                    return;
-                }
-                if (cuts.length > 0 && localSourceObjectUrl) {
-                    if (previewVideo.src !== localSourceObjectUrl) {
-                        previewVideo.src = localSourceObjectUrl;
-                    }
-                    previewSequenceActive = true;
-                    previewActiveCutIdx = 0;
-                    previewVideo.muted = true;
-                    previewVideo.currentTime = cuts[0].start;
-                    highlightActiveCutRow(0);
-                    if (previewCutOverlayBadge) {
-                        previewCutOverlayBadge.textContent = `🔇 Cut #1/${cuts.length} ${cuts[0].beat || ''} (${formatClock(cuts[0].start)} - ${formatClock(cuts[0].end)})`;
-                    }
-                    previewVideo.play().catch(() => {});
-                    btnPlay60sPreview.innerHTML = '⏸️ Pause 60s Cut Sequence';
-                }
-            });
-        }
-
-        function renderEpisodicPartsHistoryPills() {
-            const parts = Object.keys(episodicPartsHistory).map(Number).sort((a, b) => a - b);
-            if (!episodicPartsHistoryBar || !episodicPartsPillsContainer) return;
-            if (parts.length === 0) {
-                episodicPartsHistoryBar.style.display = 'none';
-                return;
-            }
-            episodicPartsHistoryBar.style.display = 'flex';
-            episodicPartsPillsContainer.innerHTML = parts.map(pNum => {
-                const isCur = (pNum === episodicCurrentPart);
-                const pData = episodicPartsHistory[pNum];
-                return `<button type="button" onclick="window.selectEpisodicPart(${pNum})" style="padding: 4px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid ${isCur ? '#10b981' : 'rgba(255,255,255,0.2)'}; background: ${isCur ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.05)'}; color: ${isCur ? '#6ee7b7' : '#cbd5e1'};">
-                    Part ${pNum} (${pData.window_range_str || '60s'})
-                </button>`;
-            }).join('');
-        }
-
-        window.selectEpisodicPart = function(partNum) {
-            const data = episodicPartsHistory[partNum];
-            if (!data) return;
-            episodicCurrentPart = Number(partNum);
-            renderEpisodicPartOutput(data);
-        };
-
-        window.jumpToEpisodicCut = function(cutIdx) {
-            const activeData = episodicPartsHistory[episodicCurrentPart];
-            const cuts = (activeData && activeData.keeper_clips) || [];
-            const cut = cuts[cutIdx];
-            if (!cut || !previewVideo) return;
-            if (localSourceObjectUrl && previewVideo.src !== localSourceObjectUrl) {
-                previewVideo.src = localSourceObjectUrl;
-            }
-            previewSequenceActive = true;
-            previewActiveCutIdx = cutIdx;
-            previewVideo.muted = true;
-            previewVideo.currentTime = cut.start;
-            highlightActiveCutRow(cutIdx);
-            if (previewCutOverlayBadge) {
-                previewCutOverlayBadge.textContent = `🔇 Cut #${cut.id}/${cuts.length} ${cut.beat || ''} (${formatClock(cut.start)} - ${formatClock(cut.end)})`;
-            }
-            previewVideo.play().catch(() => {});
-        };
-
-        function renderEpisodicPartOutput(data) {
-            if (!data) return;
-            const partNum = Number(data.part_number || 1);
-            const nextPartNum = partNum + 1;
-            const cuts = data.keeper_clips || [];
-            const totalDur = Number(data.total_duration_sec || 60).toFixed(1);
-            const scriptStr = data.script || data.full_script || '';
-            const wc = countWords(scriptStr);
-
-            if (activePartHeaderBadge) {
-                activePartHeaderBadge.textContent = `🎬 Active: PART ${partNum} (${data.window_range_str || '60s'})`;
-            }
-            if (btnResetToPart1) {
-                btnResetToPart1.style.display = (partNum > 1 || Object.keys(episodicPartsHistory).length > 1) ? 'inline-block' : 'none';
-            }
-            if (outPartBadge) {
-                outPartBadge.textContent = `PART ${partNum} • 60S SHORT`;
-            }
-            if (outMovieTitle) {
-                outMovieTitle.textContent = data.part_title || `${data.title || 'Movie'} - Part ${partNum}`;
-            }
-            if (outWindowBadge) {
-                outWindowBadge.textContent = `⏱️ Window: ${data.window_range_str || '00:00 - 10:00'}`;
-            }
-            if (outCutsBadge) {
-                outCutsBadge.textContent = `✂️ ${cuts.length} Cuts (4–6s • Total ${totalDur}s)`;
-            }
-            if (outWordsBadge) {
-                outWordsBadge.textContent = `📝 ${wc} Words (Character-Only Hindi)`;
-            }
-            if (outSourceEngineLabel) {
-                outSourceEngineLabel.textContent = `Source: ${data.source || 'Gemini + Transcript'}`;
-            }
-            if (scriptTextarea) {
-                scriptTextarea.value = scriptStr;
-                updateLiveWordCounter();
-            }
-            if (btnGenerateNextPartText) {
-                btnGenerateNextPartText.textContent = `Generate Next Part (Part ${nextPartNum} / Next 60s)`;
-            }
-            if (btnGeneratePartLabel) {
-                btnGeneratePartLabel.textContent = `Analyze & Generate Part ${partNum} (60s)`;
-            }
-
-            if (episodicCutsList) {
-                episodicCutsList.innerHTML = cuts.map((c, idx) => `
-                    <div class="episodic-cut-row" onclick="window.jumpToEpisodicCut(${idx})" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: all 0.15s ease;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px;">
-                            <span style="font-weight: 800; color: #34d399;">Cut #${c.id} ${escapeHtml(c.beat || '')}</span>
-                            <span style="color: #7dd3fc; font-family: monospace; font-weight: 700;">${escapeHtml(c.start_ts || formatClock(c.start))} &rarr; ${escapeHtml(c.end_ts || formatClock(c.end))} (${Number(c.duration).toFixed(1)}s)</span>
-                        </div>
-                        <div style="font-size: 11.5px; color: #e2e8f0; line-height: 1.4;">${escapeHtml(c.narration || c.title || '')}</div>
-                    </div>
-                `).join('');
-            }
-
-            renderEpisodicPartsHistoryPills();
-
-            // If we already sliced this part's MP4, load it into previewVideo
-            if (episodicSlicedBlobs[partNum] && episodicSlicedBlobs[partNum].url && previewVideo) {
-                previewVideo.src = episodicSlicedBlobs[partNum].url;
-                previewVideo.muted = true;
-                if (previewCutOverlayBadge) {
-                    previewCutOverlayBadge.textContent = `✅ Part ${partNum} Sliced 60s Video Ready (Muted for CapCut)`;
-                }
-            }
-        }
-
-        async function runEpisodicShortGeneration(targetPartNum, startOffsetSec, prevSummary) {
-            const urlVal = (ytUrlInput && ytUrlInput.value || '').trim();
-            if (!urlVal && !localSourceFile) {
-                alert('Please enter the YouTube Official URL in Field 1 (or select a local video file in Field 2).');
-                if (ytUrlInput) ytUrlInput.focus();
-                return;
-            }
-
-            if (btnGeneratePart) btnGeneratePart.disabled = true;
-            if (btnGenerateNextPart) btnGenerateNextPart.disabled = true;
-            if (btnGeneratePartIcon) btnGeneratePartIcon.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;"></span>';
-            if (episodicStatusBox) {
-                episodicStatusBox.style.display = 'block';
-                episodicStatusBox.style.color = '#bae6fd';
-                episodicStatusBox.textContent = `⏳ Analyzing YouTube transcript & generating Part ${targetPartNum} (60s Hindi suspense script + 10–12 scene cuts)...`;
-            }
-
-            try {
-                const payload = {
-                    youtube_url: urlVal,
-                    part_number: targetPartNum,
-                    start_offset_sec: startOffsetSec,
-                    previous_summary: prevSummary,
-                    video_duration: localSourceDuration > 60 ? localSourceDuration : null,
-                    local_video_title: localSourceFile ? localSourceFile.name : '',
-                    language: 'Hindi',
-                    channel_id: window.currentActiveChannelId || 'default'
-                };
-
-                const res = await fetch('/api/shorts/generate_part', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) {
-                    throw new Error(data.error || `Failed to generate Part ${targetPartNum}`);
-                }
-
-                episodicCurrentPart = Number(data.part_number || targetPartNum);
-                episodicNextStartSec = Number(data.next_start_sec || (startOffsetSec + 60));
-                episodicPreviousSummary = String(data.part_summary || '');
-                episodicPartsHistory[episodicCurrentPart] = data;
-
-                renderEpisodicPartOutput(data);
-
-                if (episodicStatusBox) {
-                    episodicStatusBox.style.color = '#6ee7b7';
-                    episodicStatusBox.textContent = `✅ Part ${episodicCurrentPart} Ready! ${data.word_count} Hindi words • ${data.total_clips} cuts (${data.total_duration_sec}s total).`;
-                }
-
-                // If a local video file is selected in Field 2, automatically slice the 1-minute clip in the background
-                if (localSourceFile) {
-                    await sliceAndPrepare1MinVideo(episodicCurrentPart, false);
-                }
-            } catch (err) {
-                console.error('Episodic generation error:', err);
-                if (episodicStatusBox) {
-                    episodicStatusBox.style.color = '#f87171';
-                    episodicStatusBox.textContent = `❌ Error: ${err.message}`;
-                }
-            } finally {
-                if (btnGeneratePart) btnGeneratePart.disabled = false;
-                if (btnGenerateNextPart) btnGenerateNextPart.disabled = false;
-                if (btnGeneratePartIcon) btnGeneratePartIcon.textContent = '🎬';
-            }
-        }
-
-        // Primary Button: Analyze & Generate Part 1 (60s) (or re-generate current part)
-        if (btnGeneratePart) {
-            btnGeneratePart.addEventListener('click', () => {
-                const startSec = (episodicCurrentPart === 1) ? 0.0 : (episodicPartsHistory[episodicCurrentPart]?.window_start_sec || 0.0);
-                const prevSum = (episodicCurrentPart === 1) ? '' : (episodicPartsHistory[episodicCurrentPart - 1]?.part_summary || '');
-                runEpisodicShortGeneration(episodicCurrentPart, startSec, prevSum);
-            });
-        }
-
-        // Reset to Part 1 Button
-        if (btnResetToPart1) {
-            btnResetToPart1.addEventListener('click', () => {
-                episodicCurrentPart = 1;
-                episodicNextStartSec = 0.0;
-                episodicPreviousSummary = '';
-                if (episodicPartsHistory[1]) {
-                    renderEpisodicPartOutput(episodicPartsHistory[1]);
-                } else {
-                    if (activePartHeaderBadge) activePartHeaderBadge.textContent = '🎬 Ready: PART 1 (60s)';
-                    if (btnGeneratePartLabel) btnGeneratePartLabel.textContent = 'Analyze & Generate Part 1 (60s)';
-                    if (btnGenerateNextPartText) btnGenerateNextPartText.textContent = 'Generate Next Part (Part 2 / Next 60s)';
-                }
-            });
-        }
-
-        // OUTPUT BUTTON 1: Copy Hindi Story Script
-        if (btnCopyHindiScript) {
-            btnCopyHindiScript.addEventListener('click', async () => {
-                const txt = (scriptTextarea && scriptTextarea.value || '').trim();
-                if (!txt) {
-                    alert('No Hindi script generated yet. Click "Analyze & Generate Part 1 (60s)" first!');
-                    return;
-                }
-                try {
-                    await navigator.clipboard.writeText(txt);
-                } catch (e) {
-                    if (scriptTextarea) {
-                        scriptTextarea.select();
-                        document.execCommand('copy');
-                    }
-                }
-                const wc = countWords(txt);
-                if (btnCopyHindiScriptText) {
-                    btnCopyHindiScriptText.textContent = `✅ Copied Hindi Script (${wc} Words)!`;
-                    setTimeout(() => {
-                        btnCopyHindiScriptText.textContent = 'Copy Hindi Story Script';
-                    }, 2600);
-                }
-            });
-        }
-
-        // OUTPUT BUTTON 3: Generate Next Part (Part 2 / Next 60s)
-        if (btnGenerateNextPart) {
-            btnGenerateNextPart.addEventListener('click', () => {
-                const curData = episodicPartsHistory[episodicCurrentPart];
-                const nextPart = curData ? (Number(curData.part_number) + 1) : (episodicCurrentPart + 1);
-                const nextOffset = curData ? Number(curData.next_start_sec || episodicNextStartSec) : episodicNextStartSec;
-                const prevSum = curData ? String(curData.part_summary || curData.script || '') : episodicPreviousSummary;
-                runEpisodicShortGeneration(nextPart, nextOffset, prevSum);
-            });
-        }
-
-        // Client-Side & Server-Side Fast Muted 60s Video Slicer for CapCut
-        let ffmpegWasmInstance = null;
-        async function getLoadedFfmpegWasm() {
-            if (ffmpegWasmInstance) return ffmpegWasmInstance;
-            if (!window.SharedArrayBuffer) return null;
-            if (!window.FFmpeg) {
-                await new Promise((resolve, reject) => {
-                    const s = document.createElement('script');
-                    s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-                    s.onload = resolve;
-                    s.onerror = reject;
-                    document.head.appendChild(s);
-                });
-            }
-            const { createFFmpeg } = window.FFmpeg;
-            const ff = createFFmpeg({
-                log: false,
-                corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-            });
-            await ff.load();
-            ffmpegWasmInstance = ff;
-            return ff;
-        }
-
-        function triggerBlobDownload(url, filename) {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                if (a.parentNode) a.parentNode.removeChild(a);
-            }, 300);
-        }
-
-        async function sliceAndPrepare1MinVideo(partNum, downloadImmediately = true) {
-            const pData = episodicPartsHistory[partNum];
-            if (!pData || !pData.keeper_clips || !pData.keeper_clips.length) {
-                alert('Please click "Analyze & Generate Part 1 (60s)" first so Gemini can plan the 10–12 visual cuts.');
-                return null;
-            }
-
-            if (episodicSlicedBlobs[partNum] && episodicSlicedBlobs[partNum].url) {
-                if (downloadImmediately) {
-                    triggerBlobDownload(episodicSlicedBlobs[partNum].url, episodicSlicedBlobs[partNum].filename);
-                }
-                return episodicSlicedBlobs[partNum].url;
-            }
-
-            if (!localSourceFile) {
-                alert('Please select your local movie file in Field 2 ("Local Video File Selector") to slice the 1-minute video.');
-                if (localVideoInput) localVideoInput.click();
-                return null;
-            }
-
-            const cuts = pData.keeper_clips;
-            const safeTitle = String(pData.title || 'Movie').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 28) || 'Short';
-            const outFilename = `${safeTitle}_Part_${partNum}_60s_CapCut_Muted.mp4`;
-
-            if (sliceExportProgressBox) sliceExportProgressBox.style.display = 'block';
-            if (btnDownloadSlicedMp4) btnDownloadSlicedMp4.disabled = true;
-
-            const setSliceProgress = (pct, msg) => {
-                if (sliceExportPctText) sliceExportPctText.textContent = `${Math.round(pct)}%`;
-                if (sliceExportStepText) sliceExportStepText.textContent = msg;
-                if (sliceExportProgressBar) sliceExportProgressBar.style.width = `${Math.round(pct)}%`;
-                if (btnDownloadSlicedMp4Text) btnDownloadSlicedMp4Text.textContent = `Slicing Part ${partNum} (${Math.round(pct)}%)...`;
-            };
-
-            try {
-                // Path A: Ultra-fast FFmpeg.wasm WORKERFS zero-copy keyframe stream slicer (when SharedArrayBuffer is available)
-                const ff = await getLoadedFfmpegWasm().catch(() => null);
-                if (ff) {
-                    setSliceProgress(10, `Mounting local file (${localSourceFile.name}) for zero-copy keyframe slicing...`);
-                    const mountDir = '/work_' + Date.now();
-                    ff.FS('mkdir', mountDir);
-                    ff.FS('mount', ff.FS.filesystems.WORKERFS, { files: [localSourceFile] }, mountDir);
-                    const inputPath = `${mountDir}/${localSourceFile.name}`;
-                    const cutFiles = [];
-
-                    for (let i = 0; i < cuts.length; i++) {
-                        const c = cuts[i];
-                        const cName = `cut_${i}.mp4`;
-                        setSliceProgress(12 + ((i + 1) / cuts.length) * 70, `Slicing Cut #${i + 1}/${cuts.length} (${c.duration}s • Muted)...`);
-                        await ff.run(
-                            '-ss', String(c.start),
-                            '-t', String(c.duration),
-                            '-i', inputPath,
-                            '-c:v', 'copy',
-                            '-an',
-                            '-avoid_negative_ts', 'make_zero',
-                            cName
-                        );
-                        cutFiles.push(cName);
-                    }
-
-                    setSliceProgress(88, 'Stitching 10–12 cuts into 1-minute CapCut MP4...');
-                    const concatList = cutFiles.map(f => `file '${f}'`).join('\\n');
-                    ff.FS('writeFile', 'concat_list.txt', new TextEncoder().encode(concatList));
-                    await ff.run('-f', 'concat', '-safe', '0', '-i', 'concat_list.txt', '-c:v', 'copy', '-an', '-movflags', '+faststart', 'out_60s.mp4');
-                    const dataBytes = ff.FS('readFile', 'out_60s.mp4');
-                    const blob = new Blob([dataBytes.buffer], { type: 'video/mp4' });
-                    const blobUrl = URL.createObjectURL(blob);
-
-                    // Cleanup FS
-                    cutFiles.forEach(f => { try { ff.FS('unlink', f); } catch (e) {} });
-                    try { ff.FS('unlink', 'concat_list.txt'); ff.FS('unlink', 'out_60s.mp4'); ff.FS('unmount', mountDir); } catch (e) {}
-
-                    episodicSlicedBlobs[partNum] = { blob, url: blobUrl, filename: outFilename };
-                    if (previewVideo) {
-                        previewVideo.src = blobUrl;
-                        previewVideo.muted = true;
-                    }
-                    if (previewCutOverlayBadge) {
-                        previewCutOverlayBadge.textContent = `✅ Part ${partNum} Sliced 60s MP4 Ready (Muted for CapCut)`;
-                    }
-                    setSliceProgress(100, `✅ Part ${partNum} 1-Minute Sliced Video (.mp4) Ready!`);
-                    if (downloadImmediately) {
-                        triggerBlobDownload(blobUrl, outFilename);
-                    }
-                    return blobUrl;
-                }
-
-                // Path B: Server-Assisted Native FFmpeg Stream-Copy Slicer for compact files (<= 100 MB)
-                if (localSourceFile.size <= 100 * 1024 * 1024) {
-                    if (!localServerFilename) {
-                        setSliceProgress(15, `Staging local video for fast FFmpeg keyframe stream copy...`);
-                        const fd = new FormData();
-                        fd.append('video_file', localSourceFile);
-                        const upRes = await fetch('/api/trimmer/upload', { method: 'POST', body: fd });
-                        const upData = await upRes.json();
-                        if (upRes.ok && upData.success) {
-                            localServerFilename = upData.filename;
-                        }
-                    }
-                    if (localServerFilename) {
-                        setSliceProgress(55, `Slicing ${cuts.length} chronological cuts (4–6s each, muted for CapCut)...`);
-                        const sliceRes = await fetch('/api/shorts/slice_local', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                filename: localServerFilename,
-                                keeper_clips: cuts,
-                                part_number: partNum
-                            })
-                        });
-                        const sliceData = await sliceRes.json();
-                        if (sliceRes.ok && sliceData.success) {
-                            const videoResp = await fetch(sliceData.download_url || sliceData.video_url);
-                            const blob = await videoResp.blob();
-                            const blobUrl = URL.createObjectURL(blob);
-
-                            episodicSlicedBlobs[partNum] = { blob, url: blobUrl, filename: outFilename };
-                            if (previewVideo) {
-                                previewVideo.src = blobUrl;
-                                previewVideo.muted = true;
-                            }
-                            if (previewCutOverlayBadge) {
-                                previewCutOverlayBadge.textContent = `✅ Part ${partNum} Sliced 60s MP4 Ready (Muted for CapCut)`;
-                            }
-                            setSliceProgress(100, `✅ Part ${partNum} 1-Minute Sliced Video (.mp4) Ready!`);
-                            if (downloadImmediately) {
-                                triggerBlobDownload(blobUrl, outFilename);
-                            }
-                            return blobUrl;
-                        }
-                    }
-                }
-
-                // Path C: Zero-Upload In-Browser Muted Keyframe Slicer (for multi-GB local movies without SharedArrayBuffer)
-                setSliceProgress(10, `Slicing ${cuts.length} cuts directly in browser (zero server upload)...`);
-                const offVid = document.createElement('video');
-                offVid.muted = true;
-                offVid.playsInline = true;
-                offVid.preload = 'auto';
-                offVid.src = localSourceObjectUrl;
-                await new Promise((res, rej) => {
-                    offVid.onloadedmetadata = res;
-                    offVid.onerror = () => rej(new Error('Could not decode local video in browser'));
-                });
-
-                const cw = Math.min(1280, offVid.videoWidth || 1280);
-                const ch = Math.min(720, offVid.videoHeight || 720);
-                const canvas = document.createElement('canvas');
-                canvas.width = cw;
-                canvas.height = ch;
-                const ctx = canvas.getContext('2d');
-                const stream = canvas.captureStream(30);
-                const mimeCandidates = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
-                const chosenMime = mimeCandidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
-                const recorder = new MediaRecorder(stream, chosenMime ? { mimeType: chosenMime, videoBitsPerSecond: 4500000 } : { videoBitsPerSecond: 4500000 });
-                const chunks = [];
-                recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunks.push(ev.data); };
-                recorder.start(200);
-                recorder.pause();
-
-                for (let i = 0; i < cuts.length; i++) {
-                    const c = cuts[i];
-                    setSliceProgress(12 + ((i + 1) / cuts.length) * 82, `Recording Cut #${i + 1}/${cuts.length} (${c.start_ts} -> ${c.end_ts})...`);
-                    offVid.currentTime = c.start;
-                    await new Promise(r => { offVid.onseeked = r; });
-                    recorder.resume();
-                    await offVid.play().catch(() => {});
-                    await new Promise(resolveCut => {
-                        const drawLoop = () => {
-                            if (offVid.currentTime >= c.end || offVid.paused || offVid.ended) {
-                                offVid.pause();
-                                recorder.pause();
-                                resolveCut();
-                                return;
-                            }
-                            ctx.drawImage(offVid, 0, 0, cw, ch);
-                            requestAnimationFrame(drawLoop);
-                        };
-                        drawLoop();
-                    });
-                }
-
-                const finalBlob = await new Promise(res => {
-                    recorder.onstop = () => res(new Blob(chunks, { type: 'video/mp4' }));
-                    recorder.stop();
-                });
-                const blobUrl = URL.createObjectURL(finalBlob);
-                episodicSlicedBlobs[partNum] = { blob: finalBlob, url: blobUrl, filename: outFilename };
-                if (previewVideo) {
-                    previewVideo.src = blobUrl;
-                    previewVideo.muted = true;
-                }
-                if (previewCutOverlayBadge) {
-                    previewCutOverlayBadge.textContent = `✅ Part ${partNum} Sliced 60s MP4 Ready (Muted for CapCut)`;
-                }
-                setSliceProgress(100, `✅ Part ${partNum} 1-Minute Sliced Video (.mp4) Ready!`);
-                if (downloadImmediately) {
-                    triggerBlobDownload(blobUrl, outFilename);
-                }
-                return blobUrl;
-
-            } catch (err) {
-                console.error('1-minute slice error:', err);
-                if (sliceExportStepText) sliceExportStepText.textContent = `❌ Slice Error: ${err.message}`;
-                if (downloadImmediately) alert('Video Slicing Error: ' + err.message);
-                return null;
-            } finally {
-                if (btnDownloadSlicedMp4) btnDownloadSlicedMp4.disabled = false;
-                if (btnDownloadSlicedMp4Text) btnDownloadSlicedMp4Text.textContent = 'Download 1-Minute Sliced Video (.mp4)';
-            }
-        }
-
-        // OUTPUT BUTTON 2: Download 1-Minute Sliced Video (.mp4)
-        if (btnDownloadSlicedMp4) {
-            btnDownloadSlicedMp4.addEventListener('click', async () => {
-                await sliceAndPrepare1MinVideo(episodicCurrentPart, true);
-            });
-        }
-
-        // Send 1-Minute Sliced Short directly to Original YouTube Uploader
-        if (btnSendShortToUploader) {
-            btnSendShortToUploader.addEventListener('click', async () => {
-                const pData = episodicPartsHistory[episodicCurrentPart];
-                const sliced = episodicSlicedBlobs[episodicCurrentPart];
-                window.switchWorkspaceTab('manual');
-                if (pData) {
-                    const titleEl = document.getElementById('videoTitle');
-                    const descEl = document.getElementById('videoDescription');
-                    const tagsEl = document.getElementById('videoTags');
-                    if (titleEl) titleEl.value = pData.part_title || `${pData.title} - Part ${episodicCurrentPart} #Shorts`;
-                    if (descEl) descEl.value = `${pData.part_title || ''}\\n\\n${pData.script || ''}\\n\\n#Shorts #YouTubeShorts #MovieRecap #Part${episodicCurrentPart}`;
-                    if (tagsEl) tagsEl.value = `Shorts, YouTubeShorts, MovieRecap, HindiKahani, Part${episodicCurrentPart}`;
-                }
-                if (sliced && sliced.blob) {
-                    try {
-                        const dt = new DataTransfer();
-                        dt.items.add(new File([sliced.blob], sliced.filename, { type: 'video/mp4' }));
-                        const vf = document.getElementById('videoFile');
-                        if (vf) vf.files = dt.files;
-                        const vfInfo = document.getElementById('videoFileInfo');
-                        if (vfInfo) {
-                            vfInfo.textContent = `Ready to upload: ${sliced.filename}`;
-                            vfInfo.style.display = 'block';
-                        }
-                    } catch (e) {}
-                }
-            });
-        }
-
         // ==============================================
         // INITIALIZATION & TAB BINDING (WITH TRY-CATCH)
         // ==============================================
@@ -4961,18 +4057,12 @@ HTML_MAIN = """
             try {
                 window.forceClearBlockingOverlays();
 
-                // Bind all tabs with mobile touch and desktop click listeners
-                bindTabButton('tabTrimmerMode', 'trimmer');
+                // Bind the two core pillar tabs with mobile touch and desktop click listeners
                 bindTabButton('tabGeminiMode', 'gemini');
-                bindTabButton('tabClipperMode', 'clipper');
                 bindTabButton('tabManualMode', 'manual');
 
-                // Support aliases
-                bindTabButton('trimmer-tab', 'trimmer');
-                bindTabButton('copilot-tab', 'gemini');
-
-                // Strictly default active tab to #trimmerSection on initial page load
-                window.switchWorkspaceTab('trimmer');
+                // Default active tab to Gemini AI Studio Copilot (#geminiStudioSection) on initial page load
+                window.switchWorkspaceTab('gemini');
             } catch (e) {
                 console.warn("Tab binding warning:", e);
             }
@@ -5639,7 +4729,13 @@ def gemini_analyze():
     video_file.save(video_path)
 
     try:
-        metadata = gemini_engine.analyze_video_with_gemini(video_path, format_type=format_type, custom_instructions=instructions)
+        ch_id = get_active_channel_id_or_default(request.form.get('channel_id'))
+        metadata = gemini_engine.analyze_video_with_gemini(
+            video_path,
+            format_type=format_type,
+            custom_instructions=instructions,
+            channel_id=ch_id
+        )
         metadata['video_filename'] = safe_name
         return jsonify(metadata)
     except Exception as e:
@@ -5652,12 +4748,19 @@ def save_thumbnail_frame():
     label = request.form.get('label', 'Authentic Video Frame')
     timestamp = request.form.get('timestamp', '00:00')
     seconds = float(request.form.get('seconds', 0.0))
+    aspect_ratio = request.form.get('aspect_ratio', '').strip() or None
 
     if not image_file or image_file.filename == '':
         return jsonify({'error': 'No frame image provided'}), 400
 
     filename = secure_filename(f"extracted_{uuid.uuid4().hex[:8]}_{image_file.filename}")
-    res = gemini_engine.save_client_frame(image_file.read(), filename=filename, timestamp=timestamp, label=label)
+    res = gemini_engine.save_client_frame(
+        image_file.read(),
+        filename=filename,
+        timestamp=timestamp,
+        label=label,
+        aspect_ratio=aspect_ratio
+    )
     res['seconds'] = seconds
     return jsonify(res)
 
@@ -5672,7 +4775,8 @@ def gemini_chat():
     context = data.get('context', {})
     if not message:
         return jsonify({'error': 'Message is required'}), 400
-    res = gemini_engine.chat_with_gemini(message, studio_context=context)
+    ch_id = get_active_channel_id_or_default(data.get('channel_id'))
+    res = gemini_engine.chat_with_gemini(message, studio_context=context, channel_id=ch_id)
     return jsonify(res)
 
 # ==============================================
@@ -5855,147 +4959,6 @@ def upload_status(task_id):
     if not task:
         return jsonify({'error': 'Task not found'}), 404
     return jsonify(task)
-
-# ==============================================================
-# LIGHTWEIGHT 1-MINUTE EPISODIC SHORTS ENGINE BACKEND ROUTES
-# ==============================================================
-trimmer_export_tasks: Dict[str, Dict[str, Any]] = {}
-
-
-@app.route('/api/shorts/generate_part', methods=['POST'])
-@app.route('/api/trimmer/plan_explainer', methods=['POST'])
-def shorts_generate_part():
-    """
-    Analyzes YouTube URL ground-truth transcript & metadata with Gemini to generate:
-    - Authentic 60-second Hindi suspense script (140-150 words, character-only names).
-    - 10 to 12 fast, dynamic visual scene cuts (each 4-6s, totaling ~60s) for Part N.
-    - Chronological continuation pointers (`next_start_sec`, `part_summary`) for Part N+1.
-    """
-    data = request.get_json(force=True, silent=True) or {}
-    youtube_url = (data.get('youtube_url') or data.get('url') or '').strip()
-    part_number = int(data.get('part_number') or data.get('part') or 1)
-    start_offset_sec = float(data.get('start_offset_sec') or 0.0)
-    previous_summary = (data.get('previous_summary') or '').strip()
-    local_video_title = (data.get('local_video_title') or '').strip()
-    language = (data.get('language') or 'Hindi').strip()
-    custom_instructions = (data.get('custom_instructions') or '').strip()
-
-    video_duration = data.get('video_duration')
-    try:
-        video_duration = float(video_duration) if video_duration else None
-    except Exception:
-        video_duration = None
-
-    if not youtube_url and not local_video_title:
-        return jsonify({'success': False, 'error': 'YouTube Official URL is required'}), 200
-
-    try:
-        creds = get_stored_credentials()
-        ch_id = get_active_channel_id_or_default(data.get('channel_id'))
-        result = clipper_engine.generate_episodic_60s_short_part(
-            youtube_url=youtube_url,
-            part_number=part_number,
-            start_offset_sec=start_offset_sec,
-            previous_summary=previous_summary,
-            video_duration=video_duration,
-            local_video_title=local_video_title,
-            language=language,
-            custom_instructions=custom_instructions,
-            credentials=creds,
-            channel_id=ch_id
-        )
-        return jsonify(result)
-    except Exception as e:
-        print(f"Episodic short generation error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 200
-
-
-@app.route('/api/trimmer/upload', methods=['POST'])
-def trimmer_upload():
-    """Stages a local video file for fast FFmpeg keyframe slicing when browser WORKERFS is unavailable."""
-    file = request.files.get('video_file')
-    if not file or file.filename == '':
-        return jsonify({'success': False, 'error': 'No video file provided'}), 400
-
-    video_id = str(uuid.uuid4())[:10]
-    safe_name = secure_filename(f"local_{video_id}_{file.filename}")
-    saved_path = os.path.join(clipper_engine.TRIMMER_VIDEOS_DIR, safe_name)
-    file.save(saved_path)
-
-    meta = clipper_engine.get_video_metadata(saved_path)
-    return jsonify({
-        'success': True,
-        'video_id': video_id,
-        'filename': safe_name,
-        'stream_url': f"/api/trimmer/stream/{safe_name}",
-        'metadata': meta
-    })
-
-
-@app.route('/api/trimmer/stream/<path:filename>')
-def trimmer_stream(filename):
-    safe_name = secure_filename(filename)
-    for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, UPLOAD_FOLDER]:
-        if os.path.exists(os.path.join(cand_dir, safe_name)):
-            resp = send_from_directory(cand_dir, safe_name, conditional=True)
-            resp.headers['Accept-Ranges'] = 'bytes'
-            return resp
-    return jsonify({'error': 'Video file not found'}), 404
-
-
-@app.route('/api/shorts/slice_local', methods=['POST'])
-@app.route('/api/trimmer/export', methods=['POST'])
-def shorts_slice_local():
-    """Slices the 10-12 keeper cuts from the local video file (muted `-an`, optimized for CapCut)."""
-    data = request.get_json(force=True, silent=True) or {}
-    filename = data.get('filename')
-    keeper_clips = data.get('keeper_clips') or []
-    part_num = int(data.get('part_number') or 1)
-
-    if not filename or not keeper_clips:
-        return jsonify({'success': False, 'error': 'filename and keeper_clips are required'}), 400
-
-    safe_name = secure_filename(str(filename))
-    video_path = ""
-    for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, UPLOAD_FOLDER]:
-        p = os.path.join(cand_dir, safe_name)
-        if os.path.exists(p):
-            video_path = p
-            break
-
-    if not video_path or not os.path.exists(video_path):
-        return jsonify({'success': False, 'error': f'Local video file not found: {filename}'}), 404
-
-    task_id = str(uuid.uuid4())[:8]
-    out_filename = f"part_{part_num}_60s_capcut_{task_id}.mp4"
-    out_path = os.path.join(clipper_engine.TRIMMER_EXPORTS_DIR, out_filename)
-
-    try:
-        meta = clipper_engine.export_timeline_trimmed_video(
-            source_video_path=video_path,
-            keeper_clips=keeper_clips,
-            output_path=out_path
-        )
-        return jsonify({
-            'success': True,
-            'task_id': task_id,
-            'filename': out_filename,
-            'video_url': f"/api/trimmer/media/{out_filename}",
-            'download_url': f"/api/trimmer/media/{out_filename}?download=1",
-            'metadata': meta
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/trimmer/media/<path:filename>')
-def trimmer_serve_media(filename):
-    safe_name = secure_filename(filename)
-    resp = send_from_directory(clipper_engine.TRIMMER_EXPORTS_DIR, safe_name, conditional=True)
-    resp.headers['Accept-Ranges'] = 'bytes'
-    if request.args.get('download'):
-        resp.headers['Content-Disposition'] = f'attachment; filename="{safe_name}"'
-    return resp
 
 
 if __name__ == '__main__':
