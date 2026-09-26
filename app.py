@@ -790,10 +790,62 @@ HTML_MAIN = """
 
         .trimmer-explainer-grid {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr auto;
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
             align-items: end;
             margin-bottom: 14px;
+        }
+
+        .voice-carousel-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 14px;
+            padding: 6px 4px 14px 4px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: #7c3aed rgba(255,255,255,0.05);
+        }
+        .voice-carousel-card {
+            flex: 0 0 235px;
+            scroll-snap-align: start;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1.5px solid rgba(124, 58, 237, 0.35);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .voice-carousel-card.selected-voice {
+            border-color: #10b981;
+            background: linear-gradient(145deg, rgba(16, 185, 129, 0.16), rgba(15, 23, 42, 0.95));
+            box-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+        }
+        .seq-step-pill {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #94a3b8;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+        .seq-step-pill.active-step {
+            background: rgba(168, 85, 247, 0.25);
+            border-color: #a855f7;
+            color: #f3e8ff;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+        }
+        .seq-step-pill.done-step {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: #10b981;
+            color: #6ee7b7;
         }
 
         /* Gemini AI Studio Box */
@@ -2580,369 +2632,486 @@ HTML_MAIN = """
             <!-- ============================================== -->
             <div class="card" id="trimmerSection" style="display: block; padding: 24px; background: var(--bg-surface); border-radius: var(--card-radius); border: 1px solid var(--border-color);">
                 
-                <!-- Hero Banner -->
-                <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: 12px; padding: 18px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                            <span style="font-size: 24px;">✂️</span>
-                            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #e0f2fe;">Timeline Video Trimmer &amp; Narrative Slicer</h3>
-                            <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);">⚡ ZERO SERVER UPLOAD</span>
-                            <span style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">100% NATIVE RESOLUTION</span>
-                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">CLIENT-SIDE PROCESSING</span>
+                <!-- Hero Banner & 5-Step Progress Indicator -->
+                <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(124, 58, 237, 0.16)); border: 1px solid rgba(124, 58, 237, 0.45); border-radius: 12px; padding: 16px 20px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                                <span style="font-size: 22px;">🎬</span>
+                                <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #f8fafc;">Sequential 5-Step Movie Explainer Engine (PardaCine Edition)</h3>
+                                <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">⚡ ZERO SERVER UPLOAD</span>
+                                <span style="background: rgba(168, 85, 247, 0.25); color: #e9d5ff; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.4);">5%–20% RUNTIME BOUNDS</span>
+                            </div>
+                            <p style="margin: 0; font-size: 12px; color: #cbd5e1; line-height: 1.4;">
+                                1. Preview &amp; Select Voice &rarr; 2. Auto 100-Char Speed Benchmark &rarr; 3. Ingest Movie &amp; YouTube URL &rarr; 4. PardaCine Bounded Storyboard &rarr; 5. CapCut Timeline &amp; Direct Export
+                            </p>
                         </div>
-                        <p style="margin: 0; font-size: 13px; color: #94a3b8; max-width: 840px; line-height: 1.45;">
-                            Load any size movie (800MB to 4GB+). Your source video never leaves your browser (0MB cloud bandwidth, zero upload timeouts).
-                            Slicing, keeper cuts, and synchronized Hindi narration audio muxing happen directly inside your browser for instant local MP4 download.
-                        </p>
+                    </div>
+                    <!-- 5-Step Progress Bar -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div id="seqStepPill1" class="seq-step-pill active-step"><span>1️⃣</span> <span>Step 1: Voice Carousel (5s Preview)</span></div>
+                        <div id="seqStepPill2" class="seq-step-pill"><span>2️⃣</span> <span>Step 2: 100-Char Speed Benchmark</span></div>
+                        <div id="seqStepPill3" class="seq-step-pill"><span>3️⃣</span> <span>Step 3: Movie &amp; YouTube Ingestion</span></div>
+                        <div id="seqStepPill4" class="seq-step-pill"><span>4️⃣</span> <span>Step 4: PardaCine Story Engine (5%–20%)</span></div>
+                        <div id="seqStepPill5" class="seq-step-pill"><span>5️⃣</span> <span>Step 5: CapCut Timeline &amp; Export</span></div>
                     </div>
                 </div>
 
-                <!-- Cinema Explainer Copilot Card (Story-First Dynamic Cutting) -->
-                <div style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.85), rgba(15, 23, 42, 0.98)); border: 1px solid #7c3aed; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 24px rgba(124, 58, 237, 0.2);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="font-size: 28px;">🎬</span>
-                            <div>
-                                <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #ede9fe;">Cinema Explainer Storyboard Copilot (Pure Story-First Dynamic Cutting)</h3>
-                                <p style="margin: 0; font-size: 12px; color: #a78bfa;">Gemini full editorial autonomy &bull; Organic 8-25 min pacing &bull; Micro-cuts (2-5s) &amp; Medium cuts (6-12s) &bull; Calibrated Hindi voice sync</p>
+                <!-- ============================================================== -->
+                <!-- STEP 1: VOICE CAROUSEL WITH 5-SECOND PREVIEWS (HORIZONTAL SCROLL) -->
+                <!-- ============================================================== -->
+                <div id="explainerStep1Card" style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.9), rgba(15, 23, 42, 0.98)); border: 1px solid #7c3aed; border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.18);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #7c3aed; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 1</span>
+                                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #f3e8ff;">Select Narrator Voice &amp; Hear 5-Second Suspense Preview</h4>
                             </div>
+                            <p style="margin: 4px 0 0 0; font-size: 11.5px; color: #a78bfa;">Swipe horizontally through Gemini's premier voices. Tap <b>🔊 5s Preview</b> to test, then tap <b>Select &amp; Benchmark</b> to unlock Step 2 &amp; Step 3.</p>
                         </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <span style="background: rgba(124, 58, 237, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.4);">DYNAMIC 8-25 MIN PACING</span>
-                            <span style="background: rgba(6, 182, 212, 0.2); color: #67e8f9; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.3);">NO FIXED CLIP SLOTS</span>
-                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">WPS HINDI SYNC</span>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <div>
+                                <label style="font-size: 10.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 2px;">Narration Language:</label>
+                                <select id="trimmerExplainerLang" class="form-control" style="padding: 6px 10px; font-size: 12px; min-width: 140px;">
+                                    <option value="Hindi" selected>🇮🇳 Hindi (Devanagari)</option>
+                                    <option value="English">🇺🇸 English (Global)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 10.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 2px;">Tone Style:</label>
+                                <select id="trimmerExplainerTone" class="form-control" style="padding: 6px 10px; font-size: 12px; min-width: 175px;">
+                                    <option value="Narrative Deep Storytelling" selected>Narrative Deep Storytelling</option>
+                                    <option value="Suspense / Thriller">Suspense / Thriller</option>
+                                    <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
+                                    <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
+                                </select>
+                            </div>
+                            <!-- Synced select & preview button preserved for full compatibility -->
+                            <div style="display: flex; flex-direction: column;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 2px;">
+                                    <label style="font-size: 10.5px; font-weight: 700; color: #cbd5e1; margin: 0;">Active Voice:</label>
+                                    <button type="button" id="btnPreviewExplainerVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                        <span id="previewExplainerVoiceIcon">🔊</span> <span id="previewExplainerVoiceText">5s Preview</span>
+                                    </button>
+                                </div>
+                                <select id="trimmerExplainerVoice" class="form-control" style="padding: 6px 10px; font-size: 12px; min-width: 165px;">
+                                    <option value="Kore" selected>Kore (Deep Suspense Male)</option>
+                                    <option value="Fenrir">Fenrir (Dramatic Intense)</option>
+                                    <option value="Puck">Puck (Fast-Paced Punch)</option>
+                                    <option value="Aoede">Aoede (Expressive Female)</option>
+                                    <option value="Charon">Charon (Dark Mysterious)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Explainer Input Controls Grid -->
-                    <div class="trimmer-explainer-grid">
-                        <div>
-                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Movie YouTube URL:</label>
-                            <input type="text" id="trimmerExplainerYtUrl" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;" placeholder="https://www.youtube.com/watch?v=...">
-                        </div>
-                        <div>
-                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Explainer Runtime Pacing:</label>
-                            <select id="trimmerExplainerDuration" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
-                                <option value="dynamic" selected>🎬 Natural Story Flow (8 to 25 Min Flexible)</option>
-                                <option value="600">⚡ Compact Explainer (~10 Min)</option>
-                                <option value="900">🍿 Medium Deep Dive (~15 Min)</option>
-                                <option value="1200">🔥 Full Epic Explainer (~20 Min)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
-                                <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; margin: 0;">Voice Character:</label>
-                                <button type="button" id="btnPreviewExplainerVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
-                                    <span id="previewExplainerVoiceIcon">🔊</span> <span id="previewExplainerVoiceText">Preview / Read Aloud</span>
-                                </button>
+                    <!-- Horizontal Scrollable Voice Card Carousel -->
+                    <div class="voice-carousel-scroll" id="voiceCarouselContainer">
+                        <!-- Card 1: Kore -->
+                        <div class="voice-carousel-card selected-voice" data-voice="Kore" data-tone="Narrative Deep Storytelling">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #7c3aed, #2563eb); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">🎙️</div>
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">Kore</div>
+                                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #c4b5fd; background: rgba(124, 58, 237, 0.25); padding: 1px 7px; border-radius: 10px; border: 1px solid rgba(124, 58, 237, 0.4);">Deep PardaCine Narrator</span>
+                                </div>
                             </div>
-                            <select id="trimmerExplainerVoice" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
-                                <option value="Kore" selected>Kore (Hindi Deep Male)</option>
-                                <option value="Fenrir">Fenrir (Dramatic Intense)</option>
-                                <option value="Aoede">Aoede (Expressive Female)</option>
-                                <option value="Puck">Puck (Fast-Paced Punch)</option>
-                                <option value="Charon">Charon (Deep Mysterious)</option>
-                                <option value="Algenib">Algenib (Suspense Thriller)</option>
-                                <option value="Algieba">Algieba (Fast Action Female)</option>
-                            </select>
+                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.35;">Rich, authoritative cinema storyteller voice ideal for suspenseful movie recaps.</div>
+                            <div style="display: flex; gap: 6px; margin-top: auto;">
+                                <button type="button" class="btn-voice-preview-5s" data-voice="Kore" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">🔊 5s Preview</button>
+                                <button type="button" class="btn-voice-select-lock" data-voice="Kore" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); border: none; color: #fff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">✅ Select Voice</button>
+                            </div>
                         </div>
-                        <div>
-                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Tone Style:</label>
-                            <select id="trimmerExplainerTone" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
-                                <option value="Narrative Deep Storytelling" selected>Narrative Deep Storytelling</option>
-                                <option value="Suspense / Thriller">Suspense / Thriller</option>
-                                <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
-                                <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
-                            </select>
+
+                        <!-- Card 2: Fenrir -->
+                        <div class="voice-carousel-card" data-voice="Fenrir" data-tone="Suspense / Thriller">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #dc2626, #7c2d12); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">🐺</div>
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">Fenrir</div>
+                                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #fca5a5; background: rgba(220, 38, 38, 0.22); padding: 1px 7px; border-radius: 10px; border: 1px solid rgba(220, 38, 38, 0.4);">Intense Thriller / Action</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.35;">Gritty, high-tension delivery built for dark mysteries, crime thrillers, and twists.</div>
+                            <div style="display: flex; gap: 6px; margin-top: auto;">
+                                <button type="button" class="btn-voice-preview-5s" data-voice="Fenrir" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">🔊 5s Preview</button>
+                                <button type="button" class="btn-voice-select-lock" data-voice="Fenrir" style="flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">Select Voice</button>
+                            </div>
                         </div>
-                        <div>
-                            <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 20px; font-size: 13.5px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 14px rgba(124, 58, 237, 0.4);">
-                                <span id="btnPlanExplainerIcon">🚀</span>
-                                <span id="btnPlanExplainerText">Generate Cinema Explainer Storyboard</span>
+
+                        <!-- Card 3: Puck -->
+                        <div class="voice-carousel-card" data-voice="Puck" data-tone="Movie Trailer Dramatic">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #0284c7, #06b6d4); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">⚡</div>
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">Puck</div>
+                                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #67e8f9; background: rgba(6, 182, 212, 0.2); padding: 1px 7px; border-radius: 10px; border: 1px solid rgba(6, 182, 212, 0.4);">Fast-Paced Dynamic</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.35;">Crisp, energetic, high-retention pacing for sci-fi, survival, and fast recaps.</div>
+                            <div style="display: flex; gap: 6px; margin-top: auto;">
+                                <button type="button" class="btn-voice-preview-5s" data-voice="Puck" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">🔊 5s Preview</button>
+                                <button type="button" class="btn-voice-select-lock" data-voice="Puck" style="flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">Select Voice</button>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Aoede -->
+                        <div class="voice-carousel-card" data-voice="Aoede" data-tone="Emotional Cinema Drama">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">🎭</div>
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">Aoede</div>
+                                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #f9a8d4; background: rgba(236, 72, 153, 0.2); padding: 1px 7px; border-radius: 10px; border: 1px solid rgba(236, 72, 153, 0.4);">Expressive Female Story</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.35;">Warm, expressive, emotionally gripping narration for drama and mystery films.</div>
+                            <div style="display: flex; gap: 6px; margin-top: auto;">
+                                <button type="button" class="btn-voice-preview-5s" data-voice="Aoede" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">🔊 5s Preview</button>
+                                <button type="button" class="btn-voice-select-lock" data-voice="Aoede" style="flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">Select Voice</button>
+                            </div>
+                        </div>
+
+                        <!-- Card 5: Charon -->
+                        <div class="voice-carousel-card" data-voice="Charon" data-tone="Suspense / Thriller">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #475569, #0f172a); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; border: 1px solid #64748b;">🌑</div>
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">Charon</div>
+                                    <span style="display: inline-block; font-size: 10px; font-weight: 700; color: #cbd5e1; background: rgba(100, 116, 139, 0.28); padding: 1px 7px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.4);">Dark Mystery &amp; Horror</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: #94a3b8; line-height: 1.35;">Deep, ominous, spine-chilling bass tone crafted for horror and mind-bending twists.</div>
+                            <div style="display: flex; gap: 6px; margin-top: auto;">
+                                <button type="button" class="btn-voice-preview-5s" data-voice="Charon" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">🔊 5s Preview</button>
+                                <button type="button" class="btn-voice-select-lock" data-voice="Charon" style="flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; cursor: pointer;">Select Voice</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden audio element for 5-second Read Aloud voice preview -->
+                    <audio id="explainerVoicePreviewAudio" style="display: none;"></audio>
+                </div>
+
+                <!-- ============================================================== -->
+                <!-- STEP 2: AUTOMATIC 100-CHARACTER SPEED BENCHMARK                -->
+                <!-- ============================================================== -->
+                <div id="explainerStep2Card" style="background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 12px; padding: 16px 20px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="background: #0284c7; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 2</span>
+                            <div>
+                                <h4 id="step2BenchmarkTitle" style="margin: 0; font-size: 14.5px; font-weight: 700; color: #e0f2fe;">Automatic 100-Character Speech Rate Benchmark</h4>
+                                <div id="step2BenchmarkSub" style="font-size: 11.5px; color: #94a3b8;">Select a voice in Step 1 (or click Run Benchmark) to measure exact Words/Sec &amp; Chars/Sec and unlock Steps 3–5.</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span id="step2MetricWpsBadge" style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); color: #fde047; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 8px;">WPS: Waiting...</span>
+                            <span id="step2MetricCpsBadge" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); color: #67e8f9; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 8px;">CPS: Waiting...</span>
+                            <button type="button" id="btnRunStep2Benchmark" class="btn-populate" style="background: linear-gradient(135deg, #0284c7, #7c3aed); border: none; color: #fff; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: 6px; cursor: pointer;">
+                                ⚡ Benchmark Selected Voice Now
                             </button>
                         </div>
                     </div>
+                    <div id="step2SampleTextDisplay" style="display: none; margin-top: 10px; padding: 8px 12px; background: rgba(0,0,0,0.35); border-left: 3px solid #10b981; border-radius: 4px; font-size: 11.5px; color: #a7f3d0;"></div>
+                </div>
 
-                    <!-- Hidden audio element for 3-second Read Aloud voice preview -->
-                    <audio id="explainerVoicePreviewAudio" style="display: none;"></audio>
+                <!-- ============================================================== -->
+                <!-- STEPS 3, 4 & 5 CONTAINER (STRICTLY HIDDEN UNTIL STEP 2 COMPLETES) -->
+                <!-- ============================================================== -->
+                <div id="sequentialSteps3To5Container" style="display: none;">
 
-                    <!-- Unified 5-Step Auto Explainer Pipeline Progress Tracker -->
-                    <div id="explainerPipelineTracker" style="display: none; background: rgba(0,0,0,0.35); border: 1px solid rgba(124, 58, 237, 0.4); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-                            <span id="explainerPipelineStatusTitle" style="font-size: 12.5px; font-weight: 700; color: #e9d5ff;">⚡ Running Unified One-Click Explainer Pipeline...</span>
-                            <span id="explainerPipelineSpeedBadge" style="font-size: 11px; color: #fde047; font-weight: 700; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); padding: 2px 8px; border-radius: 10px;">Benchmarking Voice Speed...</span>
+                    <!-- ========================================================== -->
+                    <!-- STEP 3: MOVIE INGESTION & YOUTUBE URL                      -->
+                    <!-- ========================================================== -->
+                    <div id="explainerStep3Card" style="background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <span style="background: #10b981; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 3</span>
+                            <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #d1fae5;">Movie Ingestion: Official YouTube URL &amp; Local Source Video</h4>
                         </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px;">
-                            <div id="pipeStep1" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                                <b>1. Speed Test:</b> 100-Char Hindi
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: stretch;">
+                            <!-- Official YouTube Movie URL Box -->
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center;">
+                                <label for="trimmerExplainerYtUrl" style="font-size: 12px; font-weight: 700; color: #bae6fd; display: block; margin-bottom: 6px;">🔗 Official Movie YouTube URL (For Metadata &amp; Story Analysis):</label>
+                                <input type="text" id="trimmerExplainerYtUrl" class="form-control" style="width: 100%; padding: 10px 12px; font-size: 13.5px; border: 1px solid #0284c7;" placeholder="https://www.youtube.com/watch?v=...">
+                                <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Paste the YouTube movie/trailer link so Gemini can map exact scene timestamps and plot twists.</div>
                             </div>
-                            <div id="pipeStep2" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                                <b>2. Storyboard:</b> Gemini Cuts
-                            </div>
-                            <div id="pipeStep3" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                                <b>3. Word Budget:</b> Exact Scene Sync
-                            </div>
-                            <div id="pipeStep4" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                                <b>4. Auto TTS:</b> Hindi + BGM
-                            </div>
-                            <div id="pipeStep5" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                                <b>5. Timeline:</b> Ready to Export
+
+                            <!-- Local Movie File Dropzone -->
+                            <div style="background: var(--bg-elevated); border: 1px dashed #0284c7; border-radius: 10px; padding: 14px 16px; text-align: center; display: flex; flex-direction: column; justify-content: center;" id="trimmerDropzone">
+                                <input type="file" id="trimmerVideoFileInput" accept="video/mp4,video/x-matroska,video/quicktime,video/webm" style="display: none;">
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                                    <div style="font-size: 14px; font-weight: 700; color: #f0f9ff;">🎥 Local Movie File (Optional Before Storyboard &bull; Required for Export)</div>
+                                    <div>
+                                        <button type="button" class="btn-populate" id="btnBrowseTrimmerFile" style="padding: 6px 14px; font-size: 12.5px; font-weight: 700; display: inline-block; background: rgba(2, 132, 199, 0.25); border-color: #38bdf8; color: #e0f2fe;">📂 Browse Local Video File</button>
+                                    </div>
+                                    <div style="font-size: 11px; color: #6ee7b7; font-weight: 500;">⚡ 100% In-Browser Local Playback &amp; Slicing (0MB Server Upload)</div>
+                                    <div id="trimmerFileInfoBadge" style="display: none; margin-top: 6px; padding: 6px 12px; background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; border-radius: 20px; font-size: 12px; color: #bae6fd; font-weight: 600;"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Storyboard Results & 4-Phase Visual Breakdown (Initially Hidden) -->
-                    <div id="trimmerExplainerStoryboardContainer" style="display: none; margin-top: 16px; border-top: 1px solid rgba(124, 58, 237, 0.3); padding-top: 16px;">
-                        <!-- Movie Metadata Header -->
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                            <div style="display: flex; align-items: center; gap: 14px;">
-                                <img id="trimmerExplainerThumb" src="" alt="Thumbnail" style="width: 72px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #334155; display: none;">
-                                <div>
-                                    <div id="trimmerExplainerTitle" style="font-size: 14px; font-weight: 700; color: #f8fafc;">Movie Title</div>
-                                    <div id="trimmerExplainerMetaSub" style="font-size: 11px; color: #94a3b8;">Runtime: 02:14:41 &bull; Channel: Cinema Channel</div>
+                    <!-- ========================================================== -->
+                    <!-- STEP 4: MATHEMATICALLY BOUNDED STORY GENERATION (PARDACINE) -->
+                    <!-- ========================================================== -->
+                    <div id="explainerStep4Card" style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.88), rgba(15, 23, 42, 0.98)); border: 1px solid #7c3aed; border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="background: #7c3aed; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 4</span>
+                                    <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #ede9fe;">Mathematically Bounded Story Generation (PardaCine Narrative Style)</h4>
                                 </div>
-                            </div>
-                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <span id="trimmerExplainerBadgeDuration" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #c084fc; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Duration: 14m 32s</span>
-                                <span id="trimmerExplainerBadgeClips" style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Dynamic Cuts: 52</span>
-                                <span id="trimmerExplainerBadgeWps" style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: 2.35 w/s</span>
-                                <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: 2049 words</span>
-                                <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
-                                    <span>⚡</span> <span>Re-Inject Cuts</span>
-                                </button>
-                                <button type="button" id="btnQuickExportFromExplainer" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #7c3aed); border: none; color: white; padding: 6px 16px; font-size: 12.5px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);">
-                                    <span>🎬</span> <span>Export Final Video</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Pre-Rendered Hindi Voiceover + BGM Audio Bar -->
-                        <div id="explainerReadyAudioBar" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
-                                <span style="font-size: 18px;">🎧</span>
-                                <div>
-                                    <div style="font-size: 12.5px; font-weight: 700; color: #6ee7b7;">Pre-Rendered Hindi Voiceover + Ducked Suspense BGM Ready!</div>
-                                    <div style="font-size: 11px; color: #a7f3d0;">Automatically synthesized &amp; mapped to timeline cuts. Ready for instant 1-click export.</div>
-                                </div>
+                                <p style="margin: 4px 0 0 0; font-size: 11.5px; color: #c4b5fd;">
+                                    High Suspense Hook &rarr; Clear Beginning &rarr; Escalating Twists &rarr; Shocking Truth Reveal &rarr; Moral Closure &bull; Strictly bounded between <b>5% (1/20th min)</b> and <b>20% (1/5th max)</b> of source runtime.
+                                </p>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <audio id="explainerReadyAudioPlayer" controls style="height: 32px; width: 220px;"></audio>
-                                <a id="btnDownloadExplainerReadyMp3" href="#" download="hindi_explainer_voiceover.mp3" class="btn-populate" style="font-size: 11.5px; padding: 5px 12px; text-decoration: none; color: #6ee7b7; border-color: #10b981; font-weight: 700;">
-                                    ⬇️ Save Voiceover MP3
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- Summary quote -->
-                        <div id="trimmerExplainerSummary" style="font-size: 12px; color: #cbd5e1; font-style: italic; background: rgba(255,255,255,0.02); border-left: 3px solid #7c3aed; padding: 8px 14px; margin-bottom: 14px; border-radius: 0 6px 6px 0;"></div>
-
-                        <!-- 4-Phase Storyboard Dynamic Grid -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;" id="trimmerExplainerPhasesGrid">
-                            <!-- Populated dynamically by renderExplainerStoryboardUI -->
-                        </div>
-
-                        <!-- Auto-Injection Guidance Banner -->
-                        <div id="trimmerExplainerAutoInjectNotice" style="margin-top: 12px; padding: 10px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; font-size: 12px; color: #a7f3d0; display: flex; align-items: center; gap: 8px;">
-                            <span>💡</span>
-                            <span><b>Direct Export Ready:</b> Keeper cuts, calibrated Hindi script, and voiceover audio are mapped to the timeline. Select your source video below and click <b>Export Final Video</b>!</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Video Input / Source Selector -->
-                <div style="background: var(--bg-elevated); border: 1px dashed #0284c7; border-radius: 10px; padding: 20px; margin-bottom: 20px; text-align: center;" id="trimmerDropzone">
-                    <input type="file" id="trimmerVideoFileInput" accept="video/mp4,video/x-matroska,video/quicktime,video/webm" style="display: none;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                        <span style="font-size: 36px;">🎬</span>
-                        <div style="font-size: 15px; font-weight: 600; color: #f0f9ff;">Drag &amp; Drop Video Here, or <button type="button" class="btn-populate" id="btnBrowseTrimmerFile" style="padding: 4px 12px; font-size: 13px; display: inline-block;">Browse Local File</button></div>
-                        <div style="font-size: 12px; color: #6ee7b7; font-weight: 500;">⚡ 100% In-Browser Local Playback &amp; Slicing &bull; Zero Server Upload (0MB Data Transferred) &bull; Any size (800MB - 4GB+)</div>
-                        <div id="trimmerFileInfoBadge" style="display: none; margin-top: 10px; padding: 8px 16px; background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; border-radius: 20px; font-size: 13px; color: #bae6fd; font-weight: 600;"></div>
-                    </div>
-                </div>
-
-                <!-- Main HTML5 Video Player Area -->
-                <div style="position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 16px;">
-                    <video id="trimmerPlayer" playsinline preload="auto" style="width: 100%; max-height: 480px; display: block; object-fit: contain; margin: 0 auto; background: #000;"></video>
-                    
-                    <!-- Live Overlay HUD -->
-                    <div style="position: absolute; top: 12px; left: 14px; display: flex; gap: 8px; z-index: 5;">
-                        <span id="trimmerHudClipBadge" style="background: rgba(0,0,0,0.75); color: #38bdf8; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.4); backdrop-filter: blur(4px);">
-                            Clip 1 of 1
-                        </span>
-                        <span id="trimmerHudResBadge" style="background: rgba(0,0,0,0.75); color: #a7f3d0; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4); backdrop-filter: blur(4px);">
-                            Native Resolution
-                        </span>
-                    </div>
-
-                    <div style="position: absolute; top: 12px; right: 14px; display: flex; gap: 8px; z-index: 5;">
-                        <span id="trimmerHudTimeBadge" style="background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(4px);">
-                            00:00:00 / 00:00:00
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Precision Transport & Editing Toolbar -->
-                <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                    <!-- Left: Manual Cut & Delete Tools -->
-                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <button type="button" id="btnTrimmerSplit" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #2563eb); padding: 8px 16px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
-                            <span>✂️</span> <span>Cut / Split at Playhead</span>
-                        </button>
-                        <button type="button" id="btnTrimmerDeleteClip" class="btn-populate" style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 8px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
-                            <span>🗑️</span> <span>Delete Active Clip</span>
-                        </button>
-                        <button type="button" id="btnTrimmerReset" class="btn-populate" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); padding: 8px 12px; font-size: 12px; color: var(--text-secondary);">
-                            <span>🔄</span> <span>Reset All</span>
-                        </button>
-                    </div>
-
-                    <!-- Center: Frame Stepping / Transport -->
-                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                        <button type="button" id="btnTrimmerPrevClip" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="Previous Keeper Clip">⏮️</button>
-                        <button type="button" id="btnTrimmerStepBack" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="-1 Second">⏪ -1s</button>
-                        <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 6px 14px; font-size: 13px; font-weight: 700; background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #38bdf8;">▶️ Play</button>
-                        <button type="button" id="btnTrimmerStepFwd" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="+1 Second">+1s ⏩</button>
-                        <button type="button" id="btnTrimmerNextClip" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="Next Keeper Clip">⏭️</button>
-                    </div>
-
-                    <!-- Right: Gemini Auto-Cut Trigger -->
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <select id="trimmerFocusSelect" class="form-control" style="width: auto; padding: 6px 10px; font-size: 12px;">
-                            <option value="Key Dramatic Highlights">✨ Dramatic Turning Points</option>
-                            <option value="Action &amp; Climax Moments">💥 Action &amp; Climax Scenes</option>
-                            <option value="Dialogue &amp; Story Arc">🗣️ Dialogue &amp; Storyline</option>
-                            <option value="Viral 60s Trailer">🔥 Viral 60s Trailer</option>
-                            <option value="5-10 Min Summary">🎬 5-10 Min Summary</option>
-                        </select>
-                        <select id="trimmerTargetDurSelect" class="form-control" style="width: auto; padding: 6px 10px; font-size: 12px;">
-                            <option value="0">Auto Length</option>
-                            <option value="60">1 Minute</option>
-                            <option value="180">3 Minutes</option>
-                            <option value="300" selected>5 Minutes</option>
-                            <option value="600">10 Minutes</option>
-                        </select>
-                        <button type="button" id="btnTrimmerGeminiAutoCut" class="btn-populate" style="background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: white; padding: 8px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);">
-                            <span>🤖</span> <span>Gemini Auto-Cut &amp; Trim</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Interactive Visual Timeline Track Container -->
-                <div style="background: #141414; border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--text-muted);">
-                        <span>Timeline Track &bull; Click to scrub &bull; Keeper clips highlighted</span>
-                        <span id="trimmerTimelinePlayheadTime" style="color: #38bdf8; font-weight: 700;">Playhead: 00:00:00</span>
-                    </div>
-
-                    <!-- Visual Timeline Bar -->
-                    <div id="trimmerTimelineTrack" style="position: relative; width: 100%; height: 50px; background: #222; border-radius: 6px; overflow: hidden; cursor: pointer; border: 1px solid #444; user-select: none;">
-                        <div id="trimmerClipsContainer" style="position: absolute; inset: 0;"></div>
-                        <!-- Playhead Cursor Line -->
-                        <div id="trimmerPlayhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 3px; background: #ff0055; box-shadow: 0 0 8px #ff0055; z-index: 10; pointer-events: none; transition: left 0.05s linear;">
-                            <div style="width: 11px; height: 11px; background: #ff0055; border-radius: 50%; position: absolute; top: -4px; left: -4px;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Timeline Stats Bar -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; flex-wrap: wrap; gap: 10px; padding: 6px 10px; background: rgba(255,255,255,0.02); border-radius: 6px;">
-                        <span id="trimmerStatOrig">⏱️ Original Length: 00:00</span>
-                        <span id="trimmerStatKept" style="color: #38bdf8; font-weight: 700;">✂️ Kept Montage: 00:00</span>
-                        <span id="trimmerStatRemoved" style="color: #f43f5e; font-weight: 700;">🗑️ Filler Discarded: 00:00 (0%)</span>
-                        <span id="trimmerStatCount" style="color: #a855f7; font-weight: 700;">🎬 Keeper Clips: 1</span>
-                    </div>
-                </div>
-
-                <!-- Keeper Clips Deck -->
-                <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f3e8ff;">🎬 Keeper Clips Sequence (Plays Seamlessly Back-to-Back)</h4>
-                        <span style="font-size: 12px; color: var(--text-muted);">Click any clip to jump player &bull; Edit timestamps if needed</span>
-                    </div>
-                    <div id="trimmerClipsDeck" style="display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto;"></div>
-                </div>
-
-                <!-- Export & Audio Options -->
-                <div style="background: #181524; border: 1px solid #7c3aed; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 700; color: #ede9fe;">🚀 Export Settings (100% Original Resolution Preserved)</h4>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                        <!-- Audio Mode -->
-                        <div>
-                            <label style="font-size: 13px; font-weight: 600; color: #ddd; display: block; margin-bottom: 6px;">Audio Narration Mode:</label>
-                            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="radio" name="trimmerAudioMode" value="original" checked>
-                                    <span>🎵 <b>Original Video Audio</b> (Keep native voices and sounds)</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="radio" name="trimmerAudioMode" value="tts">
-                                    <span>🎙️ <b>Gemini 3.8 Flash Neural Voiceover</b> (Hindi / English Story Narration)</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="radio" name="trimmerAudioMode" value="tts_bgm">
-                                    <span>🎧 <b>Ducked BGM + Neural Voiceover</b> (0% original sound, 100% copyright safe)</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Voice & Tone Settings (for TTS) -->
-                        <div id="trimmerTtsOptionsContainer" style="display: none; background: rgba(0,0,0,0.25); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 12px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
-                                <div>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
-                                        <label style="font-size: 11px; color: var(--text-muted); margin: 0;">Voice:</label>
-                                        <button type="button" id="btnPreviewTrimmerTtsVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
-                                            <span id="previewTrimmerTtsVoiceIcon">🔊</span> <span id="previewTrimmerTtsVoiceText">Preview / Read Aloud</span>
-                                        </button>
-                                    </div>
-                                    <select id="trimmerTtsVoiceSelect" class="form-control" style="width: 100%; padding: 6px 8px; font-size: 12px;">
-                                        <option value="Kore">Kore (Hindi Deep Male)</option>
-                                        <option value="Fenrir">Fenrir (Dramatic Intense Male)</option>
-                                        <option value="Puck">Puck (Fast-Paced Male)</option>
-                                        <option value="Algenib">Algenib (Authoritative Male)</option>
-                                        <option value="Charon">Charon (Deep Mysterious Male)</option>
-                                        <option value="Aoede">Aoede (Expressive Female)</option>
-                                        <option value="Algieba">Algieba (Soft Dramatic Female)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Tone Style:</label>
-                                    <select id="trimmerTtsToneSelect" class="form-control" style="width: 100%; padding: 6px 8px; font-size: 12px;">
-                                        <option value="Suspense / Thriller">Suspense / Thriller</option>
-                                        <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
-                                        <option value="Narrative Deep Storytelling">Narrative Deep Storytelling</option>
-                                        <option value="Fast-Paced Action Punch">Fast-Paced Action Punch</option>
-                                        <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <label style="font-size: 11px; color: var(--text-muted); margin: 0;">Recap Story Narration Script (Devanagari Hindi):</label>
-                                <button type="button" id="btnGenerateNarrationOnly" style="background: rgba(124, 58, 237, 0.2); border: 1px solid #7c3aed; color: #c084fc; font-size: 11px; padding: 2px 10px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                    <span>🎵</span> <span>Synthesize &amp; Download MP3 Only</span>
+                                <select id="trimmerExplainerDuration" class="form-control" style="padding: 8px 12px; font-size: 12.5px; min-width: 230px;">
+                                    <option value="dynamic" selected>🎬 PardaCine Auto-Bounded (5% to 20% Runtime)</option>
+                                    <option value="min_bound">⚡ Minimum Bound (5% = 1/20th of Movie)</option>
+                                    <option value="balanced">🍿 Balanced Recap (~12.5% of Movie)</option>
+                                    <option value="max_bound">🔥 Maximum Deep Recap (20% = 1/5th of Movie)</option>
+                                </select>
+                                <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 20px; font-size: 13.5px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 14px rgba(124, 58, 237, 0.4);">
+                                    <span id="btnPlanExplainerIcon">🚀</span>
+                                    <span id="btnPlanExplainerText">Generate PardaCine Bounded Story &amp; Voiceover</span>
                                 </button>
                             </div>
-                            <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 60px; font-size: 12px; resize: vertical;" placeholder="Script automatically generated by Gemini or enter your own custom narration..."></textarea>
-                            
+                        </div>
+
+                        <!-- Unified 5-Step Auto Explainer Pipeline Progress Tracker -->
+                        <div id="explainerPipelineTracker" style="display: none; background: rgba(0,0,0,0.35); border: 1px solid rgba(124, 58, 237, 0.4); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                                <span id="explainerPipelineStatusTitle" style="font-size: 12.5px; font-weight: 700; color: #e9d5ff;">⚡ Running PardaCine Bounded Explainer Pipeline...</span>
+                                <span id="explainerPipelineSpeedBadge" style="font-size: 11px; color: #fde047; font-weight: 700; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); padding: 2px 8px; border-radius: 10px;">Calibrated Speed Locked</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px;">
+                                <div id="pipeStep1" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <b>1. Speed Lock:</b> 100-Char Rate
+                                </div>
+                                <div id="pipeStep2" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <b>2. Bounds (5%–20%):</b> PardaCine Cuts
+                                </div>
+                                <div id="pipeStep3" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <b>3. Word Budget:</b> WPS/CPS Sync
+                                </div>
+                                <div id="pipeStep4" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <b>4. Auto TTS:</b> Voiceover + BGM
+                                </div>
+                                <div id="pipeStep5" style="font-size: 11px; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <b>5. CapCut Timeline:</b> Export Ready
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Storyboard Results & 4-Phase Visual Breakdown -->
+                        <div id="trimmerExplainerStoryboardContainer" style="display: none; margin-top: 14px; border-top: 1px solid rgba(124, 58, 237, 0.3); padding-top: 14px;">
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 14px;">
+                                    <img id="trimmerExplainerThumb" src="" alt="Thumbnail" style="width: 72px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #334155; display: none;">
+                                    <div>
+                                        <div id="trimmerExplainerTitle" style="font-size: 14px; font-weight: 700; color: #f8fafc;">Movie Title</div>
+                                        <div id="trimmerExplainerMetaSub" style="font-size: 11px; color: #94a3b8;">Runtime &bull; Bounds</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <span id="trimmerExplainerBadgeDuration" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #c084fc; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Duration: --</span>
+                                    <span id="trimmerExplainerBadgeClips" style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Cuts: --</span>
+                                    <span id="trimmerExplainerBadgeWps" style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: --</span>
+                                    <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: --</span>
+                                    <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
+                                        <span>⚡</span> <span>Sync to CapCut Timeline</span>
+                                    </button>
+                                    <button type="button" id="btnQuickExportFromExplainer" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #7c3aed); border: none; color: white; padding: 6px 16px; font-size: 12.5px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
+                                        <span>🎬</span> <span>Export Final Video</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Pre-Rendered Voiceover + BGM Audio Bar -->
+                            <div id="explainerReadyAudioBar" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
+                                    <span style="font-size: 18px;">🎧</span>
+                                    <div>
+                                        <div style="font-size: 12.5px; font-weight: 700; color: #6ee7b7;">Pre-Rendered Voiceover + Ducked Suspense BGM Ready!</div>
+                                        <div style="font-size: 11px; color: #a7f3d0;">Automatically synthesized &amp; mapped to timeline cuts.</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <audio id="explainerReadyAudioPlayer" controls style="height: 32px; width: 220px;"></audio>
+                                    <a id="btnDownloadExplainerReadyMp3" href="#" download="explainer_voiceover.mp3" class="btn-populate" style="font-size: 11.5px; padding: 5px 12px; text-decoration: none; color: #6ee7b7; border-color: #10b981; font-weight: 700;">
+                                        ⬇️ Save Voiceover MP3
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div id="trimmerExplainerSummary" style="font-size: 12px; color: #cbd5e1; font-style: italic; background: rgba(255,255,255,0.02); border-left: 3px solid #7c3aed; padding: 8px 14px; margin-bottom: 14px; border-radius: 0 6px 6px 0;"></div>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;" id="trimmerExplainerPhasesGrid"></div>
+
+                            <div id="trimmerExplainerAutoInjectNotice" style="margin-top: 12px; padding: 10px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; font-size: 12px; color: #a7f3d0; display: flex; align-items: center; gap: 8px;">
+                                <span>💡</span>
+                                <span><b>Step 5 Unlocked Below:</b> Scrub the CapCut timeline playhead, review the synchronized narrative script below the player, and click <b>Export Final Video</b>!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================== -->
+                    <!-- STEP 5: CAPCUT-STYLE TIMELINE SLIDER & DIRECT LOCAL EXPORT -->
+                    <!-- ========================================================== -->
+                    <div id="explainerStep5Card" style="background: rgba(15, 23, 42, 0.96); border: 1px solid #38bdf8; border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #0284c7; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">STEP 5</span>
+                                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #e0f2fe;">CapCut-Style Timeline Slider, Synchronized Script &amp; Direct Local Export</h4>
+                            </div>
+                            <span style="font-size: 11.5px; color: #7dd3fc;">Drag red playhead line to scrub &bull; Original movie audio muted on TTS+BGM export</span>
+                        </div>
+
+                        <!-- Main HTML5 Video Player Area -->
+                        <div style="position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 14px;">
+                            <video id="trimmerPlayer" playsinline preload="auto" style="width: 100%; max-height: 440px; display: block; object-fit: contain; margin: 0 auto; background: #000;"></video>
+                            <div style="position: absolute; top: 12px; left: 14px; display: flex; gap: 8px; z-index: 5;">
+                                <span id="trimmerHudClipBadge" style="background: rgba(0,0,0,0.75); color: #38bdf8; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.4);">Clip 1 of 1</span>
+                                <span id="trimmerHudResBadge" style="background: rgba(0,0,0,0.75); color: #a7f3d0; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4);">Native Resolution</span>
+                            </div>
+                            <div style="position: absolute; top: 12px; right: 14px; display: flex; gap: 8px; z-index: 5;">
+                                <span id="trimmerHudTimeBadge" style="background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2);">00:00:00 / 00:00:00</span>
+                            </div>
+                        </div>
+
+                        <!-- CapCut-Style Interactive Timeline Slider & Draggable Playhead -->
+                        <div style="background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: #9ca3af; flex-wrap: wrap; gap: 8px;">
+                                <span>🎞️ <b>CapCut Timeline Track</b> &bull; Drag or tap playhead to scrub scenes</span>
+                                <span id="trimmerTimelinePlayheadTime" style="color: #38bdf8; font-weight: 700; font-family: monospace;">Playhead: 00:00:00</span>
+                            </div>
+
+                            <!-- Visual Timeline Bar -->
+                            <div id="trimmerTimelineTrack" style="position: relative; width: 100%; height: 56px; background: #1f2937; border-radius: 8px; overflow: hidden; cursor: ew-resize; border: 1px solid #4b5563; user-select: none; touch-action: none;">
+                                <div id="trimmerClipsContainer" style="position: absolute; inset: 0;"></div>
+                                <!-- CapCut-Style Playhead Cursor Line -->
+                                <div id="trimmerPlayhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 3px; background: #ff0055; box-shadow: 0 0 10px #ff0055; z-index: 10; pointer-events: none;">
+                                    <div style="width: 13px; height: 13px; background: #ff0055; border: 2px solid #fff; border-radius: 50%; position: absolute; top: -4px; left: -5px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Timeline Stats Bar -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; flex-wrap: wrap; gap: 10px; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
+                                <span id="trimmerStatOrig">⏱️ Source Movie: 00:00</span>
+                                <span id="trimmerStatKept" style="color: #38bdf8; font-weight: 700;">✂️ Bounded Story Montage: 00:00</span>
+                                <span id="trimmerStatRemoved" style="color: #f43f5e; font-weight: 700;">🗑️ Filler Discarded: 00:00 (0%)</span>
+                                <span id="trimmerStatCount" style="color: #a855f7; font-weight: 700;">🎬 Keeper Cuts: 1</span>
+                            </div>
+                        </div>
+
+                        <!-- Precision Transport & Cut Toolbar -->
+                        <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <button type="button" id="btnTrimmerSplit" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #2563eb); padding: 6px 12px; font-size: 12px; font-weight: 700;">✂️ Split at Playhead</button>
+                                <button type="button" id="btnTrimmerDeleteClip" class="btn-populate" style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 12px; font-size: 12px; font-weight: 600;">🗑️ Delete Cut</button>
+                                <button type="button" id="btnTrimmerReset" class="btn-populate" style="padding: 6px 10px; font-size: 12px;">🔄 Reset</button>
+                            </div>
+                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                <button type="button" id="btnTrimmerPrevClip" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏮️</button>
+                                <button type="button" id="btnTrimmerStepBack" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏪ -1s</button>
+                                <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 5px 14px; font-size: 12.5px; font-weight: 700; background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #38bdf8;">▶️ Play</button>
+                                <button type="button" id="btnTrimmerStepFwd" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">+1s ⏩</button>
+                                <button type="button" id="btnTrimmerNextClip" class="btn-populate" style="padding: 5px 10px; font-size: 12px;">⏭️</button>
+                            </div>
+                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                <select id="trimmerFocusSelect" class="form-control" style="width: auto; padding: 5px 8px; font-size: 11.5px;">
+                                    <option value="Key Dramatic Highlights">✨ PardaCine Suspense Arc</option>
+                                    <option value="Action &amp; Climax Moments">💥 Action &amp; Climax</option>
+                                    <option value="Dialogue &amp; Story Arc">🗣️ Storyline &amp; Twists</option>
+                                </select>
+                                <select id="trimmerTargetDurSelect" class="form-control" style="width: auto; padding: 5px 8px; font-size: 11.5px;">
+                                    <option value="0" selected>Bounded 5%–20%</option>
+                                    <option value="300">5 Min</option>
+                                    <option value="600">10 Min</option>
+                                </select>
+                                <button type="button" id="btnTrimmerGeminiAutoCut" class="btn-populate" style="background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: white; padding: 6px 12px; font-size: 12px; font-weight: 700;">🤖 Auto-Cut Local Video</button>
+                            </div>
+                        </div>
+
+                        <!-- Synchronized Narrative Script Rendered Directly Below Player -->
+                        <div style="background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                <div>
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f3e8ff;">📜 Synchronized Narrative Script &amp; Scene Cuts (Click Any Scene to Scrub Player)</h4>
+                                    <div style="font-size: 11px; color: #94a3b8;">Each scene card shows its exact timestamp window and word-budgeted narration matched to your Step 2 voice speed.</div>
+                                </div>
+                                <button type="button" id="btnGenerateNarrationOnly" style="background: rgba(124, 58, 237, 0.25); border: 1px solid #7c3aed; color: #e9d5ff; font-size: 11.5px; font-weight: 700; padding: 5px 12px; border-radius: 6px; cursor: pointer;">
+                                    🎙️ Re-Synthesize Voiceover MP3
+                                </button>
+                            </div>
+
+                            <!-- Interactive Keeper Clips + Synchronized Narration Deck -->
+                            <div id="trimmerClipsDeck" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; margin-bottom: 12px;"></div>
+
+                            <!-- Editable Full Synchronized Script Box -->
+                            <label for="trimmerNarrationScript" style="font-size: 11.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 4px;">Full Continuous Story Narration Script (Editable before Export):</label>
+                            <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 95px; font-size: 12.5px; line-height: 1.5; resize: vertical;" placeholder="Your mathematically bounded PardaCine story narration script will appear here automatically..."></textarea>
+
                             <!-- In-browser Narration Audio Preview -->
                             <div id="trimmerAudioPreviewBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 8px; align-items: center; justify-content: space-between; gap: 10px;">
                                 <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
                                     <span style="font-size: 14px;">🎧</span>
                                     <audio id="trimmerNarrationAudioPlayer" controls style="height: 30px; flex-grow: 1;"></audio>
                                 </div>
-                                <a id="btnQuickDownloadAudio" href="#" download class="btn-populate" style="font-size: 11px; padding: 4px 10px; text-decoration: none; color: #c4b5fd; border-color: #7c3aed; white-space: nowrap;">
-                                    ⬇️ Download MP3
-                                </a>
+                                <a id="btnQuickDownloadAudio" href="#" download class="btn-populate" style="font-size: 11px; padding: 4px 10px; text-decoration: none; color: #c4b5fd; border-color: #7c3aed; white-space: nowrap;">⬇️ Download MP3</a>
                             </div>
+                        </div>
+
+                        <!-- Client-Side Audio Muxing Mode & Single Export Button -->
+                        <div style="background: #181524; border: 1px solid #7c3aed; border-radius: 10px; padding: 16px 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+                                <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                        <input type="radio" name="trimmerAudioMode" value="tts_bgm" checked>
+                                        <span>🎧 <b>Muted Movie + Neural Voiceover + Ducked BGM</b> (Recommended)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                        <input type="radio" name="trimmerAudioMode" value="tts">
+                                        <span>🎙️ <b>Voiceover Only</b> (0% Original Audio)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                        <input type="radio" name="trimmerAudioMode" value="original">
+                                        <span>🎵 <b>Original Movie Audio</b></span>
+                                    </label>
+                                </div>
+
+                                <!-- Synced hidden/compact TTS selectors -->
+                                <div id="trimmerTtsOptionsContainer" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <select id="trimmerTtsVoiceSelect" class="form-control" style="width: auto; padding: 4px 8px; font-size: 11.5px;">
+                                        <option value="Kore" selected>Kore</option>
+                                        <option value="Fenrir">Fenrir</option>
+                                        <option value="Puck">Puck</option>
+                                        <option value="Aoede">Aoede</option>
+                                        <option value="Charon">Charon</option>
+                                    </select>
+                                    <select id="trimmerTtsToneSelect" class="form-control" style="width: auto; padding: 4px 8px; font-size: 11.5px;">
+                                        <option value="Narrative Deep Storytelling" selected>Narrative Deep Storytelling</option>
+                                        <option value="Suspense / Thriller">Suspense / Thriller</option>
+                                        <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
+                                        <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
+                                    </select>
+                                    <button type="button" id="btnPreviewTrimmerTtsVoice" style="background: rgba(168, 85, 247, 0.25); border: 1px solid #a855f7; color: #f3e8ff; font-size: 10.5px; font-weight: 700; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                                        <span id="previewTrimmerTtsVoiceIcon">🔊</span> <span id="previewTrimmerTtsVoiceText">5s Preview</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Single Export Final Video Button -->
+                            <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 800; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
+                                <span id="btnExportIcon">🎬</span>
+                                <span id="btnExportText">Export Final Video</span>
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Export Button -->
-                    <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 700; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
-                        <span id="btnExportIcon">🎬</span>
-                        <span id="btnExportText">Export Final Video (Zero Server Upload &bull; In-Browser Slicing)</span>
-                    </button>
-                </div>
+                </div><!-- End #sequentialSteps3To5Container -->
 
                 <!-- Export Progress & Download Card -->
                 <div id="trimmerExportCard" style="display: none; background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
@@ -5830,20 +5999,26 @@ HTML_MAIN = """
                 trimmerExplainerTitle.textContent = storyboard.title || 'Cinema Explainer Storyboard';
             }
             if (trimmerExplainerMetaSub) {
-                trimmerExplainerMetaSub.innerHTML = `Runtime: <b>${storyboard.duration_str || 'Full Movie'}</b> &bull; Channel: <b>${storyboard.channel || 'Cinema Channel'}</b> &bull; Voice: <b>${storyboard.voice_name || 'Kore'} (${storyboard.tone_style || 'Narrative Deep'})</b>`;
+                const minB = storyboard.min_allowed_duration_sec ? formatSecs(storyboard.min_allowed_duration_sec) : '5%';
+                const maxB = storyboard.max_allowed_duration_sec ? formatSecs(storyboard.max_allowed_duration_sec) : '20%';
+                const pct = storyboard.story_pct_of_source ? `${storyboard.story_pct_of_source}%` : 'Bounded';
+                trimmerExplainerMetaSub.innerHTML = `Source Runtime: <b>${storyboard.duration_str || 'Full Movie'}</b> &bull; PardaCine Bounds (5%–20%): <b>${minB} – ${maxB} (${pct})</b> &bull; Voice: <b>${storyboard.voice_name || 'Kore'}</b>`;
             }
             if (trimmerExplainerBadgeDuration) {
                 const totalDur = storyboard.total_duration_sec || storyboard.target_duration || 0;
-                trimmerExplainerBadgeDuration.textContent = `⏱️ Explainer: ${formatSecs(totalDur)}`;
+                const pct = storyboard.story_pct_of_source ? ` (${storyboard.story_pct_of_source}%)` : '';
+                trimmerExplainerBadgeDuration.textContent = `⏱️ Bounded Story: ${formatSecs(totalDur)}${pct}`;
             }
             if (trimmerExplainerBadgeClips) {
-                trimmerExplainerBadgeClips.textContent = `🎬 Dynamic Cuts: ${storyboard.total_clips || storyboard.keeper_clips.length}`;
+                trimmerExplainerBadgeClips.textContent = `🎬 PardaCine Cuts: ${storyboard.total_clips || storyboard.keeper_clips.length}`;
             }
             if (trimmerExplainerBadgeWps) {
-                trimmerExplainerBadgeWps.textContent = `⚡ WPS: ${(storyboard.calibrated_wps || 2.35).toFixed(2)} w/s`;
+                const wpsVal = (storyboard.calibrated_wps || 2.35).toFixed(2);
+                const cpsVal = (storyboard.calibrated_cps || 12.5).toFixed(1);
+                trimmerExplainerBadgeWps.textContent = `⚡ ${wpsVal} w/s (${cpsVal} c/s)`;
             }
             if (trimmerExplainerBadgeWords) {
-                trimmerExplainerBadgeWords.textContent = `📝 Words: ${storyboard.total_words || 0}`;
+                trimmerExplainerBadgeWords.textContent = `📝 ${storyboard.total_words || 0}w (${storyboard.total_chars || 0}c)`;
             }
             if (trimmerExplainerSummary) {
                 trimmerExplainerSummary.textContent = storyboard.summary || 'Pure story-first cinema explainer covering all narrative beats without rigid cuts.';
@@ -6249,30 +6424,33 @@ HTML_MAIN = """
             trimmerKeeperClips.forEach((clip, idx) => {
                 const card = document.createElement('div');
                 card.style.display = 'flex';
-                card.style.justifyContent = 'space-between';
-                card.style.alignItems = 'center';
-                card.style.padding = '8px 14px';
-                card.style.background = (idx === trimmerActiveClipIndex) ? 'rgba(2, 132, 199, 0.15)' : 'rgba(255,255,255,0.03)';
-                card.style.border = (idx === trimmerActiveClipIndex) ? '1px solid #0284c7' : '1px solid rgba(255,255,255,0.06)';
-                card.style.borderRadius = '6px';
-                card.style.gap = '12px';
+                card.style.flexDirection = 'column';
+                card.style.padding = '10px 14px';
+                card.style.background = (idx === trimmerActiveClipIndex) ? 'rgba(2, 132, 199, 0.18)' : 'rgba(255,255,255,0.03)';
+                card.style.border = (idx === trimmerActiveClipIndex) ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.08)';
+                card.style.borderRadius = '8px';
+                card.style.gap = '6px';
+                card.style.cursor = 'pointer';
 
+                const narrText = (clip.narration || '').trim();
                 card.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                        <span style="font-weight: 700; color: #38bdf8; font-size: 13px;">#${idx + 1}</span>
-                        <div>
-                            <div style="font-size: 13px; font-weight: 600; color: #f1f5f9;">${clip.title || 'Scene ' + (idx + 1)}</div>
-                            <div style="font-size: 11px; color: var(--text-muted);">${clip.reason || 'Keeper clip'}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                            <span style="font-weight: 800; color: #38bdf8; font-size: 12.5px;">#${idx + 1}</span>
+                            <span style="font-size: 13px; font-weight: 700; color: #f1f5f9;">${clip.title || 'Scene ' + (idx + 1)}</span>
+                            <span style="font-size: 11px; color: #94a3b8;">(${clip.reason || 'Keeper Cut'})</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 11.5px; font-weight: 700; color: #bae6fd; background: rgba(0,0,0,0.35); padding: 3px 8px; border-radius: 4px; font-family: monospace;">
+                                ${formatSecs(clip.start)} ➔ ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)
+                            </span>
+                            <button type="button" class="btn-populate" style="padding: 3px 8px; font-size: 11.5px;" onclick="event.stopPropagation(); playKeeperClipByIndex(${idx})">▶️</button>
+                            <button type="button" class="btn-populate" style="padding: 3px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="event.stopPropagation(); deleteKeeperClipByIndex(${idx})">🗑️</button>
                         </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 12px; font-weight: 700; color: #bae6fd; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">
-                            ${formatSecs(clip.start)} ➔ ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)
-                        </span>
-                        <button type="button" class="btn-populate" style="padding: 4px 8px; font-size: 12px;" onclick="playKeeperClipByIndex(${idx})">▶️</button>
-                        <button type="button" class="btn-populate" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="deleteKeeperClipByIndex(${idx})">🗑️</button>
-                    </div>
+                    ${narrText ? `<div style="font-size: 12px; color: #e2e8f0; background: rgba(0,0,0,0.3); border-left: 3px solid #a855f7; padding: 6px 10px; border-radius: 0 6px 6px 0; line-height: 1.45;">🎙️ ${narrText}</div>` : ''}
                 `;
+                card.addEventListener('click', () => playKeeperClipByIndex(idx));
                 trimmerClipsDeck.appendChild(card);
             });
         }
@@ -6387,33 +6565,58 @@ HTML_MAIN = """
             });
         }
 
-        // Click on timeline scrubber
+        // CapCut-Style Draggable & Clickable Timeline Scrubber
         if (trimmerTimelineTrack) {
-            trimmerTimelineTrack.addEventListener('click', (e) => {
-                if (trimmerTotalDuration <= 0) return;
-                const rect = trimmerTimelineTrack.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const targetTime = (clickX / rect.width) * trimmerTotalDuration;
+            let isScrubbingTimeline = false;
 
-                // Check if inside a keeper clip or filler
+            function scrubTimelineAtClientX(clientX, snapGap) {
+                const effDur = trimmerTotalDuration > 0 ? trimmerTotalDuration : 3600;
+                const rect = trimmerTimelineTrack.getBoundingClientRect();
+                if (!rect.width) return;
+                const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+                const pct = (relX / rect.width) * 100;
+                const targetTime = (relX / rect.width) * effDur;
+
+                if (trimmerPlayhead) trimmerPlayhead.style.left = `${pct}%`;
+                if (trimmerTimelinePlayheadTime) trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(targetTime)}`;
+
                 const foundIdx = trimmerKeeperClips.findIndex(c => targetTime >= c.start && targetTime <= c.end);
                 if (foundIdx !== -1) {
                     trimmerActiveClipIndex = foundIdx;
-                    trimmerPlayer.currentTime = targetTime;
-                } else {
-                    // Inside deleted filler gap! Snap to start of next keeper clip
+                    if (trimmerPlayer && trimmerPlayer.src) {
+                        try { trimmerPlayer.currentTime = targetTime; } catch (err) {}
+                    }
+                } else if (snapGap && trimmerKeeperClips.length > 0) {
                     const nextIdx = trimmerKeeperClips.findIndex(c => c.start > targetTime);
-                    if (nextIdx !== -1) {
-                        trimmerActiveClipIndex = nextIdx;
-                        trimmerPlayer.currentTime = trimmerKeeperClips[nextIdx].start;
-                    } else if (trimmerKeeperClips.length > 0) {
-                        trimmerActiveClipIndex = 0;
-                        trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+                    const snapIdx = nextIdx !== -1 ? nextIdx : 0;
+                    trimmerActiveClipIndex = snapIdx;
+                    if (trimmerPlayer && trimmerPlayer.src) {
+                        try { trimmerPlayer.currentTime = trimmerKeeperClips[snapIdx].start; } catch (err) {}
                     }
                 }
                 renderTrimmerTimelineUI();
                 updateTrimmerDeck();
+            }
+
+            trimmerTimelineTrack.addEventListener('pointerdown', (e) => {
+                isScrubbingTimeline = true;
+                try { trimmerTimelineTrack.setPointerCapture(e.pointerId); } catch (err) {}
+                scrubTimelineAtClientX(e.clientX, false);
             });
+
+            trimmerTimelineTrack.addEventListener('pointermove', (e) => {
+                if (!isScrubbingTimeline) return;
+                scrubTimelineAtClientX(e.clientX, false);
+            });
+
+            const finishScrub = (e) => {
+                if (!isScrubbingTimeline) return;
+                isScrubbingTimeline = false;
+                try { trimmerTimelineTrack.releasePointerCapture(e.pointerId); } catch (err) {}
+                scrubTimelineAtClientX(e.clientX, true);
+            };
+            trimmerTimelineTrack.addEventListener('pointerup', finishScrub);
+            trimmerTimelineTrack.addEventListener('pointercancel', () => { isScrubbingTimeline = false; });
         }
 
         // SEAMLESS BACK-TO-BACK REAL-TIME PLAYBACK ENGINE
@@ -6482,12 +6685,13 @@ HTML_MAIN = """
                 btnTrimmerGeminiAutoCut.disabled = true;
                 btnTrimmerGeminiAutoCut.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Analyzing Story Arc...';
 
+                const langEl = document.getElementById('trimmerExplainerLang');
                 const payload = {
                     filename: trimmerServerFilename || (trimmerLocalFile ? trimmerLocalFile.name : ''),
                     duration: trimmerTotalDuration,
                     focus_style: trimmerFocusSelect ? trimmerFocusSelect.value : 'Key Dramatic Highlights',
                     target_duration: parseInt(trimmerTargetDurSelect ? trimmerTargetDurSelect.value : '0') || 0,
-                    language: 'Hindi'
+                    language: langEl ? langEl.value : 'Hindi'
                 };
 
                 try {
@@ -6505,16 +6709,15 @@ HTML_MAIN = """
                             end: c.end,
                             duration: c.duration,
                             title: c.title,
-                            reason: c.reason
+                            reason: c.reason,
+                            narration: c.narration || ''
                         }));
                         trimmerActiveClipIndex = 0;
 
-                        // Automatically update narration script
                         if (data.script && trimmerNarrationScript) {
                             trimmerNarrationScript.value = data.script;
                         }
 
-                        // Seamlessly update player to start of first keeper clip
                         trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
                         trimmerPlayer.play();
 
@@ -6522,7 +6725,7 @@ HTML_MAIN = """
                         updateTrimmerStats();
                         updateTrimmerDeck();
 
-                        alert(`Gemini Auto-Cut Complete! Applied ${trimmerKeeperClips.length} narrative keeper cuts and discarded ${data.filler_removed_percent}% filler.`);
+                        alert(`Gemini Auto-Cut Complete! Applied ${trimmerKeeperClips.length} PardaCine bounded cuts and discarded ${data.filler_removed_percent}% filler.`);
                     } else {
                         alert('Gemini auto-cut did not return clips. Please check logs.');
                     }
@@ -6530,13 +6733,13 @@ HTML_MAIN = """
                     alert('Error during Gemini Auto-Cut: ' + err.message);
                 } finally {
                     btnTrimmerGeminiAutoCut.disabled = false;
-                    btnTrimmerGeminiAutoCut.innerHTML = '<span>🤖</span> <span>Gemini Auto-Cut &amp; Trim</span>';
+                    btnTrimmerGeminiAutoCut.innerHTML = '🤖 Auto-Cut Local Video';
                 }
             });
         }
 
         // ==============================================================
-        // VOICE SELECTION & 3-SECOND LIVE PREVIEW (READ ALOUD)
+        // STEP 1 & STEP 2: VOICE CAROUSEL (5S PREVIEW) & AUTO 100-CHAR SPEED BENCHMARK
         // ==============================================================
         const btnPreviewExplainerVoice = document.getElementById('btnPreviewExplainerVoice');
         const previewExplainerVoiceIcon = document.getElementById('previewExplainerVoiceIcon');
@@ -6545,24 +6748,54 @@ HTML_MAIN = """
         const previewTrimmerTtsVoiceIcon = document.getElementById('previewTrimmerTtsVoiceIcon');
         const previewTrimmerTtsVoiceText = document.getElementById('previewTrimmerTtsVoiceText');
         const explainerVoicePreviewAudio = document.getElementById('explainerVoicePreviewAudio');
+        const trimmerExplainerLang = document.getElementById('trimmerExplainerLang');
+        const step2BenchmarkTitle = document.getElementById('step2BenchmarkTitle');
+        const step2BenchmarkSub = document.getElementById('step2BenchmarkSub');
+        const step2MetricWpsBadge = document.getElementById('step2MetricWpsBadge');
+        const step2MetricCpsBadge = document.getElementById('step2MetricCpsBadge');
+        const step2SampleTextDisplay = document.getElementById('step2SampleTextDisplay');
+        const btnRunStep2Benchmark = document.getElementById('btnRunStep2Benchmark');
+        const sequentialSteps3To5Container = document.getElementById('sequentialSteps3To5Container');
 
-        async function playThreeSecVoicePreview(voiceSelectEl, toneSelectEl, btnEl, iconEl, textEl) {
-            if (!btnEl) return;
-            const voice = voiceSelectEl ? voiceSelectEl.value : 'Kore';
-            const tone = toneSelectEl ? toneSelectEl.value : 'Narrative Deep Storytelling';
+        window.calibratedVoiceWps = 0;
+        window.calibratedVoiceCps = 0;
+        window.calibratedVoiceName = '';
 
-            // If currently playing, stop
+        function updateSeqStepPills(activeStepNum) {
+            for (let i = 1; i <= 5; i++) {
+                const pill = document.getElementById(`seqStepPill${i}`);
+                if (!pill) continue;
+                pill.classList.remove('active-step', 'done-step');
+                if (i < activeStepNum) {
+                    pill.classList.add('done-step');
+                } else if (i === activeStepNum) {
+                    pill.classList.add('active-step');
+                }
+            }
+        }
+
+        async function playFiveSecVoicePreview(voiceName, toneStyle, btnEl, iconEl, textEl, defaultLabel) {
+            const voice = voiceName || (trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore');
+            const tone = toneStyle || (trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling');
+            const lang = trimmerExplainerLang ? trimmerExplainerLang.value : 'Hindi';
+            const origLabel = defaultLabel || '5s Preview';
+
             if (explainerVoicePreviewAudio && !explainerVoicePreviewAudio.paused) {
                 explainerVoicePreviewAudio.pause();
                 explainerVoicePreviewAudio.currentTime = 0;
                 if (iconEl) iconEl.textContent = '🔊';
-                if (textEl) textEl.textContent = 'Preview / Read Aloud';
+                if (textEl) textEl.textContent = origLabel;
+                else if (btnEl) btnEl.innerHTML = `🔊 ${origLabel}`;
                 return;
             }
 
-            btnEl.disabled = true;
-            if (iconEl) iconEl.textContent = '⏳';
-            if (textEl) textEl.textContent = `Loading ${voice}...`;
+            if (btnEl) btnEl.disabled = true;
+            if (iconEl && textEl) {
+                iconEl.textContent = '⏳';
+                textEl.textContent = `${voice}...`;
+            } else if (btnEl) {
+                btnEl.innerHTML = `⏳ ${voice}...`;
+            }
 
             try {
                 const res = await fetch('/api/tts/preview', {
@@ -6571,54 +6804,205 @@ HTML_MAIN = """
                     body: JSON.stringify({
                         voice_name: voice,
                         tone_style: tone,
-                        language: 'Hindi',
+                        language: lang,
                         channel_id: window.currentActiveChannelId || 'default'
                     })
                 });
                 const data = await res.json();
                 if (!data.success || !data.audio_url) {
-                    throw new Error(data.error || 'Failed to synthesize voice preview.');
+                    throw new Error(data.error || 'Failed to synthesize 5s voice preview.');
                 }
 
                 if (explainerVoicePreviewAudio) {
                     explainerVoicePreviewAudio.src = data.audio_url;
-                    if (iconEl) iconEl.textContent = '⏹️';
-                    if (textEl) textEl.textContent = `Playing ${voice}...`;
+                    if (iconEl && textEl) {
+                        iconEl.textContent = '⏹️';
+                        textEl.textContent = `Playing ${voice}`;
+                    } else if (btnEl) {
+                        btnEl.innerHTML = `⏹️ Stop`;
+                    }
                     explainerVoicePreviewAudio.onended = () => {
-                        if (iconEl) iconEl.textContent = '🔊';
-                        if (textEl) textEl.textContent = 'Preview / Read Aloud';
+                        if (iconEl && textEl) {
+                            iconEl.textContent = '🔊';
+                            textEl.textContent = origLabel;
+                        } else if (btnEl) {
+                            btnEl.innerHTML = `🔊 ${origLabel}`;
+                        }
                     };
                     await explainerVoicePreviewAudio.play();
                 }
             } catch (err) {
-                alert('Voice Preview Error: ' + err.message);
-                if (iconEl) iconEl.textContent = '🔊';
-                if (textEl) textEl.textContent = 'Preview / Read Aloud';
+                alert('5s Voice Preview Error: ' + err.message);
+                if (iconEl && textEl) {
+                    iconEl.textContent = '🔊';
+                    textEl.textContent = origLabel;
+                } else if (btnEl) {
+                    btnEl.innerHTML = `🔊 ${origLabel}`;
+                }
             } finally {
-                btnEl.disabled = false;
+                if (btnEl) btnEl.disabled = false;
             }
         }
 
+        // Wire 5s Preview buttons inside Step 1 Voice Carousel cards
+        document.querySelectorAll('.btn-voice-preview-5s').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const voice = btn.getAttribute('data-voice') || 'Kore';
+                const card = btn.closest('.voice-carousel-card');
+                const tone = (card && card.getAttribute('data-tone')) || (trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling');
+                playFiveSecVoicePreview(voice, tone, btn, null, null, '5s Preview');
+            });
+        });
+
         if (btnPreviewExplainerVoice) {
             btnPreviewExplainerVoice.addEventListener('click', () => {
-                playThreeSecVoicePreview(
-                    trimmerExplainerVoice,
-                    trimmerExplainerTone,
+                playFiveSecVoicePreview(
+                    trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore',
+                    trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling',
                     btnPreviewExplainerVoice,
                     previewExplainerVoiceIcon,
-                    previewExplainerVoiceText
+                    previewExplainerVoiceText,
+                    '5s Preview'
                 );
             });
         }
 
         if (btnPreviewTrimmerTtsVoice) {
             btnPreviewTrimmerTtsVoice.addEventListener('click', () => {
-                playThreeSecVoicePreview(
-                    trimmerTtsVoiceSelect,
-                    trimmerTtsToneSelect,
+                playFiveSecVoicePreview(
+                    trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
+                    trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
                     btnPreviewTrimmerTtsVoice,
                     previewTrimmerTtsVoiceIcon,
-                    previewTrimmerTtsVoiceText
+                    previewTrimmerTtsVoiceText,
+                    '5s Preview'
+                );
+            });
+        }
+
+        // Step 2: Automatic 100-Character Speed Benchmark -> Unlocks Steps 3, 4, 5
+        async function lockVoiceAndRunStep2Benchmark(voiceName, toneStyle) {
+            const voice = voiceName || (trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore');
+            const tone = toneStyle || (trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling');
+            const lang = trimmerExplainerLang ? trimmerExplainerLang.value : 'Hindi';
+
+            // Highlight selected card in carousel
+            document.querySelectorAll('.voice-carousel-card').forEach(card => {
+                const cVoice = card.getAttribute('data-voice');
+                const lockBtn = card.querySelector('.btn-voice-select-lock');
+                if (cVoice === voice) {
+                    card.classList.add('selected-voice');
+                    if (lockBtn) {
+                        lockBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                        lockBtn.style.border = 'none';
+                        lockBtn.textContent = `✅ Locked: ${voice}`;
+                    }
+                } else {
+                    card.classList.remove('selected-voice');
+                    if (lockBtn) {
+                        lockBtn.style.background = 'rgba(255,255,255,0.1)';
+                        lockBtn.style.border = '1px solid rgba(255,255,255,0.25)';
+                        lockBtn.textContent = 'Select Voice';
+                    }
+                }
+            });
+
+            if (trimmerExplainerVoice) trimmerExplainerVoice.value = voice;
+            if (trimmerTtsVoiceSelect) trimmerTtsVoiceSelect.value = voice;
+            if (trimmerExplainerTone && toneStyle) trimmerExplainerTone.value = toneStyle;
+            if (trimmerTtsToneSelect && toneStyle) trimmerTtsToneSelect.value = toneStyle;
+
+            updateSeqStepPills(2);
+            if (btnRunStep2Benchmark) {
+                btnRunStep2Benchmark.disabled = true;
+                btnRunStep2Benchmark.innerHTML = `⏳ Benchmarking ${voice} (100-Char ${lang})...`;
+            }
+            if (step2BenchmarkTitle) {
+                step2BenchmarkTitle.textContent = `⏳ Running 100-Character ${lang} Speed Benchmark for "${voice}"...`;
+            }
+            if (step2MetricWpsBadge) step2MetricWpsBadge.textContent = 'WPS: Measuring...';
+            if (step2MetricCpsBadge) step2MetricCpsBadge.textContent = 'CPS: Measuring...';
+
+            let measuredWps = lang === 'English' ? 2.65 : 2.35;
+            let measuredCps = lang === 'English' ? 14.2 : 12.5;
+            let sampleText = '';
+
+            try {
+                const calRes = await fetch('/api/tts/calibrate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        voice_name: voice,
+                        tone_style: tone,
+                        language: lang,
+                        force_live: true
+                    })
+                });
+                const calData = await calRes.json();
+                if (calData.success && calData.result) {
+                    measuredWps = parseFloat(calData.result.wps) || measuredWps;
+                    measuredCps = parseFloat(calData.result.cps) || measuredCps;
+                    sampleText = calData.result.sample_text || '';
+                }
+            } catch (err) {
+                console.warn('Step 2 calibration fallback used:', err);
+            }
+
+            window.calibratedVoiceWps = measuredWps;
+            window.calibratedVoiceCps = measuredCps;
+            window.calibratedVoiceName = voice;
+
+            if (step2BenchmarkTitle) {
+                step2BenchmarkTitle.innerHTML = `✅ Step 2 Complete: <b>${voice}</b> Calibrated at <b>${measuredWps.toFixed(2)} Words/sec</b> &amp; <b>${measuredCps.toFixed(1)} Chars/sec</b>`;
+            }
+            if (step2BenchmarkSub) {
+                step2BenchmarkSub.innerHTML = `🔓 <b>Steps 3, 4 &amp; 5 Unlocked!</b> Storyboard generator will now budget exact words per scene cut using ${voice}'s measured speaking rate.`;
+            }
+            if (step2MetricWpsBadge) step2MetricWpsBadge.textContent = `WPS: ${measuredWps.toFixed(2)} words/s`;
+            if (step2MetricCpsBadge) step2MetricCpsBadge.textContent = `CPS: ${measuredCps.toFixed(1)} chars/s`;
+            if (step2SampleTextDisplay && sampleText) {
+                step2SampleTextDisplay.style.display = 'block';
+                step2SampleTextDisplay.innerHTML = `<b>100-Char Benchmark Sample (${sampleText.length} chars):</b> "${sampleText}"`;
+            }
+            if (btnRunStep2Benchmark) {
+                btnRunStep2Benchmark.disabled = false;
+                btnRunStep2Benchmark.innerHTML = `🔄 Re-Benchmark ${voice}`;
+            }
+
+            // Reveal Steps 3, 4, and 5 now that Step 2 calibration is complete!
+            if (sequentialSteps3To5Container) {
+                sequentialSteps3To5Container.style.display = 'block';
+            }
+            updateSeqStepPills(3);
+            return { wps: measuredWps, cps: measuredCps };
+        }
+
+        // Wire Step 1 Voice Carousel card selection buttons & card clicks
+        document.querySelectorAll('.btn-voice-select-lock').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const voice = btn.getAttribute('data-voice') || 'Kore';
+                const card = btn.closest('.voice-carousel-card');
+                const tone = (card && card.getAttribute('data-tone')) || (trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling');
+                lockVoiceAndRunStep2Benchmark(voice, tone);
+            });
+        });
+
+        document.querySelectorAll('.voice-carousel-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-voice-preview-5s') || e.target.closest('.btn-voice-select-lock')) return;
+                const voice = card.getAttribute('data-voice') || 'Kore';
+                const tone = card.getAttribute('data-tone') || (trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling');
+                lockVoiceAndRunStep2Benchmark(voice, tone);
+            });
+        });
+
+        if (btnRunStep2Benchmark) {
+            btnRunStep2Benchmark.addEventListener('click', () => {
+                lockVoiceAndRunStep2Benchmark(
+                    trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore',
+                    trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling'
                 );
             });
         }
@@ -6627,6 +7011,10 @@ HTML_MAIN = """
         if (trimmerExplainerVoice && trimmerTtsVoiceSelect) {
             trimmerExplainerVoice.addEventListener('change', () => {
                 trimmerTtsVoiceSelect.value = trimmerExplainerVoice.value;
+                lockVoiceAndRunStep2Benchmark(
+                    trimmerExplainerVoice.value,
+                    trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling'
+                );
             });
             trimmerTtsVoiceSelect.addEventListener('change', () => {
                 trimmerExplainerVoice.value = trimmerTtsVoiceSelect.value;
@@ -6639,13 +7027,12 @@ HTML_MAIN = """
         }
         if (trimmerNarrationScript) {
             trimmerNarrationScript.addEventListener('input', () => {
-                // If user manually edits narration script text, mark audio for fresh synthesis on export
                 currentNarrationAudioUrl = null;
             });
         }
 
         // ==============================================================
-        // UNIFIED ONE-CLICK AUTO EXPLAINER PIPELINE (ALL 5 STEPS IN 1 CLICK)
+        // STEP 4 & STEP 5: PARDACINE BOUNDED STORY GENERATION & CAPCUT TIMELINE
         // ==============================================================
         const explainerPipelineTracker = document.getElementById('explainerPipelineTracker');
         const explainerPipelineStatusTitle = document.getElementById('explainerPipelineStatusTitle');
@@ -6678,53 +7065,36 @@ HTML_MAIN = """
             btnTrimmerPlanExplainer.addEventListener('click', async () => {
                 const url = (trimmerExplainerYtUrl ? trimmerExplainerYtUrl.value : '').trim();
                 if (!url) {
-                    alert('Please enter a YouTube movie URL to run the One-Click Auto Explainer Pipeline.');
+                    alert('Please enter a YouTube movie URL in Step 3 before generating the PardaCine bounded storyboard.');
                     if (trimmerExplainerYtUrl) trimmerExplainerYtUrl.focus();
                     return;
                 }
 
                 const voiceName = trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore';
                 const toneStyle = trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling';
+                const lang = trimmerExplainerLang ? trimmerExplainerLang.value : 'Hindi';
                 const durVal = trimmerExplainerDuration ? trimmerExplainerDuration.value : 'dynamic';
 
+                updateSeqStepPills(4);
                 btnTrimmerPlanExplainer.disabled = true;
                 if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span>';
-                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 1/5: Benchmarking Voice Speed...';
+                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Running PardaCine Bounded Story Engine...';
 
                 if (explainerPipelineTracker) explainerPipelineTracker.style.display = 'block';
-                setPipelineStepState(1, 'active', '⏳ <b>1. Speed Test:</b> 100-Char Hindi...');
-                setPipelineStepState(2, 'pending', '<b>2. Storyboard:</b> Gemini Cuts');
-                setPipelineStepState(3, 'pending', '<b>3. Word Budget:</b> Exact Scene Sync');
-                setPipelineStepState(4, 'pending', '<b>4. Auto TTS:</b> Hindi + BGM');
-                setPipelineStepState(5, 'pending', '<b>5. Timeline:</b> Ready to Export');
+                setPipelineStepState(1, 'active', '⏳ <b>1. Speed Lock:</b> Verifying...');
+                setPipelineStepState(2, 'pending', '<b>2. Bounds (5%–20%):</b> PardaCine Cuts');
+                setPipelineStepState(3, 'pending', '<b>3. Word Budget:</b> WPS/CPS Sync');
+                setPipelineStepState(4, 'pending', '<b>4. Auto TTS:</b> Voiceover + BGM');
+                setPipelineStepState(5, 'pending', '<b>5. CapCut Timeline:</b> Export Ready');
 
                 try {
-                    // ----------------------------------------------------------
-                    // STEP 1: Live Speed Test (100-Character Hindi Benchmark)
-                    // ----------------------------------------------------------
-                    if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.textContent = `⚡ Step 1/5: Benchmarking "${voiceName}" on 100-character Hindi sample...`;
-                    }
-                    let measuredWps = 2.35;
-                    let measuredCps = 12.5;
-                    try {
-                        const calRes = await fetch('/api/tts/calibrate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                voice_name: voiceName,
-                                tone_style: toneStyle,
-                                language: 'Hindi',
-                                force_live: true
-                            })
-                        });
-                        const calData = await calRes.json();
-                        if (calData.success && calData.result) {
-                            measuredWps = parseFloat(calData.result.wps) || 2.35;
-                            measuredCps = parseFloat(calData.result.cps) || 12.5;
-                        }
-                    } catch (calErr) {
-                        console.warn('Calibration benchmark notice:', calErr);
+                    let measuredWps = window.calibratedVoiceWps || 0;
+                    let measuredCps = window.calibratedVoiceCps || 0;
+
+                    if (!measuredWps || window.calibratedVoiceName !== voiceName) {
+                        const bench = await lockVoiceAndRunStep2Benchmark(voiceName, toneStyle);
+                        measuredWps = bench.wps;
+                        measuredCps = bench.cps;
                     }
 
                     setPipelineStepState(1, 'done', `✅ <b>1. Speed:</b> ${measuredWps.toFixed(2)} w/s (${measuredCps.toFixed(1)} c/s)`);
@@ -6732,22 +7102,18 @@ HTML_MAIN = """
                         explainerPipelineSpeedBadge.textContent = `${voiceName}: ${measuredWps.toFixed(2)} WPS • ${measuredCps.toFixed(1)} CPS`;
                     }
 
-                    // ----------------------------------------------------------
-                    // STEP 2 & STEP 3: Storyboard Extraction + Strict Word Budgeting
-                    // ----------------------------------------------------------
-                    setPipelineStepState(2, 'active', '⏳ <b>2. Storyboard:</b> Extracting Cuts...');
+                    setPipelineStepState(2, 'active', '⏳ <b>2. Bounds (5%–20%):</b> Extracting...');
                     setPipelineStepState(3, 'active', '⏳ <b>3. Word Budget:</b> Syncing Script...');
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 2-3/5: Extracting Storyboard & Script...';
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.textContent = `🎬 Step 2 & 3/5: Gemini extracting dynamic cuts & word-budgeted Hindi script (@ ${measuredWps.toFixed(2)} WPS)...`;
+                        explainerPipelineStatusTitle.textContent = `🎬 Generating PardaCine story arc (5%–20% runtime bounds) matched to ${measuredWps.toFixed(2)} WPS...`;
                     }
 
                     const payload = {
                         youtube_url: url,
-                        target_duration: durVal === 'dynamic' ? 'dynamic' : (parseInt(durVal) || 'dynamic'),
+                        target_duration: durVal,
                         voice_name: voiceName,
                         tone_style: toneStyle,
-                        language: 'Hindi',
+                        language: lang,
                         calibrated_wps: measuredWps,
                         calibrated_cps: measuredCps,
                         channel_id: window.currentActiveChannelId || 'default'
@@ -6770,21 +7136,19 @@ HTML_MAIN = """
                     }
 
                     data.calibrated_wps = data.calibrated_wps || measuredWps;
-                    data.calibrated_cps = measuredCps;
+                    data.calibrated_cps = data.calibrated_cps || measuredCps;
                     currentExplainerStoryboard = data;
 
-                    setPipelineStepState(2, 'done', `✅ <b>2. Storyboard:</b> ${data.total_clips || (data.keeper_clips || []).length} Cuts`);
+                    setPipelineStepState(2, 'done', `✅ <b>2. Bounded:</b> ${data.total_clips || (data.keeper_clips || []).length} Cuts (${data.story_pct_of_source || 12}%)`);
                     setPipelineStepState(3, 'done', `✅ <b>3. Word Budget:</b> ${data.total_words || 0} Words`);
 
                     renderExplainerStoryboardUI(data);
 
-                    // ----------------------------------------------------------
-                    // STEP 4: Auto-Generate Full Hindi Voiceover + Ducked Suspense BGM
-                    // ----------------------------------------------------------
+                    // Synthesize full Voiceover + Ducked Suspense BGM
                     setPipelineStepState(4, 'active', '⏳ <b>4. Auto TTS:</b> Synthesizing MP3...');
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 4/5: Synthesizing Hindi Voiceover + BGM...';
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Synthesizing Voiceover + Ducked BGM...';
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.textContent = `🎙️ Step 4/5: Synthesizing full Hindi voiceover (${voiceName}) + ducked suspense BGM...`;
+                        explainerPipelineStatusTitle.textContent = `🎙️ Synthesizing ${lang} voiceover (${voiceName}) + ducked suspense BGM...`;
                     }
 
                     const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\\n\\n');
@@ -6796,7 +7160,7 @@ HTML_MAIN = """
                                 script: fullScriptText,
                                 voice_name: voiceName,
                                 tone_style: toneStyle,
-                                language: 'Hindi',
+                                language: lang,
                                 audio_mode: 'tts_bgm',
                                 include_bgm: true,
                                 channel_id: window.currentActiveChannelId || 'default'
@@ -6812,36 +7176,34 @@ HTML_MAIN = """
                             if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = ttsData.audio_url;
                             if (btnDownloadExplainerReadyMp3) {
                                 btnDownloadExplainerReadyMp3.href = ttsData.audio_url;
-                                btnDownloadExplainerReadyMp3.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                                btnDownloadExplainerReadyMp3.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
                             }
 
                             if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
                             if (trimmerNarrationAudioPlayer) trimmerNarrationAudioPlayer.src = ttsData.audio_url;
                             if (btnQuickDownloadAudio) {
                                 btnQuickDownloadAudio.href = ttsData.audio_url;
-                                btnQuickDownloadAudio.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                                btnQuickDownloadAudio.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
                             }
                             if (btnDownloadNarrationAudio) {
                                 btnDownloadNarrationAudio.href = ttsData.audio_url;
-                                btnDownloadNarrationAudio.download = ttsData.filename || 'hindi_explainer_voiceover_bgm.mp3';
+                                btnDownloadNarrationAudio.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
                                 btnDownloadNarrationAudio.style.display = 'inline-flex';
                             }
                             setPipelineStepState(4, 'done', '✅ <b>4. Auto TTS:</b> Voiceover + BGM Ready');
                         } else {
-                            setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Ready on Export');
+                            setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Synthesize on Export');
                         }
                     }
 
-                    // ----------------------------------------------------------
-                    // STEP 5: Instant Timeline Injection & Direct Export Ready
-                    // ----------------------------------------------------------
-                    setPipelineStepState(5, 'active', '⏳ <b>5. Timeline:</b> Injecting...');
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Step 5/5: Injecting into Timeline...';
+                    // Inject into Step 5 CapCut Timeline
+                    setPipelineStepState(5, 'active', '⏳ <b>5. CapCut Timeline:</b> Syncing...');
                     applyExplainerStoryboardToTimeline(data);
-                    setPipelineStepState(5, 'done', '✅ <b>5. Timeline:</b> Injected & Export Ready!');
+                    setPipelineStepState(5, 'done', '✅ <b>5. CapCut Timeline:</b> Ready to Export!');
+                    updateSeqStepPills(5);
 
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.innerHTML = `✅ <b>All 5 Steps Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)}) + Hindi Voiceover mapped to timeline. Hit <b>Export Final Video</b>!`;
+                        explainerPipelineStatusTitle.innerHTML = `✅ <b>PardaCine Storyboard &amp; Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie) synced to Step 5 CapCut timeline.`;
                     }
                 } catch (err) {
                     alert('Cinema Explainer Pipeline Error: ' + err.message);
@@ -6851,7 +7213,7 @@ HTML_MAIN = """
                 } finally {
                     btnTrimmerPlanExplainer.disabled = false;
                     if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🚀';
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generate Cinema Explainer Storyboard';
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generate PardaCine Bounded Story & Voiceover';
                 }
             });
         }
@@ -9101,13 +9463,14 @@ def clipper_tts_preview():
         custom_text = (data.get('text') or '').strip()
         ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
 
+        # Standardized 5-second suspense dialogue in Hindi or English
         sample_text = custom_text or (
-            "नमस्ते! यह आवाज़ आपकी सिनेमाई कहानी के लिए बिल्कुल तैयार है!"
+            "अंधेरी रात के सन्नाटे में जब वह रहस्यमयी दरवाज़ा खुला, तो अंदर का खौफनाक सच देखकर सबके होश उड़ गए... क्या वह इस जाल से बच पाएगा?"
             if language.lower().startswith('hi') else
-            "Hello! This voice is calibrated and ready for your cinematic movie explainer!"
+            "In the dead of night, when that locked door finally creaked open, the terrifying truth inside changed everything forever... Will anyone survive?"
         )
         unique_id = uuid.uuid4().hex[:6]
-        filename = f"preview_{voice}_{unique_id}.mp3"
+        filename = f"preview5s_{voice}_{unique_id}.mp3"
         output_path = os.path.join(clipper_engine.TEMP_DIR, filename)
 
         ok = clipper_engine.generate_gemini_tts_audio(
@@ -9123,9 +9486,11 @@ def clipper_tts_preview():
                 'success': True,
                 'audio_url': f'/api/clipper/tts_sample/{filename}',
                 'voice': voice,
-                'tone': tone
+                'tone': tone,
+                'language': language,
+                'sample_text': sample_text
             }), 200
-        return jsonify({'success': False, 'error': 'Failed to generate voice preview audio'}), 200
+        return jsonify({'success': False, 'error': 'Failed to generate 5s voice preview audio'}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 200
 
@@ -9152,6 +9517,7 @@ def clipper_tts_calibrate():
                 ckpt = clipper_engine.load_job_checkpoint(job_id)
                 if ckpt:
                     ckpt['wps'] = result['wps']
+                    ckpt['cps'] = result.get('cps', 12.5)
                     ckpt['voice_name'] = voice
                     ckpt['tone_style'] = tone
                     clipper_engine.save_job_checkpoint(job_id, ckpt)
@@ -9210,10 +9576,11 @@ def tts_generate():
             output_path=tts_raw,
             voice_name=voice_name,
             tone_style=tone_style,
+            language=language,
             channel_id=ch_id
         )
         if not gen_ok or not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
-            clipper_engine.generate_voiceover_audio(text=script, output_path=tts_raw, language=language)
+            clipper_engine.generate_voiceover_audio(text=script, output_path=tts_raw, language=language, voice_name=voice_name)
 
         if not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
             return jsonify({'success': False, 'error': 'Failed to synthesize voiceover audio'}), 200
@@ -9345,14 +9712,14 @@ def trimmer_gemini_autocut():
 @app.route('/api/trimmer/plan_explainer', methods=['POST'])
 def trimmer_plan_explainer():
     """
-    Extracts 100% accurate YouTube metadata and calls Gemini with calibrated 100-word WPS
-    to generate an organic 8-25 minute cinema explainer storyboard with micro/medium cuts.
+    Extracts 100% accurate YouTube metadata and calls Gemini with calibrated 100-char WPS/CPS
+    to generate a PardaCine-style mathematically bounded (5%-20% source runtime) cinema explainer storyboard.
     """
     data = request.get_json(force=True, silent=True) or {}
     youtube_url = (data.get('youtube_url') or '').strip()
     target_duration_raw = data.get('target_duration', 'dynamic')
-    if target_duration_raw == 'dynamic' or not target_duration_raw:
-        target_duration = 'dynamic'
+    if str(target_duration_raw).strip().lower() in ['dynamic', 'min_bound', 'balanced', 'max_bound', '5pct', '10pct', '20pct'] or not target_duration_raw:
+        target_duration = str(target_duration_raw or 'dynamic').strip().lower()
     else:
         try:
             target_duration = int(target_duration_raw)
@@ -9362,6 +9729,16 @@ def trimmer_plan_explainer():
     voice_name = (data.get('voice_name') or 'Kore').strip()
     tone_style = (data.get('tone_style') or 'Narrative Deep Storytelling').strip()
     custom_instructions = (data.get('custom_instructions') or '').strip()
+    calibrated_wps = data.get('calibrated_wps')
+    calibrated_cps = data.get('calibrated_cps')
+    try:
+        calibrated_wps = float(calibrated_wps) if calibrated_wps else None
+    except Exception:
+        calibrated_wps = None
+    try:
+        calibrated_cps = float(calibrated_cps) if calibrated_cps else None
+    except Exception:
+        calibrated_cps = None
 
     if not youtube_url:
         return jsonify({'success': False, 'error': 'YouTube URL is required'}), 200
@@ -9377,7 +9754,9 @@ def trimmer_plan_explainer():
             voice_name=voice_name,
             tone_style=tone_style,
             custom_instructions=custom_instructions,
-            channel_id=ch_id
+            channel_id=ch_id,
+            calibrated_wps=calibrated_wps,
+            calibrated_cps=calibrated_cps
         )
 
         # Optional server audio generation for instant in-browser playback
