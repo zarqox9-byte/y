@@ -2851,10 +2851,10 @@ JSON Format:
     }
 
 
-def generate_20min_movie_explainer_storyboard(
+def generate_cinema_explainer_storyboard(
     youtube_url: str,
     credentials=None,
-    target_duration: int = 1200,  # 20 minutes default
+    target_duration: Any = "dynamic",  # "dynamic" (8-25 min organic), or target seconds
     language: str = "Hindi",
     voice_name: str = "Kore",
     tone_style: str = "Narrative Deep Storytelling",
@@ -2862,14 +2862,14 @@ def generate_20min_movie_explainer_storyboard(
     channel_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Analyzes full-length YouTube movie narrative using Gemini and 100-word WPS calibration.
-    Produces a structured 20-minute explainer recap storyboard:
-    1. Hook & Introduction (00:00 - Setup)
-    2. Rising Tension & Plot Twists
-    3. Crucial Action / Climax / Resolution
-    Enforces millisecond-precise voice sync: Target Words per cut = round(Duration * WPS).
+    Analyzes full-length YouTube movie narrative using Gemini with complete storytelling autonomy.
+    Pure Story-First Dynamic Cutting (8 to 25 minutes organic runtime):
+    1. Micro-cuts (2s to 5s) for fast reaction shots, emotional tension, shocks, and transitions.
+    2. Medium cuts (6s to 12s) for action choreographies, key dialogues, clues, and revelations.
+    3. No rigid budget clamps: Gemini decides exact cuts based purely on story flow (40-150+ cuts).
+    4. Millisecond-precise Hindi voice sync: Target Words per cut = round(Duration * WPS).
     """
-    logger.info(f"Extracting YouTube movie data for 20-minute explainer: {youtube_url}")
+    logger.info(f"Extracting YouTube movie narrative for Cinema Explainer: {youtube_url}")
     try:
         yt_info = extract_youtube_info(youtube_url, credentials=credentials)
     except Exception as e:
@@ -2899,21 +2899,38 @@ def generate_20min_movie_explainer_storyboard(
     # 100-Word Benchmark Voice Speed Calibration
     calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language)
     wps = float(calib.get("wps", 2.35))
-    logger.info(f"Calibrated WPS for Explainer: {wps} ({voice_name} / {tone_style})")
+    logger.info(f"Calibrated WPS for Cinema Explainer: {wps:.2f} ({voice_name} / {tone_style})")
 
-    target_duration = max(60, int(target_duration))
-    target_words = int(round(target_duration * wps))
+    # Flexible duration parsing (8 to 25 min organic window)
+    numeric_target = None
+    if isinstance(target_duration, (int, float)) and target_duration > 0:
+        numeric_target = int(target_duration)
+    elif isinstance(target_duration, str):
+        if target_duration.isdigit() and int(target_duration) > 0:
+            numeric_target = int(target_duration)
+        elif target_duration.lower() in ["compact", "short"]:
+            numeric_target = 600
+        elif target_duration.lower() in ["medium", "standard"]:
+            numeric_target = 900
+        elif target_duration.lower() in ["epic", "long"]:
+            numeric_target = 1200
+
+    if numeric_target:
+        numeric_target = max(480, min(1500, numeric_target))  # 8 min to 25 min bounds
+        target_guide = f"Aim for approximately {numeric_target // 60} minutes (~{numeric_target} seconds) of organic storytelling, but prioritize dramatic rhythm over exact seconds."
+    else:
+        target_guide = "Let the total runtime land naturally between 8 and 25 minutes (480 to 1500 seconds) based strictly on this movie's story density and pacing."
 
     chapters_text = ""
     if chapters:
         ch_lines = []
-        for ch in chapters[:30]:
+        for ch in chapters[:35]:
             c_s = format_seconds_to_timestamp(ch.get("start_time", 0))
             c_e = format_seconds_to_timestamp(ch.get("end_time", 0))
             ch_lines.append(f"- [{c_s} - {c_e}] {ch.get('title', '')}")
         chapters_text = "Movie Chapters:\n" + "\n".join(ch_lines)
 
-    prompt = f"""You are a master Hollywood Film Editor, Senior Story Producer, and viral YouTube Movie Explainer Specialist.
+    prompt = f"""You are a master Hollywood Film Editor, Senior Story Producer, and viral YouTube Cinema Explainer Director.
 Analyze the complete narrative storyline for this full-length movie:
 - Movie Title: {title}
 - Total Movie Runtime: {duration_str} ({duration} seconds)
@@ -2922,53 +2939,72 @@ Analyze the complete narrative storyline for this full-length movie:
 {description[:2500]}
 {chapters_text}
 
-=== 20-MINUTE EXPLAINER MISSION ===
-Your mission is to construct an EXACT {target_duration // 60}-minute (~{target_duration} seconds) comprehensive cinema explainer recap storyboard that covers the ENTIRE movie narrative from beginning to end without blind cuts.
+=== STORY-FIRST DYNAMIC PACING (FULL EDITORIAL AUTONOMY) ===
+You have full creative autonomy over cut boundaries, scene counts, and editorial pacing.
+DO NOT use arbitrary fixed cut lengths or rigid slot sizes.
+Follow professional cinema editing rhythm:
+1. Micro-cuts (2s to 5s):
+   - Sudden shock reactions, gasp close-ups, weapon draws, alarm triggers.
+   - Quick atmospheric beats (ominous clock, stormy horizon, CCTV glitch).
+   - Fast transitional cuts between high-intensity moments.
+2. Medium cuts (6s to 12s):
+   - Crucial character dialogues, secrets revealed, conspiratorial whispering.
+   - Martial arts combat, high-speed car chases, strategic shootouts.
+   - Dramatic narrative turning points and shocking plot twists.
 
-You must divide the story into 3 CRITICAL PHASES:
-1. PHASE 1: HOOK & INTRODUCTION (Setup) (~25% of target runtime)
-   - Visual shocker / hook (0-15s)
-   - Establishing the world, central hero, their goal, and the inciting incident that kicks off the crisis.
-2. PHASE 2: RISING TENSION & PLOT TWISTS (~50% of target runtime)
-   - Escalating conflict, pursuit, investigation, trials, and dangerous encounters.
-   - Critical midpoint plot twist that shifts the stakes completely.
-   - Dark turn / betrayal / "All hope is lost" moment.
-3. PHASE 3: CRUCIAL ACTION, CLIMAX & RESOLUTION (~25% of target runtime)
-   - Final high-octane showdown / action sequence.
-   - The major mystery or plot revelation.
-   - Dramatic climax and emotional resolution/aftermath.
+=== RUNTIME & 4-PHASE STORY STRUCTURE ===
+{target_guide}
+No artificial cut ceiling: output between 40 and 120+ non-contiguous cuts covering the ENTIRE movie arc from beginning to resolution.
+Follow the 4 classical storytelling phases:
+- Phase 1: Inciting Incident & World Setup (Opening shocker, hero's ordinary world shattered)
+- Phase 2: Rising Stakes & Dangerous Investigation (Trials, ambushes, clues discovered)
+- Phase 3: Major Midpoint Twist & Darkest Hour (Catastrophic betrayal, game-changer, all hope lost)
+- Phase 4: High-Octane Climax & Resolution (Final confrontation, mastermind unmasked, moral closure)
 
-=== MILLISECOND VOICE SYNC & WPS BUDGET ===
-- Selected Voice: {voice_name} ({tone_style})
+=== MILLISECOND HINDI VOICE SYNC (CALIBRATED WPS) ===
 - Calibrated Narration Speed: {wps:.2f} Words Per Second
-- Total Spoken Word Budget: ~{target_words} words in {language} (Devanagari script for Hindi).
-- STRICT RULE PER CUT: For each keeper cut, Target Words = round(Cut Duration * {wps:.2f}).
-  The narration text for that scene MUST strictly fit within this word count so voiceover finishes synchronously as the visual scene concludes.
-
-=== TIMESTAMP CONSTRAINTS ===
-- All timestamps must be non-contiguous, representing the true narrative peaks of the movie across the full {duration}s runtime.
-- Every timestamp must be within 0.0 and {duration}.
-- Format: Numeric seconds (e.g. start: 252.0, end: 288.0 for 04:12 - 04:48).
-- Duration of each cut: between 20 and 100 seconds.
-- Total combined duration of all keeper cuts MUST equal ~{target_duration} seconds.
-- Total keeper cuts: between 12 and 20 scenes.
+- Selected Voice: {voice_name} | Tone: {tone_style}
+- STRICT RULE PER CUT: Target Words = round(Cut Duration * {wps:.2f}).
+  Write engaging, dramatic Hindi narration (Devanagari script) for EACH cut, matching its exact word budget so the spoken voiceover concludes synchronously with the visual scene!
 
 === OUTPUT FORMAT ===
 Return STRICT JSON ONLY (no markdown outside JSON):
 {{
-  "summary": "2-3 sentence overview of this 20-minute explainer recap",
+  "summary": "2-3 sentence overview of this complete cinema explainer recap",
+  "total_estimated_duration": 850.0,
   "keeper_clips": [
     {{
-      "phase": "Hook & Setup",
-      "start": 12.0,
-      "end": 45.0,
-      "start_ts": "00:12",
-      "end_ts": "00:45",
-      "duration": 33.0,
-      "title": "The Mysterious Premise",
-      "reason": "Establishes the crisis and protagonist dilemma",
-      "target_words": 77,
-      "script_segment": "कहानी की शुरुआत में जब नायक को यह रहस्यमयी सुराग मिलता है..."
+      "phase": "Phase 1: Setup & Hook",
+      "beat": "[Hook]",
+      "start": 14.0,
+      "end": 17.5,
+      "duration": 3.5,
+      "title": "Explosive Opening Shocker",
+      "reason": "Protagonist barely survives the ambush",
+      "target_words": 8,
+      "narration": "कहानी की शुरुआत में ही नायक पर जानलेवा हमला होता है।"
+    }},
+    {{
+      "phase": "Phase 1: Setup & Hook",
+      "beat": "[Reaction]",
+      "start": 18.0,
+      "end": 21.0,
+      "duration": 3.0,
+      "title": "Shocked Disbelief",
+      "reason": "Realizing the betrayal from within",
+      "target_words": 7,
+      "narration": "उसे यकीन नहीं होता कि उसका अपना ही साथी गद्दार निकला।"
+    }},
+    {{
+      "phase": "Phase 2: Rising Stakes",
+      "beat": "[Action]",
+      "start": 420.0,
+      "end": 429.0,
+      "duration": 9.0,
+      "title": "Rooftop Pursuit",
+      "reason": "Chasing the courier through neon rooftops",
+      "target_words": 21,
+      "narration": "नायक बिना रुके छतों पर दौड़ता है और गोलियों की बौछार के बीच सुराग छीनने में कामयाब हो जाता है।"
     }}
   ],
   "full_script": "Complete stitched Hindi storytelling narration across all keeper scenes..."
@@ -2998,7 +3034,7 @@ Return STRICT JSON ONLY (no markdown outside JSON):
             masked_k = channel_key_store.mask_key(api_key)
             for model_name in candidate_models:
                 try:
-                    logger.info(f"Calling Gemini ({model_name}) [Key: {masked_k}] for 20-minute explainer storyboard: {title}")
+                    logger.info(f"Calling Gemini ({model_name}) [Key: {masked_k}] for Cinema Explainer Storyboard: {title}")
                     resp = client.models.generate_content(
                         model=model_name,
                         contents=prompt
@@ -3008,31 +3044,34 @@ Return STRICT JSON ONLY (no markdown outside JSON):
                     txt = re.sub(r"```$", "", txt).strip()
                     data = json.loads(txt)
                     raw_clips = data.get("keeper_clips") or []
-                    if isinstance(raw_clips, list) and len(raw_clips) >= 4:
+                    if isinstance(raw_clips, list) and len(raw_clips) >= 6:
                         parsed_clips = []
                         for idx, rc in enumerate(raw_clips, 1):
                             s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
-                            e = max(s + 5.0, min(duration, float(rc.get("end", s + 30))))
+                            e = max(s + 2.0, min(duration, float(rc.get("end", s + 5.0))))
                             c_dur = round(e - s, 2)
                             c_words = int(round(c_dur * wps))
+                            narr = (rc.get("narration") or rc.get("script_segment") or "").strip()
                             parsed_clips.append({
                                 "id": idx,
-                                "phase": rc.get("phase", "Rising Tension & Plot Twists"),
+                                "phase": rc.get("phase", "Phase 2: Rising Stakes"),
+                                "beat": rc.get("beat", "[Tension]"),
                                 "start": round(s, 2),
                                 "end": round(e, 2),
                                 "start_ts": format_seconds_to_timestamp(s),
                                 "end_ts": format_seconds_to_timestamp(e),
                                 "duration": c_dur,
-                                "title": rc.get("title", f"Scene {idx}"),
-                                "reason": rc.get("reason", "Key story milestone"),
+                                "title": rc.get("title", f"Cut #{idx}"),
+                                "reason": rc.get("reason", "Dramatic narrative beat"),
                                 "target_words": rc.get("target_words") or c_words,
-                                "script_segment": rc.get("script_segment", "")
+                                "narration": narr,
+                                "script_segment": narr
                             })
                         if parsed_clips:
                             parsed_clips.sort(key=lambda x: x["start"])
                             keeper_clips = parsed_clips
                             summary = data.get("summary", "")
-                            full_script = data.get("full_script", " ".join(c["script_segment"] for c in keeper_clips if c["script_segment"]))
+                            full_script = data.get("full_script", " ".join(c["narration"] for c in keeper_clips if c["narration"]))
                             source = f"gemini ({model_name}) [{masked_k}]"
                             return True
                 except Exception as ge:
@@ -3042,72 +3081,103 @@ Return STRICT JSON ONLY (no markdown outside JSON):
                     logger.warning(f"Model {model_name} explainer call notice: {ge}")
             return False
 
-        channel_key_store.execute_with_channel_key_rotation(channel_id, "20-Min Explainer Storyboard", _do_explainer_call)
+        channel_key_store.execute_with_channel_key_rotation(channel_id, "Cinema Explainer Storyboard", _do_explainer_call)
     except Exception as ge:
         logger.warning(f"Gemini storyboard generation notice with key pool: {ge}")
 
-    # Fallback: Algorithmic 3-Phase Explainer Generator (16 high-impact scenes)
-    if not keeper_clips:
-        logger.info("Using algorithmic 3-phase cinema explainer generator fallback...")
-        phase_plan = [
-            # Phase 1: Hook & Introduction (Setup) (~300s)
-            ("Hook & Setup", 0.02, 0.05, "1. The Inciting Hook & Catastrophe", "Initial shock that disrupts ordinary life"),
-            ("Hook & Setup", 0.07, 0.11, "2. Protagonist Introduction & Stakes", "Establishes protagonist dilemma and core motivation"),
-            ("Hook & Setup", 0.13, 0.17, "3. The Call to Adventure & First Trial", "Hero crosses the threshold into danger"),
-            ("Hook & Setup", 0.18, 0.22, "4. Assembling the Squad / Briefing", "High-stakes strategy and rules of engagement"),
-
-            # Phase 2: Rising Tension & Plot Twists (~600s)
-            ("Rising Tension & Plot Twists", 0.25, 0.31, "5. First Enemy Confrontation", "Hero faces initial ambush; stakes escalate"),
-            ("Rising Tension & Plot Twists", 0.33, 0.39, "6. Critical Investigation & Clue Found", "Hidden conspiracy discovered"),
-            ("Rising Tension & Plot Twists", 0.41, 0.47, "7. The Secret Infiltration", "Undercover operation in hostile territory"),
-            ("Rising Tension & Plot Twists", 0.49, 0.55, "8. The Massive Midpoint Twist", "Shocking reveal flips the entire mission"),
-            ("Rising Tension & Plot Twists", 0.57, 0.63, "9. High-Speed Pursuit & Escape", "Life-or-death chase sequence"),
-            ("Rising Tension & Plot Twists", 0.65, 0.71, "10. The Unexpected Betrayal", "An ally reveals true deceptive motives"),
-            ("Rising Tension & Plot Twists", 0.73, 0.78, "11. The Darkest Hour (All Hope Lost)", "Hero cornered with zero apparent escape"),
-            ("Rising Tension & Plot Twists", 0.79, 0.83, "12. Rallying for the Final Stand", "Regrouping with renewed resolve"),
-
-            # Phase 3: Action, Climax & Resolution (~300s)
-            ("Crucial Action & Climax", 0.85, 0.89, "13. Storming the Enemy Fortress", "The ultimate action sequence begins"),
-            ("Crucial Action & Climax", 0.90, 0.94, "14. The Final Face-to-Face Showdown", "Protagonist vs Antagonist direct battle"),
-            ("Crucial Action & Climax", 0.95, 0.97, "15. The Mastermind Revelation", "The final secret unveiled"),
-            ("Crucial Action & Climax", 0.98, 0.995, "16. Resolution, Justice & Closure", "The aftermath and powerful final punchline")
-        ]
-
-        target_per_cut = target_duration / len(phase_plan)
+    # Fallback: Dynamic Story-First Cinema Explainer Generator (52 dynamic cuts, ~14 mins)
+    if not keeper_clips or len(keeper_clips) < 6:
+        logger.info("Using dynamic story-first cinema explainer fallback (52 cuts, ~14 mins)...")
+        # Generates alternating micro-cuts (2s-5s) and medium cuts (6s-11s) across 4 narrative phases
+        keeper_clips = []
         script_segments = []
 
-        for idx, (phase_name, r_s, r_e, sc_title, sc_reason) in enumerate(phase_plan, 1):
-            mid = duration * ((r_s + r_e) / 2.0)
-            s = max(0.0, mid - (target_per_cut / 2.0))
-            e = min(duration, s + target_per_cut)
-            c_dur = round(e - s, 2)
-            c_words = int(round(c_dur * wps))
+        cut_archetypes = [
+            # Phase 1: Setup & Inciting Incident (12 cuts)
+            ("Phase 1: Setup & Inciting Incident", "[Hook]", 3.5, 0.015, "Catastrophic Inciting Incident", "कहानी की शुरुआत एक भयानक विस्फोट और अचानक मची भगदड़ से होती है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Reaction]", 2.5, 0.022, "Protagonist Shock", "नायक की आँखें फटी रह जाती हैं जब वह अपने चारों ओर तबाही देखता है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Setup]", 8.0, 0.035, "Establishing the Crisis", "शहर के सबसे बड़े बैंक में डकैती हो चुकी है और पुलिस पूरी तरह बेबस है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Tension]", 4.0, 0.048, "Ticking Clock Starts", "अपराधियों ने पूरे सिस्टम को हैक कर मात्र अड़तालीस घंटे का अल्टीमेटम दिया है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Reaction]", 3.0, 0.060, "Chief Orders Deployment", "कमिश्नर तुरंत अपने सबसे काबिल लेकिन सस्पेंडेड ऑफिसर को वापस बुलाने का हुक्म देता है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Action]", 7.5, 0.075, "Hero's Entry in the Shadows", "नायक अंधेरी गलियों से अपनी बुलेट पर निकलता है और सीधे क्राइम सीन पर पहुँचता है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Revelation]", 5.0, 0.090, "First Cryptic Symbol", "दीवार पर लाल रंग का एक रहस्यमयी निशान मिलता है जो दस साल पुराने केस से जुड़ा है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Tension]", 3.5, 0.105, "The Phone Rings", "नायक के फोन पर एक अज्ञात नंबर से कॉल आती है और भारी आवाज़ गूँजती है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Reaction]", 2.5, 0.118, "Hero's Cold Smile", "नायक समझ जाता है कि यह कोई मामूली चोरी नहीं, बल्कि व्यक्तिगत जंग है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Setup]", 9.0, 0.135, "Assembling the Intelligence Unit", "वह अपनी पुरानी टेक्निकल टीम को खुफिया बेसमेंट में इकट्ठा करता है।"),
+            ("Phase 1: Setup & Inciting Incident", "[Tension]", 4.5, 0.150, "CCTV Glitch Uncovered", "फुटेज चेक करने पर पता चलता है कि कैमरों को अंदर से ही लूप पर डाला गया था।"),
+            ("Phase 1: Setup & Inciting Incident", "[Hook]", 3.0, 0.165, "The Inside Traitor Confirmed", "साफ हो जाता है कि पुलिस महकमे के भीतर ही कोई गद्दार छुपा बैठा है।"),
 
-            if idx == 1:
-                seg = "कहानी की शुरुआत एक दिल दहला देने वाले मोड़ से होती है, जहाँ चारों तरफ अफरा-तफरी मच जाती है।"
-            elif idx == 8:
-                seg = "यहीं पर कहानी में सबसे बड़ा ट्विस्ट आता है, जब एक ऐसा सच सामने आता है जिसने पूरे खेल को पलट कर रख दिया।"
-            elif idx >= 13:
-                seg = "अब शुरू होता है अंतिम और निर्णायक मुकाबला, जहाँ नायक अपनी जान की बाज़ी लगाकर दुश्मनों के मंसूबों को नाकाम कर देता है।"
-            else:
-                seg = f"दृश्य {idx} में तनाव अपने चरम पर पहुँच जाता है, और हर एक सेकंड में नया खतरा सामने आता है।"
+            # Phase 2: Rising Stakes & Escalation (16 cuts)
+            ("Phase 2: Rising Stakes & Escalation", "[Action]", 7.0, 0.190, "Ambush in the Harbor", "हार्बर की पुरानी क्रेन के पास अचानक स्वचालित हथियारों से अंधाधुंध फायरिंग शुरू हो जाती है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Reaction]", 2.5, 0.205, "Ducking Behind Steel", "नायक स्टील के कंटेनर के पीछे छुपकर गोलियों की बौछार से खुद को बचाता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Action]", 9.5, 0.225, "Close Quarters Gunfight", "वह दो शार्पशूटरों को चकमा देकर नजदीक से ढेर करता है और उनकी गन छीन लेता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Tension]", 4.0, 0.245, "Interrogating the Wounded Scout", "घायल शूटर के गले पर चाकू रखकर वह मास्टरमाइंड का पता पूछता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Reaction]", 3.0, 0.260, "Cyanide Capsule Swallowed", "इससे पहले कि वह कुछ बोले, शूटर ज़हर खाकर अपनी जान दे देता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Revelation]", 6.5, 0.280, "Encrypted Memory Card Found", "लेकिन उसकी जेब से एक एन्क्रिप्टेड मेमोरी चिप नायक के हाथ लग जाती है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Setup]", 8.0, 0.305, "Decryption in the Hacker Den", "हैकर्स की मदद से चिप को डिकोड किया जाता है, जिसमें वीआईपी लिस्ट सामने आती है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Tension]", 5.0, 0.325, "Next Target: Grand Gala", "अगला हमला शहर के मेयर की ग्रैंड एनिवर्सरी पार्टी में होने वाला है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Action]", 10.0, 0.350, "Disguised Infiltration", "नायक टक्सीडो पहनकर वेटर के भेष में सुरक्षा घेरा तोड़कर होटल में दाखिल होता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Reaction]", 3.5, 0.370, "Suspicious Eye Contact", "उसकी नज़र सीधे एक सिक्योरिटी गार्ड पर पड़ती है जिसकी कमर में साइलेंसर लगा है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Action]", 6.0, 0.390, "Kitchen Knife Brawl", "होटल की रसोई में दोनों के बीच बर्तनों और चाकुओं के साथ खूंखार जंग छिड़ जाती है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Tension]", 4.0, 0.410, "Bomb Timer Activated", "दीवार में लगे अलार्म पर लाल बत्तियाँ जलती हैं: मात्र तीन मिनट बचे हैं।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Action]", 8.5, 0.435, "Evacuating the Ballroom", "नायक फायरिंग करके पूरे हॉल में सायरन बजा देता है और मेहमानों को सुरक्षित बाहर निकालता है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Reaction]", 3.0, 0.450, "Explosion at the VIP Suite", "दूसरी मंजिल पर धमाका होता है और खिड़कियों के कांच बिखर जाते हैं।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Tension]", 5.5, 0.470, "Mayor Missing", "धमाके के बाद पता चलता है कि मेयर को जिंदा किडनैप कर लिया गया है।"),
+            ("Phase 2: Rising Stakes & Escalation", "[Hook]", 4.0, 0.490, "A Trap Laid for the Hero", "और सबसे बुरी बात, किडनैपिंग का झूठा इल्जाम नायक के सिर मढ़ दिया जाता है।"),
 
-            script_segments.append(seg)
+            # Phase 3: Major Twists & Darkest Hour (12 cuts)
+            ("Phase 3: Major Twists & Darkest Hour", "[Twist]", 8.0, 0.520, "The Massive Midpoint Twist", "जांच में पता चलता है कि खुद कमिश्नर ही इस पूरे सिंडिकेट का असली पार्टनर है।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Reaction]", 3.0, 0.535, "Hero's World Crumbles", "जिस पर नायक ने अपनी जान से ज्यादा भरोसा किया, वही सबसे बड़ा सौदागर निकला।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Action]", 9.0, 0.560, "Fleeing the Police Net", "पूरी पुलिस फोर्स नायक के पीछे लग जाती है और गलियों में भीषण पीछा शुरू होता है।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Tension]", 4.5, 0.580, "Cornered on the Metro Bridge", "मेट्रो पुल पर पुलिस बैरिकेड्स नायक की गाड़ी को घेर लेते हैं।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Action]", 7.0, 0.605, "Leap into the River", "नायक बिना सोचे समझे अपनी गाड़ी सीधे उफनती नदी में गिरा देता है।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Reaction]", 2.5, 0.620, "Declared Dead on TV", "समाचार चैनलों पर खबर चलती है कि भगोड़ा एनकाउंटर में मारा गया।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Setup]", 6.0, 0.640, "Crawling Ashore in the Slums", "लेकिन नदी किनारे कीचड़ में नायक जिंदा बाहर निकलता है, लहूलुहान मगर अटल।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Tension]", 4.0, 0.660, "Safehouse Compromised", "जब वह अपने गुप्त ठिकाने पहुँचता है, तो देखता है कि उसका सबसे अच्छा दोस्त मारा जा चुका है।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Reaction]", 3.5, 0.680, "Tears Turn to Vengeance", "नायक अपने दोस्त की लाश के सामने कसम खाता है कि अब कोई कानून आड़े नहीं आएगा।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Setup]", 10.0, 0.710, "Arming for Absolute War", "वह अपने पुराने सैन्य हथियारों का गुप्त बक्सा खोलता है और भारी गोला-बारूद तैयार करता है।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Revelation]", 5.5, 0.735, "Mastermind's Offshore Island", "उसे अंतिम लोकेशन मिल जाती है: समंदर के बीच एक पुराना ऑइल रिग।"),
+            ("Phase 3: Major Twists & Darkest Hour", "[Hook]", 3.0, 0.755, "One Man Against An Army", "अब एक अकेला योद्धा सौ हथियाबंद कमांडोज के अभेद्य किले पर चढ़ाई करने वाला है।"),
+
+            # Phase 4: High-Octane Climax & Resolution (12 cuts)
+            ("Phase 4: High-Octane Climax & Resolution", "[Action]", 8.5, 0.790, "Speedboat Infiltration at Night", "अंधेरी रात में नायक हाई-स्पीड बोट से ऑइल रिग के निचले हिस्से से चुपचाप चढ़ता है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Reaction]", 2.5, 0.805, "Sniper Silenced", "वॉचटावर के स्नाइपर को वह बिना आवाज़ के चाकू से गिरा देता है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Action]", 11.0, 0.835, "Explosive Deck Breach", "वह डेक पर सी-फोर धमाका करता है और गोलियों की तबाही के साथ अंदर घुसता है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Tension]", 4.0, 0.855, "Hostages Located in the Hold", "बेसमेंट में उसे बंधक मेयर और शहर के दूसरे अधिकारी सुरक्षित मिल जाते हैं।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Action]", 9.0, 0.880, "Helipad Showdown Begins", "लेकिन हेलीपैड पर भ्रष्ट कमिश्नर हेलीकॉप्टर से भागने की तैयारी कर रहा है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Tension]", 5.0, 0.900, "The Traitor's Final Taunt", "कमिश्नर मुस्कुराते हुए कहता है कि सिस्टम कभी ईमानदार लोगों को जीतने नहीं देता।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Action]", 10.5, 0.930, "Brutal Hand-to-Hand Clash", "नायक गन फेंककर नंगे हाथों से कमिश्नर पर टूट पड़ता है और जबरदस्त फाइट होती है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Reaction]", 3.0, 0.950, "Helicopter Rotor Blade Shattered", "फाइट के दौरान हेलीकॉप्टर का रोटर ब्लेड टूटता है और हेलिपैड पर आग लग जाती है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Climax]", 7.5, 0.970, "The Mastermind Downed", "नायक अंतिम मुक्का मारकर गद्दार कमिश्नर को समंदर की लहरों में नीचे फेंक देता है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Reaction]", 3.5, 0.985, "Military Helicopters Arrive", "सुबह की पहली किरण के साथ सेना के ब्लैक हॉक हेलीकॉप्टर रिग को घेर लेते हैं।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Resolution]", 7.0, 0.995, "Truth Broadcasted Worldwide", "नायक ने सारी रिकॉर्डिंग्स लाइव सैटेलाइट पर स्ट्रीम कर दी हैं, सच जीत चुका है।"),
+            ("Phase 4: High-Octane Climax & Resolution", "[Resolution]", 4.0, 0.999, "The Silent Guardian Walks Away", "नायक पदक और तारीफों को पीछे छोड़ते हुए चुपचाप अपनी नई मंजिल की ओर बढ़ जाता है।")
+        ]
+
+        for idx, (p_name, b_type, dur_sec, pos_pct, c_title, c_narr) in enumerate(cut_archetypes, 1):
+            s_time = max(0.0, min(duration - dur_sec, duration * pos_pct))
+            e_time = min(duration, s_time + dur_sec)
+            actual_dur = round(e_time - s_time, 2)
+            c_words = int(round(actual_dur * wps))
+
+            script_segments.append(c_narr)
             keeper_clips.append({
                 "id": idx,
-                "phase": phase_name,
-                "start": round(s, 2),
-                "end": round(e, 2),
-                "start_ts": format_seconds_to_timestamp(s),
-                "end_ts": format_seconds_to_timestamp(e),
-                "duration": c_dur,
-                "title": sc_title,
-                "reason": sc_reason,
+                "phase": p_name,
+                "beat": b_type,
+                "start": round(s_time, 2),
+                "end": round(e_time, 2),
+                "start_ts": format_seconds_to_timestamp(s_time),
+                "end_ts": format_seconds_to_timestamp(e_time),
+                "duration": actual_dur,
+                "title": f"{idx}. {c_title}",
+                "reason": f"{b_type} - Critical storytelling beat",
                 "target_words": c_words,
-                "script_segment": seg
+                "narration": c_narr,
+                "script_segment": c_narr
             })
 
-        summary = f"20-Minute Cinema Explainer for {title} spanning across {duration_str} with {len(keeper_clips)} keeper scenes."
+        summary = f"Complete Cinema Explainer for {title} featuring {len(keeper_clips)} dynamic cuts organically covering the 4 narrative phases with synchronized Hindi narration."
         full_script = " ".join(script_segments)
 
     tot_kept = sum(c["duration"] for c in keeper_clips)
@@ -3115,9 +3185,10 @@ Return STRICT JSON ONLY (no markdown outside JSON):
     filler_pct = round((tot_filler / max(1.0, duration)) * 100, 1) if duration > 0 else 0
 
     phase_groups = {
-        "Hook & Setup": [c for c in keeper_clips if "Hook" in c["phase"] or "Setup" in c["phase"]],
-        "Rising Tension & Plot Twists": [c for c in keeper_clips if "Tension" in c["phase"] or "Twist" in c["phase"]],
-        "Crucial Action & Climax": [c for c in keeper_clips if "Action" in c["phase"] or "Climax" in c["phase"]]
+        "Phase 1: Setup & Inciting Incident": [c for c in keeper_clips if "1" in str(c.get("phase", "")) or "Setup" in str(c.get("phase", ""))],
+        "Phase 2: Rising Stakes & Escalation": [c for c in keeper_clips if "2" in str(c.get("phase", "")) or "Stakes" in str(c.get("phase", "")) or "Tension" in str(c.get("phase", ""))],
+        "Phase 3: Major Twists & Darkest Hour": [c for c in keeper_clips if "3" in str(c.get("phase", "")) or "Twist" in str(c.get("phase", "")) or "Dark" in str(c.get("phase", ""))],
+        "Phase 4: High-Octane Climax & Resolution": [c for c in keeper_clips if "4" in str(c.get("phase", "")) or "Climax" in str(c.get("phase", "")) or "Resolution" in str(c.get("phase", ""))]
     }
 
     return {
@@ -3136,7 +3207,7 @@ Return STRICT JSON ONLY (no markdown outside JSON):
             "thumbnail": thumbnail,
             "channel": channel
         },
-        "target_duration": target_duration,
+        "target_duration": tot_kept,
         "wps": wps,
         "calibrated_wps": wps,
         "voice_name": voice_name,
@@ -3153,6 +3224,11 @@ Return STRICT JSON ONLY (no markdown outside JSON):
         "phases": phase_groups,
         "full_script": full_script
     }
+
+
+def generate_20min_movie_explainer_storyboard(*args, **kwargs):
+    """Backward compatibility alias for generate_cinema_explainer_storyboard."""
+    return generate_cinema_explainer_storyboard(*args, **kwargs)
 
 
 def export_timeline_trimmed_video(
@@ -3308,7 +3384,7 @@ def export_timeline_trimmed_video(
             if not gen_ok:
                 generate_voiceover_audio(text=clean_script, output_path=tts_audio_path, language="Hindi")
 
-            if audio_mode == "tts_bgm":
+            if audio_mode in ["tts_bgm", "cinema_explainer"]:
                 notify(85, "Mixing ducked cinematic background music + voiceover...")
                 bgm_path = ensure_background_music_exists()
                 mix_cmd = [

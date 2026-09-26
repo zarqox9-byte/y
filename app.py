@@ -2493,19 +2493,20 @@ HTML_MAIN = """
                     </div>
                 </div>
 
-                <!-- 20-Minute Movie Explainer Copilot Card -->
-                <div style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.75), rgba(15, 23, 42, 0.95)); border: 1px solid #7c3aed; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.15);">
+                <!-- Cinema Explainer Copilot Card (Story-First Dynamic Cutting) -->
+                <div style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.85), rgba(15, 23, 42, 0.98)); border: 1px solid #7c3aed; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 24px rgba(124, 58, 237, 0.2);">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 26px;">🧠</span>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 28px;">🎬</span>
                             <div>
-                                <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #ede9fe;">20-Minute Movie Explainer Copilot (Hollywood 3-Phase Storyboard)</h3>
-                                <p style="margin: 0; font-size: 12px; color: #a78bfa;">Analyzes complete movie narrative from YouTube &bull; 100-word calibrated voice sync &bull; Auto-injects cuts into timeline</p>
+                                <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #ede9fe;">Cinema Explainer Storyboard Copilot (Pure Story-First Dynamic Cutting)</h3>
+                                <p style="margin: 0; font-size: 12px; color: #a78bfa;">Gemini full editorial autonomy &bull; Organic 8-25 min pacing &bull; Micro-cuts (2-5s) &amp; Medium cuts (6-12s) &bull; Calibrated Hindi voice sync</p>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 8px;">
-                            <span style="background: rgba(124, 58, 237, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.4);">100% YOUTUBE DATA GROUNDING</span>
-                            <span style="background: rgba(6, 182, 212, 0.2); color: #67e8f9; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.3);">WPS CALIBRATED TTS</span>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span style="background: rgba(124, 58, 237, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.4);">DYNAMIC 8-25 MIN PACING</span>
+                            <span style="background: rgba(6, 182, 212, 0.2); color: #67e8f9; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.3);">NO FIXED CLIP SLOTS</span>
+                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">WPS HINDI SYNC</span>
                         </div>
                     </div>
 
@@ -2516,12 +2517,12 @@ HTML_MAIN = """
                             <input type="text" id="trimmerExplainerYtUrl" class="form-control" style="width: 100%; padding: 8px 12px; font-size: 13px;" placeholder="https://www.youtube.com/watch?v=...">
                         </div>
                         <div>
-                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Target Explainer Length:</label>
+                            <label style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Explainer Runtime Pacing:</label>
                             <select id="trimmerExplainerDuration" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
-                                <option value="1200" selected>🎬 20 Minutes (Full Explainer)</option>
-                                <option value="900">⏱️ 15 Minutes (Extended Recap)</option>
-                                <option value="600">⚡ 10 Minutes (Standard Recap)</option>
-                                <option value="300">🔥 5 Minutes (Fast Breakdown)</option>
+                                <option value="dynamic" selected>🎬 Natural Story Flow (8 to 25 Min Flexible)</option>
+                                <option value="600">⚡ Compact Explainer (~10 Min)</option>
+                                <option value="900">🍿 Medium Deep Dive (~15 Min)</option>
+                                <option value="1200">🔥 Full Epic Explainer (~20 Min)</option>
                             </select>
                         </div>
                         <div>
@@ -2529,8 +2530,8 @@ HTML_MAIN = """
                             <select id="trimmerExplainerVoice" class="form-control" style="width: 100%; padding: 8px 10px; font-size: 12px;">
                                 <option value="Kore" selected>Kore (Hindi Deep Male)</option>
                                 <option value="Fenrir">Fenrir (Dramatic Intense)</option>
-                                <option value="Puck">Puck (Fast-Paced Punch)</option>
                                 <option value="Aoede">Aoede (Expressive Female)</option>
+                                <option value="Puck">Puck (Fast-Paced Punch)</option>
                                 <option value="Charon">Charon (Deep Mysterious)</option>
                             </select>
                         </div>
@@ -2544,14 +2545,14 @@ HTML_MAIN = """
                             </select>
                         </div>
                         <div>
-                            <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 18px; font-size: 13px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);">
-                                <span id="btnPlanExplainerIcon">🚀</span>
-                                <span id="btnPlanExplainerText">Plan 20-Min Explainer</span>
+                            <button type="button" id="btnTrimmerPlanExplainer" class="btn-upload" style="background: linear-gradient(135deg, #7c3aed, #0284c7); padding: 9px 20px; font-size: 13.5px; font-weight: 700; white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 8px; border-radius: 6px; box-shadow: 0 0 14px rgba(124, 58, 237, 0.4);">
+                                <span id="btnPlanExplainerIcon">🎬</span>
+                                <span id="btnPlanExplainerText">Generate Cinema Explainer Storyboard</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Storyboard Results & 3-Phase Visual Breakdown (Initially Hidden) -->
+                    <!-- Storyboard Results & 4-Phase Visual Breakdown (Initially Hidden) -->
                     <div id="trimmerExplainerStoryboardContainer" style="display: none; margin-top: 16px; border-top: 1px solid rgba(124, 58, 237, 0.3); padding-top: 16px;">
                         <!-- Movie Metadata Header -->
                         <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -2563,11 +2564,12 @@ HTML_MAIN = """
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <span id="trimmerExplainerBadgeWps" style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: 2.35 w/s</span>
-                                <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: 2820 words</span>
-                                <span id="trimmerExplainerBadgeClips" style="background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #c084fc; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Keeper Clips: 14</span>
+                                <span id="trimmerExplainerBadgeDuration" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #c084fc; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Duration: 14m 32s</span>
+                                <span id="trimmerExplainerBadgeClips" style="background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Dynamic Cuts: 52</span>
+                                <span id="trimmerExplainerBadgeWps" style="background: rgba(234, 179, 8, 0.15); border: 1px solid #eab308; color: #fde047; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">WPS: 2.35 w/s</span>
+                                <span id="trimmerExplainerBadgeWords" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px;">Words: 2049 words</span>
                                 <button type="button" id="btnInjectExplainerCuts" class="btn-populate" style="background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; display: flex; align-items: center; gap: 6px;">
-                                    <span>⚡</span> <span>Inject Cuts into Timeline</span>
+                                    <span>⚡</span> <span>Inject All Cuts into Timeline</span>
                                 </button>
                             </div>
                         </div>
@@ -2575,34 +2577,9 @@ HTML_MAIN = """
                         <!-- Summary quote -->
                         <div id="trimmerExplainerSummary" style="font-size: 12px; color: #cbd5e1; font-style: italic; background: rgba(255,255,255,0.02); border-left: 3px solid #7c3aed; padding: 8px 14px; margin-bottom: 14px; border-radius: 0 6px 6px 0;"></div>
 
-                        <!-- 3-Phase Storyboard Cards -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;" id="trimmerExplainerPhasesGrid">
-                            <!-- Phase 1 Card -->
-                            <div style="background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 8px; padding: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🎣 PHASE 1: Hook &amp; Setup</span>
-                                    <span id="trimmerPhase1Meta" style="font-size: 11px; color: #94a3b8;">~5 min</span>
-                                </div>
-                                <div id="trimmerPhase1Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
-                            </div>
-
-                            <!-- Phase 2 Card -->
-                            <div style="background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: 8px; padding: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <span style="font-size: 12px; font-weight: 700; color: #c084fc;">⚡ PHASE 2: Rising Tension &amp; Twists</span>
-                                    <span id="trimmerPhase2Meta" style="font-size: 11px; color: #94a3b8;">~10 min</span>
-                                </div>
-                                <div id="trimmerPhase2Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
-                            </div>
-
-                            <!-- Phase 3 Card -->
-                            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <span style="font-size: 12px; font-weight: 700; color: #f87171;">💥 PHASE 3: Climax &amp; Resolution</span>
-                                    <span id="trimmerPhase3Meta" style="font-size: 11px; color: #94a3b8;">~5 min</span>
-                                </div>
-                                <div id="trimmerPhase3Clips" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
-                            </div>
+                        <!-- 4-Phase Storyboard Dynamic Grid -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;" id="trimmerExplainerPhasesGrid">
+                            <!-- Populated dynamically by renderExplainerStoryboardUI -->
                         </div>
 
                         <!-- Auto-Injection Guidance Banner -->
@@ -5528,16 +5505,12 @@ HTML_MAIN = """
         const trimmerExplainerTitle = document.getElementById('trimmerExplainerTitle');
         const trimmerExplainerMetaSub = document.getElementById('trimmerExplainerMetaSub');
         const trimmerExplainerBadgeWps = document.getElementById('trimmerExplainerBadgeWps');
+        const trimmerExplainerBadgeDuration = document.getElementById('trimmerExplainerBadgeDuration');
         const trimmerExplainerBadgeWords = document.getElementById('trimmerExplainerBadgeWords');
         const trimmerExplainerBadgeClips = document.getElementById('trimmerExplainerBadgeClips');
         const trimmerExplainerSummary = document.getElementById('trimmerExplainerSummary');
+        const trimmerExplainerPhasesGrid = document.getElementById('trimmerExplainerPhasesGrid');
         const btnInjectExplainerCuts = document.getElementById('btnInjectExplainerCuts');
-        const trimmerPhase1Clips = document.getElementById('trimmerPhase1Clips');
-        const trimmerPhase2Clips = document.getElementById('trimmerPhase2Clips');
-        const trimmerPhase3Clips = document.getElementById('trimmerPhase3Clips');
-        const trimmerPhase1Meta = document.getElementById('trimmerPhase1Meta');
-        const trimmerPhase2Meta = document.getElementById('trimmerPhase2Meta');
-        const trimmerPhase3Meta = document.getElementById('trimmerPhase3Meta');
 
         function renderExplainerStoryboardUI(storyboard) {
             if (!storyboard || !storyboard.keeper_clips) return;
@@ -5548,66 +5521,162 @@ HTML_MAIN = """
                 trimmerExplainerThumb.style.display = 'block';
             }
             if (trimmerExplainerTitle) {
-                trimmerExplainerTitle.textContent = storyboard.title || 'Movie Narrative Explainer';
+                trimmerExplainerTitle.textContent = storyboard.title || 'Cinema Explainer Storyboard';
             }
             if (trimmerExplainerMetaSub) {
-                trimmerExplainerMetaSub.innerHTML = `Runtime: <b>${storyboard.duration_str || 'Full Movie'}</b> &bull; Target: <b>${Math.round((storyboard.target_duration || 1200) / 60)} Minutes</b> &bull; Voice: <b>${storyboard.voice_name || 'Kore'} (${storyboard.tone_style || 'Narrative Deep'})</b>`;
+                trimmerExplainerMetaSub.innerHTML = `Runtime: <b>${storyboard.duration_str || 'Full Movie'}</b> &bull; Channel: <b>${storyboard.channel || 'Cinema Channel'}</b> &bull; Voice: <b>${storyboard.voice_name || 'Kore'} (${storyboard.tone_style || 'Narrative Deep'})</b>`;
+            }
+            if (trimmerExplainerBadgeDuration) {
+                const totalDur = storyboard.total_duration_sec || storyboard.target_duration || 0;
+                trimmerExplainerBadgeDuration.textContent = `⏱️ Explainer: ${formatSecs(totalDur)}`;
+            }
+            if (trimmerExplainerBadgeClips) {
+                trimmerExplainerBadgeClips.textContent = `🎬 Dynamic Cuts: ${storyboard.total_clips || storyboard.keeper_clips.length}`;
             }
             if (trimmerExplainerBadgeWps) {
                 trimmerExplainerBadgeWps.textContent = `⚡ WPS: ${(storyboard.calibrated_wps || 2.35).toFixed(2)} w/s`;
             }
             if (trimmerExplainerBadgeWords) {
-                trimmerExplainerBadgeWords.textContent = `📝 Spoken Words: ${storyboard.total_words || Math.round((storyboard.target_duration || 1200) * (storyboard.calibrated_wps || 2.35))}`;
-            }
-            if (trimmerExplainerBadgeClips) {
-                trimmerExplainerBadgeClips.textContent = `🎬 Keeper Scenes: ${storyboard.total_clips || storyboard.keeper_clips.length}`;
+                trimmerExplainerBadgeWords.textContent = `📝 Words: ${storyboard.total_words || 0}`;
             }
             if (trimmerExplainerSummary) {
-                trimmerExplainerSummary.textContent = storyboard.summary || 'Comprehensive narrative recap covering the entire storyline without blind cuts.';
+                trimmerExplainerSummary.textContent = storyboard.summary || 'Pure story-first cinema explainer covering all narrative beats without rigid cuts.';
             }
 
-            const clips = storyboard.keeper_clips || [];
-            const p1 = clips.filter(c => (c.phase && c.phase.includes('1')) || (c.title && c.title.toLowerCase().includes('phase 1')));
-            const p2 = clips.filter(c => (c.phase && c.phase.includes('2')) || (c.title && c.title.toLowerCase().includes('phase 2')));
-            const p3 = clips.filter(c => (c.phase && c.phase.includes('3')) || (c.title && c.title.toLowerCase().includes('phase 3')));
+            if (trimmerExplainerPhasesGrid) {
+                trimmerExplainerPhasesGrid.innerHTML = '';
+                const clips = storyboard.keeper_clips || [];
 
-            let phase1Clips = p1, phase2Clips = p2, phase3Clips = p3;
-            if (phase1Clips.length === 0 && phase2Clips.length === 0 && phase3Clips.length === 0) {
-                const count = clips.length;
-                const c1 = Math.max(1, Math.round(count * 0.25));
-                const c2 = Math.max(1, Math.round(count * 0.5));
-                phase1Clips = clips.slice(0, c1);
-                phase2Clips = clips.slice(c1, c1 + c2);
-                phase3Clips = clips.slice(c1 + c2);
-            }
+                const phaseConfigs = [
+                    {
+                        key: "Phase 1",
+                        label: "Phase 1: Setup & Hook",
+                        subtitle: "Inciting Incident & World Building",
+                        color: "#38bdf8",
+                        bg: "rgba(56, 189, 248, 0.08)",
+                        border: "rgba(56, 189, 248, 0.3)",
+                        icon: "🎬"
+                    },
+                    {
+                        key: "Phase 2",
+                        label: "Phase 2: Rising Stakes",
+                        subtitle: "Dangerous Escalation & Trials",
+                        color: "#a855f7",
+                        bg: "rgba(168, 85, 247, 0.08)",
+                        border: "rgba(168, 85, 247, 0.3)",
+                        icon: "🔥"
+                    },
+                    {
+                        key: "Phase 3",
+                        label: "Phase 3: Major Twists",
+                        subtitle: "Darkest Hour & Revelation",
+                        color: "#f59e0b",
+                        bg: "rgba(245, 158, 11, 0.08)",
+                        border: "rgba(245, 158, 11, 0.3)",
+                        icon: "⚡"
+                    },
+                    {
+                        key: "Phase 4",
+                        label: "Phase 4: Epic Climax",
+                        subtitle: "High-Octane Showdown & Closure",
+                        color: "#10b981",
+                        bg: "rgba(16, 185, 129, 0.08)",
+                        border: "rgba(16, 185, 129, 0.3)",
+                        icon: "🏆"
+                    }
+                ];
 
-            function renderPhaseClips(container, metaEl, pClips) {
-                if (!container) return;
-                container.innerHTML = '';
-                const totalDur = pClips.reduce((acc, c) => acc + (c.duration || (c.end - c.start)), 0);
-                if (metaEl) metaEl.textContent = `${pClips.length} scenes • ${formatSecs(totalDur)}`;
+                let groups = {};
+                if (storyboard.phase_groups && Object.keys(storyboard.phase_groups).length > 0) {
+                    const keys = Object.keys(storyboard.phase_groups);
+                    keys.forEach((k, idx) => {
+                        const targetCfg = phaseConfigs[idx] || phaseConfigs[0];
+                        groups[targetCfg.key] = storyboard.phase_groups[k] || [];
+                    });
+                } else {
+                    const p1 = clips.filter(c => String(c.phase || '').includes('1') || String(c.title || '').toLowerCase().includes('phase 1'));
+                    const p2 = clips.filter(c => String(c.phase || '').includes('2') || String(c.title || '').toLowerCase().includes('phase 2'));
+                    const p3 = clips.filter(c => String(c.phase || '').includes('3') || String(c.title || '').toLowerCase().includes('phase 3'));
+                    const p4 = clips.filter(c => String(c.phase || '').includes('4') || String(c.title || '').toLowerCase().includes('phase 4'));
 
-                pClips.forEach(c => {
-                    const row = document.createElement('div');
-                    row.style.background = 'rgba(0,0,0,0.3)';
-                    row.style.padding = '6px 8px';
-                    row.style.borderRadius = '4px';
-                    row.style.border = '1px solid rgba(255,255,255,0.05)';
-                    row.style.fontSize = '11px';
-                    row.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                            <span style="font-weight: 700; color: #f1f5f9;">${c.title || 'Scene'}</span>
-                            <span style="color: #38bdf8; font-family: monospace;">${formatSecs(c.start)} - ${formatSecs(c.end)} (${(c.duration || (c.end-c.start)).toFixed(0)}s)</span>
+                    if (p1.length || p2.length || p3.length || p4.length) {
+                        groups["Phase 1"] = p1;
+                        groups["Phase 2"] = p2;
+                        groups["Phase 3"] = p3;
+                        groups["Phase 4"] = p4;
+                    } else {
+                        const cLen = clips.length;
+                        const q1 = Math.max(1, Math.round(cLen * 0.25));
+                        const q2 = Math.max(1, Math.round(cLen * 0.50));
+                        const q3 = Math.max(1, Math.round(cLen * 0.75));
+                        groups["Phase 1"] = clips.slice(0, q1);
+                        groups["Phase 2"] = clips.slice(q1, q2);
+                        groups["Phase 3"] = clips.slice(q2, q3);
+                        groups["Phase 4"] = clips.slice(q3);
+                    }
+                }
+
+                phaseConfigs.forEach(cfg => {
+                    const phaseClips = groups[cfg.key] || [];
+                    const phaseDur = phaseClips.reduce((acc, c) => acc + (parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0), 0);
+                    const microCount = phaseClips.filter(c => (parseFloat(c.duration) || 0) <= 5.0).length;
+
+                    const col = document.createElement('div');
+                    col.style.background = cfg.bg;
+                    col.style.border = `1px solid ${cfg.border}`;
+                    col.style.borderRadius = '8px';
+                    col.style.padding = '10px';
+                    col.style.display = 'flex';
+                    col.style.flexDirection = 'column';
+                    col.style.gap = '8px';
+
+                    col.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid ${cfg.border}; padding-bottom: 6px;">
+                            <div>
+                                <div style="font-weight: 700; color: ${cfg.color}; font-size: 12.5px; display: flex; align-items: center; gap: 4px;">
+                                    <span>${cfg.icon}</span> <span>${cfg.label}</span>
+                                </div>
+                                <div style="color: #94a3b8; font-size: 10px;">${cfg.subtitle}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: #f1f5f9; font-weight: 700; font-size: 11px;">${formatSecs(phaseDur)}</div>
+                                <div style="color: #94a3b8; font-size: 9.5px;">${phaseClips.length} cuts (${microCount} micro)</div>
+                            </div>
                         </div>
-                        <div style="color: #94a3b8; font-size: 10px; line-height: 1.3;">${(c.narration || c.reason || '').slice(0, 95)}${(c.narration || '').length > 95 ? '...' : ''}</div>
+                        <div style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px;">
+                            ${phaseClips.map(c => {
+                                const dur = parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0;
+                                const isMicro = dur <= 5.0;
+                                const badgeStyle = isMicro
+                                    ? 'background: rgba(6,182,212,0.18); color: #38bdf8; border: 1px solid rgba(6,182,212,0.4);'
+                                    : 'background: rgba(168,85,247,0.18); color: #c084fc; border: 1px solid rgba(168,85,247,0.4);';
+                                const badgeText = isMicro ? `⚡ MICRO ${dur.toFixed(1)}s` : `🎬 SCENE ${dur.toFixed(1)}s`;
+                                const beatTag = c.beat || (isMicro ? '[Hook]' : '[Action]');
+                                const targetWords = c.target_words || Math.round(dur * (storyboard.calibrated_wps || 2.35));
+                                const narr = (c.narration || c.reason || '').trim();
+
+                                return `
+                                    <div style="background: rgba(0,0,0,0.35); padding: 6px 8px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.06); font-size: 11px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; gap: 6px;">
+                                            <span style="font-weight: 600; color: #f8fafc; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.title || 'Scene Beat'}</span>
+                                            <span style="${badgeStyle} font-size: 9px; padding: 1px 5px; border-radius: 4px; font-weight: 700; white-space: nowrap;">${badgeText}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #94a3b8; font-family: monospace; margin-bottom: 3px;">
+                                            <span style="color: ${cfg.color}; font-weight: 600;">${beatTag}</span>
+                                            <span>${formatSecs(c.start)} - ${formatSecs(c.end)}</span>
+                                        </div>
+                                        ${narr ? `<div style="color: #cbd5e1; font-size: 10.5px; line-height: 1.3; background: rgba(255,255,255,0.03); padding: 4px 6px; border-radius: 3px; border-left: 2px solid ${cfg.color}; margin-top: 2px;">
+                                            ${narr}
+                                            <span style="color: #64748b; font-size: 9.5px; margin-left: 4px;">(${targetWords}w)</span>
+                                        </div>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                     `;
-                    container.appendChild(row);
+                    trimmerExplainerPhasesGrid.appendChild(col);
                 });
             }
-
-            renderPhaseClips(trimmerPhase1Clips, trimmerPhase1Meta, phase1Clips);
-            renderPhaseClips(trimmerPhase2Clips, trimmerPhase2Meta, phase2Clips);
-            renderPhaseClips(trimmerPhase3Clips, trimmerPhase3Meta, phase3Clips);
         }
 
         function applyExplainerStoryboardToTimeline(storyboard) {
@@ -6164,24 +6233,25 @@ HTML_MAIN = """
             });
         }
 
-        // 20-MINUTE MOVIE EXPLAINER STORYBOARD COPILOT
+        // CINEMA EXPLAINER STORYBOARD COPILOT (PURE STORY-FIRST DYNAMIC PACING)
         if (btnTrimmerPlanExplainer) {
             btnTrimmerPlanExplainer.addEventListener('click', async () => {
                 const url = (trimmerExplainerYtUrl ? trimmerExplainerYtUrl.value : '').trim();
                 if (!url) {
-                    alert('Please enter a YouTube movie URL to plan the 20-minute explainer.');
+                    alert('Please enter a YouTube movie URL to generate the Cinema Explainer storyboard.');
                     if (trimmerExplainerYtUrl) trimmerExplainerYtUrl.focus();
                     return;
                 }
 
                 btnTrimmerPlanExplainer.disabled = true;
                 if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span>';
-                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Extracting Movie Structure...';
+                if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generating Cinema Storyboard...';
 
                 try {
+                    const durVal = trimmerExplainerDuration ? trimmerExplainerDuration.value : 'dynamic';
                     const payload = {
                         youtube_url: url,
-                        target_duration: parseInt(trimmerExplainerDuration ? trimmerExplainerDuration.value : '1200') || 1200,
+                        target_duration: durVal === 'dynamic' ? 'dynamic' : (parseInt(durVal) || 'dynamic'),
                         voice_name: trimmerExplainerVoice ? trimmerExplainerVoice.value : 'Kore',
                         tone_style: trimmerExplainerTone ? trimmerExplainerTone.value : 'Narrative Deep Storytelling',
                         language: 'Hindi'
@@ -6208,7 +6278,7 @@ HTML_MAIN = """
 
                     if (trimmerTotalDuration > 0) {
                         applyExplainerStoryboardToTimeline(data);
-                        alert(`20-Minute Explainer Ready!\nAnalyzed "${data.title}" and auto-injected ${data.total_clips} cuts totaling ${formatSecs(data.total_duration_sec)} into your timeline with millisecond-synced Hindi voiceover!`);
+                        alert(`Cinema Explainer Ready!\nAnalyzed "${data.title}" and auto-injected ${data.total_clips} dynamic cuts totaling ${formatSecs(data.total_duration_sec)} into your timeline with millisecond-synced Hindi voiceover!`);
                     } else {
                         const noticeEl = document.getElementById('trimmerExplainerAutoInjectNotice');
                         if (noticeEl) {
@@ -6216,11 +6286,11 @@ HTML_MAIN = """
                         }
                     }
                 } catch (err) {
-                    alert('Explainer Planning Error: ' + err.message);
+                    alert('Cinema Explainer Error: ' + err.message);
                 } finally {
                     btnTrimmerPlanExplainer.disabled = false;
-                    if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🚀';
-                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Plan 20-Min Explainer';
+                    if (btnPlanExplainerIcon) btnPlanExplainerIcon.innerHTML = '🎬';
+                    if (btnPlanExplainerText) btnPlanExplainerText.textContent = 'Generate Cinema Explainer Storyboard';
                 }
             });
         }
@@ -6228,7 +6298,7 @@ HTML_MAIN = """
         if (btnInjectExplainerCuts) {
             btnInjectExplainerCuts.addEventListener('click', () => {
                 if (!currentExplainerStoryboard) {
-                    alert('Please plan a 20-minute explainer first using a YouTube URL.');
+                    alert('Please generate a Cinema Explainer storyboard first using a YouTube URL.');
                     return;
                 }
                 if (trimmerTotalDuration <= 0) {
@@ -8261,11 +8331,18 @@ def trimmer_gemini_autocut():
 def trimmer_plan_explainer():
     """
     Extracts 100% accurate YouTube metadata and calls Gemini with calibrated 100-word WPS
-    to generate an exact 20-minute (or user-chosen target duration) 3-phase explainer storyboard.
+    to generate an organic 8-25 minute cinema explainer storyboard with micro/medium cuts.
     """
     data = request.get_json(force=True, silent=True) or {}
     youtube_url = (data.get('youtube_url') or '').strip()
-    target_duration = int(data.get('target_duration') or 1200)
+    target_duration_raw = data.get('target_duration', 'dynamic')
+    if target_duration_raw == 'dynamic' or not target_duration_raw:
+        target_duration = 'dynamic'
+    else:
+        try:
+            target_duration = int(target_duration_raw)
+        except (ValueError, TypeError):
+            target_duration = 'dynamic'
     language = (data.get('language') or 'Hindi').strip()
     voice_name = (data.get('voice_name') or 'Kore').strip()
     tone_style = (data.get('tone_style') or 'Narrative Deep Storytelling').strip()
@@ -8277,7 +8354,7 @@ def trimmer_plan_explainer():
     try:
         creds = get_stored_credentials()
         ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
-        storyboard = clipper_engine.generate_20min_movie_explainer_storyboard(
+        storyboard = clipper_engine.generate_cinema_explainer_storyboard(
             youtube_url=youtube_url,
             credentials=creds,
             target_duration=target_duration,
