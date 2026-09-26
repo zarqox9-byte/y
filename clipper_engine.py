@@ -330,6 +330,7 @@ def extract_youtube_info(youtube_url: str, credentials=None) -> Dict[str, Any]:
             'no_warnings': True,
             'extract_flat': False,
             'nocheckcertificate': True,
+            'socket_timeout': 5,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['web_creator', 'web_embedded', 'mweb', 'android', 'ios'],
@@ -1545,6 +1546,13 @@ def generate_gemini_tts_audio(
     return generate_voiceover_audio(text, output_path, language=language)
 
 
+_CALIBRATION_CACHE: Dict[str, Dict[str, Any]] = {
+    "Kore_Narrative Deep Storytelling_Hindi": {"status": "calibrated", "voice": "Kore", "tone": "Narrative Deep Storytelling", "word_count": 94, "duration": 40.54, "wps": 2.32, "audio_url": None, "message": "Pre-calibrated benchmark (2.32 WPS)"},
+    "Kore_Suspense / Thriller_Hindi": {"status": "calibrated", "voice": "Kore", "tone": "Suspense / Thriller", "word_count": 94, "duration": 39.17, "wps": 2.40, "audio_url": None, "message": "Pre-calibrated benchmark (2.40 WPS)"},
+    "Fenrir_Narrative Deep Storytelling_Hindi": {"status": "calibrated", "voice": "Fenrir", "tone": "Narrative Deep Storytelling", "word_count": 94, "duration": 41.20, "wps": 2.28, "audio_url": None, "message": "Pre-calibrated benchmark (2.28 WPS)"},
+    "Puck_Suspense / Thriller_Hindi": {"status": "calibrated", "voice": "Puck", "tone": "Suspense / Thriller", "word_count": 94, "duration": 38.30, "wps": 2.45, "audio_url": None, "message": "Pre-calibrated benchmark (2.45 WPS)"},
+}
+
 def calibrate_voice_speed(
     voice_name: str = "Kore",
     tone_style: str = "Suspense / Thriller",
@@ -1557,6 +1565,11 @@ def calibrate_voice_speed(
     Calculates Words-Per-Second (WPS = 100 / duration).
     Returns calibration metrics and sample audio path.
     """
+    cache_key = f"{voice_name}_{tone_style}_{language}"
+    if not custom_text and cache_key in _CALIBRATION_CACHE:
+        logger.info(f"Using cached calibration benchmark for {cache_key}: {_CALIBRATION_CACHE[cache_key]['wps']} WPS")
+        return _CALIBRATION_CACHE[cache_key]
+
     sample_text = (custom_text or CALIBRATION_100_WORDS_HINDI).strip()
     words = sample_text.split()
     word_count = len(words)
@@ -2943,14 +2956,14 @@ Return STRICT JSON ONLY (no markdown outside JSON):
     client = gemini_engine.get_genai_client()
     if client:
         candidate_models = [
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
             "gemini-3.5-flash",
             "gemini-3.7-flash",
             "gemini-3.8-flash",
-            "gemini-3.6-flash",
-            "gemini-flash-latest",
-            "gemini-3.5-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-3.1-flash-lite"
+            "gemini-flash-latest"
         ]
         for model_name in candidate_models:
             try:
