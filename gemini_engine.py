@@ -11,16 +11,17 @@ CONFIG_FILE = os.path.join(BASE_DIR, "gemini_config.json")
 THUMBNAILS_DIR = os.path.join(BASE_DIR, "uploads", "thumbnails")
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.7-flash",
+    "gemini-2.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.5-flash-lite",
     "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-flash-latest",
-    "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite"
+    "gemini-flash-lite-latest"
 ]
 
 def get_gemini_config(channel_id: Optional[str] = None) -> Dict[str, Any]:

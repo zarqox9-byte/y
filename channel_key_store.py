@@ -200,42 +200,79 @@ def rehydrate_from_backups_if_empty():
 def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
     """
     Retrieves the array of up to 10 Gemini API keys for a channel ID.
-    If no keys configured for that channel ID, falls back to 'default' pool,
-    or gemini_config.json, or GEMINI_API_KEY env.
+    If no keys configured for that channel ID, falls back to any active channel pool in DB,
+    'default' pool, backup JSON, user_accounts.json, gemini_config.json, or GEMINI_API_KEY env.
     """
     clean_id = (channel_id or "").strip() or "default"
     keys: List[str] = []
 
-    # 1. Query Database
+    # 1. Query Database for exact channel_id
     try:
         conn = _get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT keys_json FROM channel_gemini_keys WHERE channel_id = ?", (clean_id,) if _DB_MODE == "sqlite" else (clean_id,))
+        if _DB_MODE == "postgres":
+            cur.execute("SELECT keys_json FROM channel_gemini_keys WHERE channel_id = %s", (clean_id,))
+        else:
+            cur.execute("SELECT keys_json FROM channel_gemini_keys WHERE channel_id = ?", (clean_id,))
         row = cur.fetchone()
-        conn.close()
 
         if row:
-            raw_json = row[0] if isinstance(row, tuple) or isinstance(row, list) else row["keys_json"]
+            raw_json = row[0] if isinstance(row, (tuple, list)) else row["keys_json"]
             parsed = json.loads(raw_json)
             if isinstance(parsed, list):
                 keys = [k.strip() for k in parsed if isinstance(k, str) and k.strip()]
+
+        # 1b. If exact channel_id had no keys, pool keys from any configured channel in DB (e.g. UC... <-> default)
+        if not keys:
+            cur.execute("SELECT keys_json FROM channel_gemini_keys ORDER BY updated_at DESC")
+            all_rows = cur.fetchall() or []
+            for r in all_rows:
+                raw_j = r[0] if isinstance(r, (tuple, list)) else r["keys_json"]
+                try:
+                    p_list = json.loads(raw_j)
+                    if isinstance(p_list, list):
+                        for k in p_list:
+                            if isinstance(k, str) and k.strip():
+                                keys.append(k.strip())
+                except Exception:
+                    pass
+        conn.close()
     except Exception as e:
         logger.warning(f"DB query error for channel {clean_id}: {e}")
 
     # 2. Fallback to Backup JSON if DB query returned nothing
     if not keys:
         backup_data = load_backup_json()
-        if clean_id in backup_data and isinstance(backup_data[clean_id], list):
-            keys = [k.strip() for k in backup_data[clean_id] if isinstance(k, str) and k.strip()]
+        if isinstance(backup_data, dict):
+            if clean_id in backup_data and isinstance(backup_data[clean_id], list):
+                keys = [k.strip() for k in backup_data[clean_id] if isinstance(k, str) and k.strip()]
+            if not keys:
+                for ch_k, k_list in backup_data.items():
+                    if isinstance(k_list, list):
+                        for k in k_list:
+                            if isinstance(k, str) and k.strip():
+                                keys.append(k.strip())
             if keys:
-                # Restore to DB
                 save_channel_keys_to_db(clean_id, keys, mirror_backup=False)
 
-    # 3. Fallback to 'default' channel pool if specific channel has no keys
-    if not keys and clean_id != "default":
-        default_keys = get_channel_keys("default")
-        if default_keys:
-            return default_keys
+    # 3. Fallback to user_accounts.json if keys were saved on account objects
+    if not keys and os.path.exists(ACCOUNTS_STORE_FILE):
+        try:
+            with open(ACCOUNTS_STORE_FILE, "r", encoding="utf-8") as f:
+                acc_store = json.load(f)
+            if isinstance(acc_store, dict):
+                for acc in acc_store.values():
+                    if isinstance(acc, dict):
+                        acc_keys = acc.get("gemini_keys") or acc.get("api_keys") or []
+                        if isinstance(acc_keys, list):
+                            for k in acc_keys:
+                                if isinstance(k, str) and k.strip():
+                                    keys.append(k.strip())
+                        single_k = acc.get("gemini_api_key") or acc.get("api_key")
+                        if isinstance(single_k, str) and single_k.strip():
+                            keys.append(single_k.strip())
+        except Exception:
+            pass
 
     # 4. Fallback to gemini_config.json
     if not keys and os.path.exists(CONFIG_FILE):
@@ -246,15 +283,23 @@ def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
                 if k:
                     keys = [k]
                     save_channel_keys_to_db(clean_id, keys, mirror_backup=True)
+                extra_pool = cfg.get("keys_pool") or cfg.get("keys") or []
+                if isinstance(extra_pool, list):
+                    for ek in extra_pool:
+                        if isinstance(ek, str) and ek.strip():
+                            keys.append(ek.strip())
         except Exception:
             pass
 
-    # 5. Fallback to GEMINI_API_KEY environment variable
+    # 5. Fallback to GEMINI_API_KEY / GOOGLE_API_KEY environment variables
     if not keys:
-        env_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if env_key:
-            keys = [env_key]
-            save_channel_keys_to_db(clean_id, keys, mirror_backup=True)
+        for env_var in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+            env_key = os.environ.get(env_var, "").strip()
+            if env_key:
+                keys = [k.strip() for k in env_key.split(",") if k.strip()]
+                if keys:
+                    save_channel_keys_to_db(clean_id, keys, mirror_backup=True)
+                    break
 
     # Deduplicate while preserving order and limit to 10
     seen = set()
@@ -349,7 +394,7 @@ def verify_gemini_key_online(key: str) -> Tuple[bool, str]:
         client = genai.Client(api_key=clean_k)
         # Fast lightweight ping
         client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+            model="gemini-2.5-flash-lite",
             contents="PING"
         )
         return True, "Key verified successfully"

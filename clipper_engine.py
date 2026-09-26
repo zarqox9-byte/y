@@ -262,16 +262,23 @@ def get_youtube_data_api_client(credentials=None):
                 logger.warning(f"Could not load token.json: {e}")
 
     if not creds:
-        # Check accounts.json in uploads or base directory
-        for acc_path in [os.path.join(BASE_DIR, "accounts.json"), os.path.join(BASE_DIR, "uploads", "accounts.json")]:
+        # Check user_accounts.json and accounts.json in base or uploads directory
+        for acc_path in [
+            os.path.join(BASE_DIR, "user_accounts.json"),
+            os.path.join(BASE_DIR, "uploads", "user_accounts.json"),
+            os.path.join(BASE_DIR, "accounts.json"),
+            os.path.join(BASE_DIR, "uploads", "accounts.json")
+        ]:
             if os.path.exists(acc_path):
                 try:
                     with open(acc_path, "r", encoding="utf-8") as f:
                         acc_data = json.load(f)
                     if acc_data and isinstance(acc_data, dict):
-                        first_account = next(iter(acc_data.values()))
-                        if "credentials" in first_account:
-                            creds = Credentials(**first_account["credentials"])
+                        for acc_entry in acc_data.values():
+                            if isinstance(acc_entry, dict) and "credentials" in acc_entry and isinstance(acc_entry["credentials"], dict):
+                                creds = Credentials(**acc_entry["credentials"])
+                                break
+                        if creds:
                             break
                 except Exception as e:
                     logger.warning(f"Could not load {acc_path}: {e}")
@@ -358,7 +365,7 @@ def extract_youtube_info(youtube_url: str, credentials=None) -> Dict[str, Any]:
         chapters = info.get('chapters') or []
         thumbnail = info.get('thumbnail') or ''
         channel = info.get('uploader') or info.get('channel') or ''
-        clean_desc = (description[:2000] if description else "").strip()
+        clean_desc = (description[:4500] if description else "").strip()
 
         logger.info(f"Metadata extracted via yt-dlp: '{title}' ({format_seconds_to_timestamp(duration)}), Chapters: {len(chapters)}")
         return {
@@ -403,7 +410,7 @@ def extract_youtube_info(youtube_url: str, credentials=None) -> Dict[str, Any]:
                     )
 
                     chapters = extract_chapters_from_description(description, duration)
-                    clean_desc = (description[:2000] if description else "").strip()
+                    clean_desc = (description[:4500] if description else "").strip()
 
                     logger.info(f"Successfully extracted metadata via YouTube Data API v3: '{title}' ({format_seconds_to_timestamp(duration)})")
                     return {
@@ -1611,16 +1618,16 @@ def generate_gemini_tts_audio(
     channel_id: Optional[str] = None
 ) -> bool:
     """
-    Synthesizes speech using Google Gemini 3.1/3.8 Flash TTS preview model
+    Synthesizes speech using Google Gemini 2.5 / 3.1 Flash TTS preview models
     with 10-key pool auto-rotation per channel.
-    Converts 24kHz mono PCM to 192kbps MP3 via FFmpeg.
+    Converts 24kHz mono PCM to 44.1kHz stereo 192kbps MP3 via FFmpeg.
     Falls back smoothly to Edge-TTS if quota or network issue occurs across all keys.
     """
     if not text or not text.strip():
         logger.warning("Empty script provided for Gemini TTS.")
         return False
 
-    logger.info(f"Generating Gemini TTS audio (Voice: {voice_name}, Tone: {tone_style}) for script: {text[:60]}...")
+    logger.info(f"Generating Gemini TTS audio (Voice: {voice_name}, Tone: {tone_style}, Channel: {channel_id}) for script: {text[:60]}...")
 
     # 1. Try Gemini TTS with auto-rotation across channel key pool
     try:
@@ -1631,49 +1638,59 @@ def generate_gemini_tts_audio(
             tone_prefix = TONE_PROMPT_PRESETS.get(tone_style, f"Say in {language} in a dramatic storytelling voice: ")
             tts_prompt = f"{tone_prefix}{text.strip()}"
 
-            resp = client.models.generate_content(
-                model="gemini-3.1-flash-tts-preview",
-                contents=tts_prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=voice_name
+            last_tts_err = None
+            for tts_model in ["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"]:
+                try:
+                    resp = client.models.generate_content(
+                        model=tts_model,
+                        contents=tts_prompt,
+                        config=types.GenerateContentConfig(
+                            response_modalities=["AUDIO"],
+                            speech_config=types.SpeechConfig(
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name=voice_name
+                                    )
+                                )
                             )
                         )
                     )
-                )
-            )
-            if resp and resp.candidates and resp.candidates[0].content and resp.candidates[0].content.parts:
-                pcm_data = resp.candidates[0].content.parts[0].inline_data.data
-                if pcm_data and len(pcm_data) > 1000:
-                    temp_wav = output_path + f".tmp_{uuid.uuid4().hex[:6]}.wav"
-                    try:
-                        with wave.open(temp_wav, "wb") as wf:
-                            wf.setnchannels(1)
-                            wf.setsampwidth(2)
-                            wf.setframerate(24000)
-                            wf.writeframes(pcm_data)
-
-                        ffmpeg_bin = get_ffmpeg_bin()
-                        cmd = [
-                            ffmpeg_bin, "-y",
-                            "-i", temp_wav,
-                            "-c:a", "libmp3lame",
-                            "-b:a", "192k",
-                            output_path
-                        ]
-                        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-                            logger.info(f"Gemini TTS audio created with key {channel_key_store.mask_key(api_key)}: {output_path} ({os.path.getsize(output_path)} bytes)")
-                            return True
-                    finally:
-                        if os.path.exists(temp_wav):
+                    if resp and resp.candidates and resp.candidates[0].content and resp.candidates[0].content.parts:
+                        pcm_data = resp.candidates[0].content.parts[0].inline_data.data
+                        if pcm_data and len(pcm_data) > 1000:
+                            temp_wav = output_path + f".tmp_{uuid.uuid4().hex[:6]}.wav"
                             try:
-                                os.remove(temp_wav)
-                            except Exception:
-                                pass
+                                with wave.open(temp_wav, "wb") as wf:
+                                    wf.setnchannels(1)
+                                    wf.setsampwidth(2)
+                                    wf.setframerate(24000)
+                                    wf.writeframes(pcm_data)
+
+                                ffmpeg_bin = get_ffmpeg_bin()
+                                cmd = [
+                                    ffmpeg_bin, "-y",
+                                    "-i", temp_wav,
+                                    "-af", "volume=1.28",
+                                    "-ar", "44100", "-ac", "2",
+                                    "-c:a", "libmp3lame",
+                                    "-b:a", "192k",
+                                    output_path
+                                ]
+                                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+                                    logger.info(f"Gemini TTS ({tts_model}) audio created with key {channel_key_store.mask_key(api_key)}: {output_path} ({os.path.getsize(output_path)} bytes)")
+                                    return True
+                            finally:
+                                if os.path.exists(temp_wav):
+                                    try:
+                                        os.remove(temp_wav)
+                                    except Exception:
+                                        pass
+                except Exception as te:
+                    last_tts_err = te
+                    logger.warning(f"Gemini TTS model {tts_model} notice with key {channel_key_store.mask_key(api_key)}: {te}")
+            if last_tts_err and any(q in str(last_tts_err).lower() for q in ["429", "resource_exhausted", "quota", "rate limit"]):
+                raise last_tts_err
             return False
 
         tts_success = channel_key_store.execute_with_channel_key_rotation(channel_id, "Gemini TTS", _tts_worker)
@@ -1695,7 +1712,8 @@ def calibrate_voice_speed(
     tone_style: str = "Suspense / Thriller",
     language: str = "Hindi",
     custom_text: Optional[str] = None,
-    force_live: bool = False
+    force_live: bool = False,
+    channel_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Synthesizes canonical ~100-character Hindi/English benchmark text using selected voice and tone style.
@@ -1723,7 +1741,8 @@ def calibrate_voice_speed(
         output_path=sample_path,
         voice_name=voice_name,
         tone_style=tone_style,
-        language=language
+        language=language,
+        channel_id=channel_id
     )
     if not ok or not os.path.exists(sample_path):
         default_wps = 2.40
@@ -2960,7 +2979,7 @@ def extract_real_movie_transcript_and_story(
     bucket_summaries: List[str] = []
     if transcript_entries:
         max_ts = max(float(duration), max((e["start"] + e["duration"]) for e in transcript_entries))
-        num_buckets = 16
+        num_buckets = 20
         bucket_span = max(30.0, max_ts / num_buckets)
         for b_idx in range(num_buckets):
             b_start = b_idx * bucket_span
@@ -2970,7 +2989,7 @@ def extract_real_movie_transcript_and_story(
                 if b_start <= e["start"] < b_end
             ]
             if lines_in_bucket:
-                joined_dialogue = " ".join(lines_in_bucket)[:420]
+                joined_dialogue = " ".join(lines_in_bucket)[:1200]
                 bucket_summaries.append(
                     f"[{format_seconds_to_timestamp(b_start)} - {format_seconds_to_timestamp(b_end)}] {joined_dialogue}"
                 )
@@ -3031,12 +3050,12 @@ def synthesize_locked_voice_audio(
     voice_name: str = "Kore",
     tone_style: str = "Suspense / Thriller",
     language: str = "Hindi",
-    engine_lock: str = "edge_neural",
+    engine_lock: str = "gemini_tts",
     channel_id: Optional[str] = None
 ) -> bool:
     """
     STAGE 4: Single-Engine Voice Lock (Zero Mid-Stream Voice Switching).
-    Synthesizes speech using a strictly locked engine (`edge_neural` or `gemini_tts`)
+    Synthesizes speech using a strictly locked engine (`gemini_tts` or `edge_neural`)
     so the narrator voice never switches mid-video between Gemini TTS and Edge-TTS.
     """
     clean_text = sanitize_actor_names_to_character_roles((text or "").strip(), language)
@@ -3044,7 +3063,7 @@ def synthesize_locked_voice_audio(
         return False
 
     if engine_lock == "gemini_tts":
-        # Strictly attempt Gemini TTS only (caller handles batch consistency if quota is hit)
+        # Strictly attempt Gemini TTS across channel key pool using official TTS models
         try:
             import channel_key_store
             from google.genai import types
@@ -3052,42 +3071,58 @@ def synthesize_locked_voice_audio(
             def _strict_gemini_worker(client, api_key):
                 tone_prefix = TONE_PROMPT_PRESETS.get(tone_style, f"Say in {language} in a dramatic storytelling voice: ")
                 tts_prompt = f"{tone_prefix}{clean_text}"
-                resp = client.models.generate_content(
-                    model="gemini-3.1-flash-tts-preview",
-                    contents=tts_prompt,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=types.SpeechConfig(
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=voice_name
+                last_err = None
+                for tts_model in ["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"]:
+                    try:
+                        resp = client.models.generate_content(
+                            model=tts_model,
+                            contents=tts_prompt,
+                            config=types.GenerateContentConfig(
+                                response_modalities=["AUDIO"],
+                                speech_config=types.SpeechConfig(
+                                    voice_config=types.VoiceConfig(
+                                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                            voice_name=voice_name
+                                        )
+                                    )
                                 )
                             )
                         )
-                    )
-                )
-                if resp and resp.candidates and resp.candidates[0].content and resp.candidates[0].content.parts:
-                    pcm_data = resp.candidates[0].content.parts[0].inline_data.data
-                    if pcm_data and len(pcm_data) > 1000:
-                        temp_wav = output_path + f".tmp_{uuid.uuid4().hex[:6]}.wav"
-                        try:
-                            with wave.open(temp_wav, "wb") as wf:
-                                wf.setnchannels(1)
-                                wf.setsampwidth(2)
-                                wf.setframerate(24000)
-                                wf.writeframes(pcm_data)
-                            ffmpeg_bin = get_ffmpeg_bin()
-                            subprocess.run(
-                                [ffmpeg_bin, "-y", "-i", temp_wav, "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "192k", output_path],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                            )
-                            return os.path.exists(output_path) and os.path.getsize(output_path) > 800
-                        finally:
-                            if os.path.exists(temp_wav):
+                        if resp and resp.candidates and resp.candidates[0].content and resp.candidates[0].content.parts:
+                            pcm_data = resp.candidates[0].content.parts[0].inline_data.data
+                            if pcm_data and len(pcm_data) > 1000:
+                                temp_wav = output_path + f".tmp_{uuid.uuid4().hex[:6]}.wav"
                                 try:
-                                    os.remove(temp_wav)
-                                except Exception:
-                                    pass
+                                    with wave.open(temp_wav, "wb") as wf:
+                                        wf.setnchannels(1)
+                                        wf.setsampwidth(2)
+                                        wf.setframerate(24000)
+                                        wf.writeframes(pcm_data)
+                                    ffmpeg_bin = get_ffmpeg_bin()
+                                    subprocess.run(
+                                        [
+                                            ffmpeg_bin, "-y", "-i", temp_wav,
+                                            "-af", "volume=1.28",
+                                            "-ar", "44100", "-ac", "2",
+                                            "-c:a", "libmp3lame", "-b:a", "192k",
+                                            output_path
+                                        ],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                                    )
+                                    if os.path.exists(output_path) and os.path.getsize(output_path) > 800:
+                                        logger.info(f"Locked Gemini TTS ({tts_model}) synthesized with key {channel_key_store.mask_key(api_key)}")
+                                        return True
+                                finally:
+                                    if os.path.exists(temp_wav):
+                                        try:
+                                            os.remove(temp_wav)
+                                        except Exception:
+                                            pass
+                    except Exception as te:
+                        last_err = te
+                        logger.warning(f"Locked Gemini TTS model {tts_model} notice with key {channel_key_store.mask_key(api_key)}: {te}")
+                if last_err and any(q in str(last_err).lower() for q in ["429", "resource_exhausted", "quota", "rate limit"]):
+                    raise last_err
                 return False
 
             return bool(channel_key_store.execute_with_channel_key_rotation(channel_id, "Locked Gemini TTS", _strict_gemini_worker))
@@ -3095,14 +3130,14 @@ def synthesize_locked_voice_audio(
             logger.warning(f"Locked Gemini TTS notice: {e}")
             return False
 
-    # Default & High-Reliability Single-Engine Lock: Character Neural Profile (Edge-TTS)
+    # High-Reliability Single-Engine Fallback: Character Neural Profile (Edge-TTS)
     raw_mp3 = output_path + f".raw_{uuid.uuid4().hex[:6]}.mp3"
     try:
         ok = generate_voiceover_audio(clean_text, raw_mp3, language=language, voice_name=voice_name)
         if ok and os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 500:
             ffmpeg_bin = get_ffmpeg_bin()
             res = subprocess.run(
-                [ffmpeg_bin, "-y", "-i", raw_mp3, "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "192k", output_path],
+                [ffmpeg_bin, "-y", "-i", raw_mp3, "-af", "volume=1.25", "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "192k", output_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
             if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 500:
@@ -3226,7 +3261,7 @@ def execute_audio_master_1to1_pipeline(
     wps: float = 2.35,
     cps: float = 12.5,
     include_bgm: bool = True,
-    engine_lock: str = "edge_neural",
+    engine_lock: str = "gemini_tts",
     channel_id: Optional[str] = None,
     progress_callback: Optional[Any] = None,
     **kwargs
@@ -3235,7 +3270,8 @@ def execute_audio_master_1to1_pipeline(
     STAGE 3 & 4: AUDIO-MASTER 1:1 DURATION SYNC (THE CORE FIX).
     For each scene beat (12 to 24 beats):
       1. Sanitizes character names (zero real-life celebrity names, zero fake fillers).
-      2. Synthesizes natural narration audio FIRST using a single locked voice engine (`engine_lock`).
+      2. Synthesizes natural narration audio FIRST using a single locked voice engine (`gemini_tts` default).
+         Uses cohesive 3-chunk Gemini TTS synthesis so free-tier RPM limits (3-10 RPM) are never exceeded!
       3. Measures the exact natural audio duration (`D_audio`).
       4. Sets the scene's visual cut duration strictly equal to `D_audio` (`delta_t_cut = D_audio`).
     Concatenates all scene audio files lossless-ly so:
@@ -3259,17 +3295,14 @@ def execute_audio_master_1to1_pipeline(
     os.makedirs(work_dir, exist_ok=True)
     ffmpeg_bin = get_ffmpeg_bin()
 
-    # Single-Engine Voice Lock:
-    # Verify engine on Beat 1; if Gemini TTS is requested and fails/rate-limits on any beat,
-    # lock the entire video 100% to edge_neural so voices NEVER switch mid-stream.
-    active_engine = engine_lock if engine_lock in ["edge_neural", "gemini_tts"] else "edge_neural"
+    active_engine = engine_lock if engine_lock in ["gemini_tts", "edge_neural"] else "gemini_tts"
 
     try:
         beat_audio_files: List[str] = []
         synced_clips: List[Dict[str, Any]] = []
         script_segments: List[str] = []
 
-        # First pass: synthesize each beat with active_engine
+        prepared_beats: List[Dict[str, Any]] = []
         for idx, beat in enumerate(scene_beats, 1):
             narration_text = sanitize_actor_names_to_character_roles(
                 str(beat.get("narration") or beat.get("script_segment") or "").strip(),
@@ -3281,62 +3314,105 @@ def execute_audio_master_1to1_pipeline(
                     if language.lower().startswith("hi")
                     else f"In scene {idx}, the protagonist faces the next pivotal turn of events."
                 )
+            prepared_beats.append({"idx": idx, "beat": beat, "narration": narration_text})
 
-            beat_mp3 = os.path.join(work_dir, f"beat_{idx:03d}.mp3")
-            pct = 25 + int(55 * (idx / float(total_beats)))
-            notify(pct, f"Audio-Master Beat {idx}/{total_beats}: Synthesizing locked '{voice_name}' voice...")
+        gemini_batch_ok = False
+        if active_engine == "gemini_tts":
+            # Synthesize in 3 cohesive narrative phase chunks (avoids hitting 3-10 RPM free-tier limits on 16-24 beats)
+            num_chunks = min(3, max(1, int(math.ceil(total_beats / 6.0))))
+            chunk_size = max(1, int(math.ceil(total_beats / float(num_chunks))))
+            chunk_groups = [prepared_beats[i:i + chunk_size] for i in range(0, total_beats, chunk_size)]
+            gemini_batch_ok = True
 
-            ok = synthesize_locked_voice_audio(
-                text=narration_text,
-                output_path=beat_mp3,
-                voice_name=voice_name,
-                tone_style=tone_style,
-                language=language,
-                engine_lock=active_engine,
-                channel_id=channel_id
-            )
+            for c_idx, c_group in enumerate(chunk_groups, 1):
+                pct = 25 + int(50 * (c_idx / float(len(chunk_groups))))
+                notify(pct, f"Audio-Master Gemini TTS Phase {c_idx}/{len(chunk_groups)}: Synthesizing '{voice_name}' ({tone_style})...")
+                chunk_text = " ... ".join(item["narration"] for item in c_group)
+                chunk_mp3 = os.path.join(work_dir, f"gemini_chunk_{c_idx:02d}.mp3")
 
-            if not ok and active_engine == "gemini_tts":
-                # Single-engine lock rule: never mix Gemini TTS and Edge-TTS!
-                # Re-synthesize all previous beats + remaining beats strictly with edge_neural.
-                logger.info("Gemini TTS rate-limited mid-batch; enforcing Single-Engine Lock by re-synthesizing all beats on edge_neural.")
-                active_engine = "edge_neural"
-                beat_audio_files.clear()
-                synced_clips.clear()
-                script_segments.clear()
-                for r_idx, r_beat in enumerate(scene_beats, 1):
-                    r_text = sanitize_actor_names_to_character_roles(
-                        str(r_beat.get("narration") or r_beat.get("script_segment") or "").strip(),
-                        language
+                ok = synthesize_locked_voice_audio(
+                    text=chunk_text,
+                    output_path=chunk_mp3,
+                    voice_name=voice_name,
+                    tone_style=tone_style,
+                    language=language,
+                    engine_lock="gemini_tts",
+                    channel_id=channel_id
+                )
+                if not ok or not os.path.exists(chunk_mp3) or os.path.getsize(chunk_mp3) < 800:
+                    logger.warning(f"Gemini TTS phase chunk {c_idx} did not succeed; switching batch to edge_neural lock.")
+                    gemini_batch_ok = False
+                    break
+
+                d_chunk = round(max(float(len(c_group)) * 2.0, get_audio_duration(chunk_mp3)), 3)
+                total_chars = max(1, sum(max(1, len(item["narration"])) for item in c_group))
+                offset_cursor = 0.0
+
+                for b_pos, item in enumerate(c_group):
+                    b_idx = item["idx"]
+                    beat_mp3 = os.path.join(work_dir, f"beat_{b_idx:03d}.mp3")
+                    if b_pos == len(c_group) - 1:
+                        d_beat = round(max(1.5, d_chunk - offset_cursor), 3)
+                    else:
+                        char_ratio = max(1, len(item["narration"])) / float(total_chars)
+                        d_beat = round(max(1.5, d_chunk * char_ratio), 3)
+                        if offset_cursor + d_beat > d_chunk - 1.5 * (len(c_group) - 1 - b_pos):
+                            d_beat = round(max(1.5, (d_chunk - offset_cursor) / float(len(c_group) - b_pos)), 3)
+
+                    subprocess.run(
+                        [
+                            ffmpeg_bin, "-y",
+                            "-ss", f"{offset_cursor:.3f}",
+                            "-t", f"{d_beat:.3f}",
+                            "-i", chunk_mp3,
+                            "-ar", "44100", "-ac", "2",
+                            "-c:a", "libmp3lame", "-b:a", "192k",
+                            beat_mp3
+                        ],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
                     )
-                    r_mp3 = os.path.join(work_dir, f"beat_{r_idx:03d}.mp3")
-                    synthesize_locked_voice_audio(
-                        text=r_text,
-                        output_path=r_mp3,
-                        voice_name=voice_name,
-                        tone_style=tone_style,
-                        language=language,
-                        engine_lock="edge_neural",
-                        channel_id=channel_id
-                    )
-                    d_audio = round(max(1.5, get_audio_duration(r_mp3)), 3)
-                    beat_audio_files.append(r_mp3)
-                    script_segments.append(r_text)
+                    if not os.path.exists(beat_mp3) or os.path.getsize(beat_mp3) < 400:
+                        shutil.copyfile(chunk_mp3, beat_mp3)
+
+                    measured_beat = round(max(1.5, get_audio_duration(beat_mp3) or d_beat), 3)
+                    offset_cursor = round(offset_cursor + d_beat, 3)
+                    beat_audio_files.append(beat_mp3)
+                    script_segments.append(item["narration"])
                     synced_clips.append({
-                        "raw_beat": r_beat,
-                        "narration": r_text,
-                        "d_audio": d_audio
+                        "raw_beat": item["beat"],
+                        "narration": item["narration"],
+                        "d_audio": measured_beat
                     })
-                break
 
-            d_audio = round(max(1.5, get_audio_duration(beat_mp3)), 3)
-            beat_audio_files.append(beat_mp3)
-            script_segments.append(narration_text)
-            synced_clips.append({
-                "raw_beat": beat,
-                "narration": narration_text,
-                "d_audio": d_audio
-            })
+        if not gemini_batch_ok:
+            active_engine = "edge_neural"
+            beat_audio_files.clear()
+            synced_clips.clear()
+            script_segments.clear()
+            for item in prepared_beats:
+                r_idx = item["idx"]
+                r_beat = item["beat"]
+                r_text = item["narration"]
+                pct = 25 + int(55 * (r_idx / float(total_beats)))
+                notify(pct, f"Audio-Master Beat {r_idx}/{total_beats}: Synthesizing locked '{voice_name}' neural voice...")
+                r_mp3 = os.path.join(work_dir, f"beat_{r_idx:03d}.mp3")
+                synthesize_locked_voice_audio(
+                    text=r_text,
+                    output_path=r_mp3,
+                    voice_name=voice_name,
+                    tone_style=tone_style,
+                    language=language,
+                    engine_lock="edge_neural",
+                    channel_id=channel_id
+                )
+                d_audio = round(max(1.5, get_audio_duration(r_mp3)), 3)
+                beat_audio_files.append(r_mp3)
+                script_segments.append(r_text)
+                synced_clips.append({
+                    "raw_beat": r_beat,
+                    "narration": r_text,
+                    "d_audio": d_audio
+                })
 
         # Now lock each scene's visual cut duration strictly equal to its measured D_audio (delta_t_cut == D_audio)
         final_keeper_clips: List[Dict[str, Any]] = []
@@ -3419,9 +3495,9 @@ def execute_audio_master_1to1_pipeline(
                     "-i", stitched_vo,
                     "-stream_loop", "-1", "-i", bgm_path,
                     "-filter_complex", (
-                        f"[0:a]volume=1.0[vo];"
-                        f"[1:a]volume=0.14[bgm];"
-                        f"[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2,"
+                        f"[0:a]volume=1.32[vo];"
+                        f"[1:a]volume=0.07[bgm];"
+                        f"[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,"
                         f"afade=t=out:st={fade_st:.2f}:d=1.5,"
                         f"apad=whole_dur={total_cuts_duration:.3f},atrim=0:{total_cuts_duration:.3f}[aout]"
                     ),
@@ -3430,7 +3506,9 @@ def execute_audio_master_1to1_pipeline(
                     "-c:a", "libmp3lame", "-b:a", "192k",
                     output_audio_path
                 ]
-                subprocess.run(mix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+                res_mix = subprocess.run(mix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+                if res_mix.returncode != 0 or not os.path.exists(output_audio_path) or os.path.getsize(output_audio_path) < 500:
+                    shutil.copyfile(stitched_vo, output_audio_path)
             else:
                 shutil.copyfile(stitched_vo, output_audio_path)
         else:
@@ -3450,7 +3528,7 @@ def execute_audio_master_1to1_pipeline(
         full_script = " ".join(script_segments).strip()
         total_words = len(full_script.split())
 
-        notify(100, f"Audio-Master 1:1 Lock Complete: Audio={measured_master_audio:.2f}s == Video={total_cuts_duration:.2f}s (Drift={sync_delta:.3f}s)")
+        notify(100, f"Audio-Master 1:1 Lock Complete ({active_engine}): Audio={measured_master_audio:.2f}s == Video={total_cuts_duration:.2f}s (Drift={sync_delta:.3f}s)")
         return {
             "success": os.path.exists(output_audio_path) and os.path.getsize(output_audio_path) > 500,
             "output_path": output_audio_path,
@@ -3459,6 +3537,7 @@ def execute_audio_master_1to1_pipeline(
             "duration_delta": sync_delta,
             "synced_1to1": sync_delta <= 0.5,
             "voice_engine_locked": active_engine,
+            "locked_engine": active_engine,
             "voice_name": voice_name,
             "tone_style": tone_style,
             "wps": wps,
@@ -3488,7 +3567,7 @@ def synthesize_scene_by_scene_synced_audio(
     cps: Optional[float] = None,
     include_bgm: bool = False,
     channel_id: Optional[str] = None,
-    engine_lock: str = "edge_neural",
+    engine_lock: str = "gemini_tts",
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -3633,12 +3712,13 @@ JSON Format:
 
         def _do_autocut(client, api_key):
             nonlocal keeper_clips, source
-            for model_name in ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
+            for model_name in ["gemini-2.5-flash", "gemini-3-flash-preview", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite-preview"]:
                 try:
                     resp = client.models.generate_content(model=model_name, contents=prompt)
-                    txt = resp.text.strip()
-                    txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
-                    txt = re.sub(r"```$", "", txt).strip()
+                    txt = (resp.text or "").strip()
+                    m_json = re.search(r"\{[\s\S]*\}", txt)
+                    if m_json:
+                        txt = m_json.group(0)
                     data = json.loads(txt)
                     raw_clips = data.get("keeper_clips") or []
                     if isinstance(raw_clips, list) and len(raw_clips) >= 4:
@@ -3728,9 +3808,10 @@ def generate_cinema_explainer_storyboard(
 ) -> Dict[str, Any]:
     """
     5-STAGE AUDIO-MASTER MOVIE EXPLAINER ENGINE:
-    - Stage 1: Uses calibrated voice speed (WPS & CPS) & Single-Engine Voice Lock (`edge_neural`).
+    - Stage 1: Uses calibrated voice speed (WPS & CPS) & Single-Engine Voice Lock (`gemini_tts` default).
     - Stage 2: Extracts real movie dialogue & plot via `youtube-transcript-api` / captionTracks + metadata.
-    - Stage 3: Generates 12 to 24 character-only scene beats (zero real actor names, zero fake templates).
+    - Stage 3: Generates 12 to 24 character-only scene beats using native YouTube video multimodal understanding
+      + Google Search Grounding + real transcript (zero real actor names, zero fake templates).
     - Stage 4: Audio-Master 1:1 Sync — synthesizes natural scene audio FIRST, measures exact `D_audio`,
       and locks each visual cut duration strictly equal to `D_audio` (`0.0s` drift).
     """
@@ -3808,7 +3889,7 @@ def generate_cinema_explainer_storyboard(
         wps = float(calibrated_wps)
         cps = float(calibrated_cps)
     else:
-        calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language)
+        calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language, channel_id=channel_id)
         wps = float(calibrated_wps or calib.get("wps") or base_wps)
         cps = float(calibrated_cps or calib.get("cps", 12.5))
 
@@ -3847,26 +3928,28 @@ def generate_cinema_explainer_storyboard(
         chapters_text = "Official Video Chapters:\n" + "\n".join(ch_lines)
 
     transcript_block = (
-        f"=== EXTRACTED REAL MOVIE SUBTITLES / DIALOGUE TIMELINE ({transcript_source}) ===\n{transcript_digest[:6000]}"
+        f"=== EXTRACTED REAL MOVIE SUBTITLES / DIALOGUE TIMELINE ({transcript_source}) ===\n{transcript_digest[:18000]}"
         if transcript_digest
-        else "=== VALIDATED SYNOPSIS & METADATA (No caption track found; use synopsis & title context strictly) ==="
+        else "=== VALIDATED SYNOPSIS & METADATA (Use real movie plot of this exact film strictly) ==="
     )
 
     prompt = f"""You are the lead narrative writer and film director for 'PardaCine', the premier cinema explainer channel.
-Write a gripping, 100% authentic movie explainer storyboard based strictly on this movie's real storyline:
-- Movie Title: {title}
+Write a gripping, 100% authentic movie explainer storyboard based strictly on THIS specific movie/video's REAL storyline:
+- Movie / Video Title: {title}
+- YouTube URL: {youtube_url_clean}
 - Total Movie Runtime: {duration_str} ({duration} seconds)
 - Channel / Studio: {channel}
 - Narration Language: {language}
-- Movie Synopsis / Description:
-{description[:2500]}
+{f"- Additional User Instructions: {custom_instructions}" if custom_instructions else ""}
+- Official Movie Synopsis / Description:
+{description[:4500]}
 {chapters_text}
 {transcript_block}
 
 {STRICT_CHARACTER_ONLY_NAMING_RULE}
 
 === STAGE 3: AUDIO-MASTER SCENE BEAT SPECIFICATION ===
-1. Structure the real story into EXACTLY {num_beats} chronological scene beats (between 12 and 24 beats) across the 4 PardaCine phases:
+1. Structure the exact real story of '{title}' into {num_beats} chronological scene beats (between 12 and 24 beats) across the 4 PardaCine phases:
    - Phase 1: Setup & Inciting Incident
    - Phase 2: Rising Stakes & Escalation
    - Phase 3: Major Twists & Darkest Hour
@@ -3874,7 +3957,7 @@ Write a gripping, 100% authentic movie explainer storyboard based strictly on th
 2. Target Explainer Runtime: ~{numeric_target:.0f}s (strictly within 5% = {min_allowed_sec:.0f}s and 20% = {max_allowed_sec:.0f}s of source movie).
 3. Calibrated Voice Speed: {wps:.2f} words/sec.
    - Write approximately ~{words_per_beat} natural {language} words for EACH scene beat (~{target_total_words} words total across all {num_beats} beats).
-   - Never write generic placeholder sentences; tell the actual story of '{title}' using only in-movie character names or archetype roles ("नायक", "अन्वेषक", "डॉक्टर", "वह साया").
+   - CRITICAL ACCURACY RULE: Never invent a fake story or generic placeholder sentences! Tell the 100% real, actual plot of '{title}' from start to finish using only in-movie character names or archetype roles ("नायक", "अन्वेषक", "डॉक्टर", "वह साया").
 
 Return STRICT JSON ONLY:
 {{
@@ -3893,60 +3976,115 @@ Return STRICT JSON ONLY:
 }}
 """
 
-    notify(15, f"Stage 3: Generating {num_beats} character-only scene beats from real story ({transcript_source})...")
+    notify(15, f"Stage 3: Generating {num_beats} authentic scene beats from real story ({transcript_source})...")
     raw_scene_beats: List[Dict[str, Any]] = []
     summary = ""
     source = f"real_story ({transcript_source})"
 
     try:
         import channel_key_store
+        from google.genai import types
+
         candidate_models = [
-            "gemini-3.6-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-flash-latest"
+            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
+            "gemini-2.5-flash-lite",
+            "gemini-3.1-flash-lite-preview"
         ]
 
-        def _do_explainer_call(client, api_key):
+        def _parse_storyboard_response(resp_text: str, mode_label: str, model_name: str, masked_k: str) -> bool:
             nonlocal raw_scene_beats, summary, source
+            txt = (resp_text or "").strip()
+            if not txt:
+                return False
+            m_json = re.search(r"\{[\s\S]*\}", txt)
+            if m_json:
+                txt = m_json.group(0)
+            data = json.loads(txt)
+            rc_list = data.get("keeper_clips") or []
+            if isinstance(rc_list, list) and len(rc_list) >= 6:
+                parsed = []
+                for idx, rc in enumerate(rc_list, 1):
+                    s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
+                    narr = sanitize_actor_names_to_character_roles(
+                        str(rc.get("narration") or rc.get("script_segment") or "").strip(),
+                        language
+                    )
+                    if narr:
+                        est_d = round(max(3.5, len(narr.split()) / max(1.5, wps)), 2)
+                        parsed.append({
+                            "id": idx,
+                            "phase": rc.get("phase", "Phase 2: Rising Stakes & Escalation"),
+                            "beat": rc.get("beat", f"[Beat {idx}]"),
+                            "start": round(s, 2),
+                            "end": round(min(float(duration), s + est_d), 2),
+                            "duration": est_d,
+                            "title": sanitize_actor_names_to_character_roles(rc.get("title", f"Scene {idx}"), language),
+                            "reason": sanitize_actor_names_to_character_roles(rc.get("reason", "PardaCine story beat"), language),
+                            "narration": narr
+                        })
+                if len(parsed) >= 6:
+                    parsed.sort(key=lambda x: x["start"])
+                    raw_scene_beats = parsed
+                    summary = sanitize_actor_names_to_character_roles(data.get("summary", ""), language)
+                    source = f"gemini ({model_name} | {mode_label}) [{masked_k}] + {transcript_source}"
+                    return True
+            return False
+
+        def _do_explainer_call(client, api_key):
             masked_k = channel_key_store.mask_key(api_key)
+            is_yt = bool(youtube_url_clean and ("youtube.com" in youtube_url_clean or "youtu.be" in youtube_url_clean))
+
             for model_name in candidate_models:
-                try:
-                    resp = client.models.generate_content(model=model_name, contents=prompt)
-                    txt = resp.text.strip()
-                    txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
-                    txt = re.sub(r"```$", "", txt).strip()
-                    data = json.loads(txt)
-                    rc_list = data.get("keeper_clips") or []
-                    if isinstance(rc_list, list) and len(rc_list) >= 6:
-                        parsed = []
-                        for idx, rc in enumerate(rc_list, 1):
-                            s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
-                            narr = sanitize_actor_names_to_character_roles(
-                                str(rc.get("narration") or rc.get("script_segment") or "").strip(),
-                                language
-                            )
-                            if narr:
-                                est_d = round(max(3.5, len(narr.split()) / max(1.5, wps)), 2)
-                                parsed.append({
-                                    "id": idx,
-                                    "phase": rc.get("phase", "Phase 2: Rising Stakes & Escalation"),
-                                    "beat": rc.get("beat", f"[Beat {idx}]"),
-                                    "start": round(s, 2),
-                                    "end": round(min(float(duration), s + est_d), 2),
-                                    "duration": est_d,
-                                    "title": sanitize_actor_names_to_character_roles(rc.get("title", f"Scene {idx}"), language),
-                                    "reason": sanitize_actor_names_to_character_roles(rc.get("reason", "PardaCine story beat"), language),
-                                    "narration": narr
-                                })
-                        if len(parsed) >= 6:
-                            parsed.sort(key=lambda x: x["start"])
-                            raw_scene_beats = parsed
-                            summary = sanitize_actor_names_to_character_roles(data.get("summary", ""), language)
-                            source = f"gemini ({model_name}) [{masked_k}] + {transcript_source}"
+                # Pass A: If YouTube URL is provided and runtime <= 5400s, try direct Multimodal YouTube Video ingestion first
+                if is_yt and duration <= 5400 and model_name in ["gemini-2.5-flash", "gemini-3-flash-preview"]:
+                    try:
+                        logger.info(f"Attempting direct YouTube video multimodal story extraction with {model_name} [{masked_k}]...")
+                        mm_contents = types.Content(
+                            parts=[
+                                types.Part(file_data=types.FileData(file_uri=youtube_url_clean)),
+                                types.Part(text=prompt)
+                            ]
+                        )
+                        resp = client.models.generate_content(
+                            model=model_name,
+                            contents=mm_contents,
+                            config=types.GenerateContentConfig(temperature=0.25)
+                        )
+                        if resp and resp.text and _parse_storyboard_response(resp.text, "youtube_video_multimodal", model_name, masked_k):
                             return True
+                    except Exception as mm_err:
+                        if any(term in str(mm_err) for term in ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]):
+                            raise mm_err
+                        logger.info(f"Multimodal YouTube video pass notice on {model_name}: {mm_err}")
+
+                # Pass B: Google Search Grounding + Real Extracted Transcript & Official Synopsis
+                try:
+                    logger.info(f"Attempting Google Search grounded story extraction with {model_name} [{masked_k}]...")
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            tools=[types.Tool(google_search=types.GoogleSearch())],
+                            temperature=0.25
+                        )
+                    )
+                    if resp and resp.text and _parse_storyboard_response(resp.text, "google_search_grounded", model_name, masked_k):
+                        return True
+                except Exception as gs_err:
+                    if any(term in str(gs_err) for term in ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]):
+                        raise gs_err
+                    logger.info(f"Google Search grounded pass notice on {model_name}: {gs_err}")
+
+                # Pass C: Direct Prompt with Full Transcript & Metadata
+                try:
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(temperature=0.25)
+                    )
+                    if resp and resp.text and _parse_storyboard_response(resp.text, "transcript_and_synopsis", model_name, masked_k):
+                        return True
                 except Exception as ge:
                     if any(term in str(ge) for term in ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]):
                         raise ge
@@ -3978,6 +4116,7 @@ Return STRICT JSON ONLY:
     narration_filename = None
     audio_master_synced = False
     sync_drift_sec = 0.0
+    locked_engine_used = "gemini_tts"
 
     if synthesize_audio_master:
         unique_id = uuid.uuid4().hex[:8]
@@ -3993,7 +4132,7 @@ Return STRICT JSON ONLY:
             wps=wps,
             cps=cps,
             include_bgm=True,
-            engine_lock="edge_neural",
+            engine_lock="gemini_tts",
             channel_id=channel_id,
             progress_callback=progress_callback
         )
@@ -4004,6 +4143,7 @@ Return STRICT JSON ONLY:
             narration_audio_url = f"/api/clipper/tts_sample/{narration_filename}"
             audio_master_synced = True
             sync_drift_sec = am_res.get("duration_delta", 0.0)
+            locked_engine_used = am_res.get("voice_engine_locked", "gemini_tts")
         else:
             keeper_clips = raw_scene_beats
             full_script = " ".join(c["narration"] for c in keeper_clips if c.get("narration"))
@@ -4058,7 +4198,7 @@ Return STRICT JSON ONLY:
         "calibrated_cps": cps,
         "voice_name": voice_name,
         "tone_style": tone_style,
-        "voice_engine_locked": "edge_neural",
+        "voice_engine_locked": locked_engine_used,
         "language": language,
         "total_duration_sec": round(tot_kept, 2),
         "audio_duration": round(tot_kept, 2),

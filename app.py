@@ -119,41 +119,51 @@ def save_user_account(email: str, creds_dict: dict, channels: list, active_chann
     save_accounts_store(accounts)
     return account_key
 
-def get_active_channel_id_or_default() -> str:
-    """Returns active channel ID from request, session, or accounts store, fallback to 'default'."""
-    ch_id = None
+def get_active_channel_id_or_default(explicit_channel_id: str = None) -> str:
+    """Returns active channel ID from request, session, or accounts store, resolving real channel IDs over 'default'."""
+    ch_id = (explicit_channel_id or "").strip()
+    if ch_id and ch_id.lower() != "default":
+        return ch_id
+
     try:
         if request:
-            ch_id = request.args.get('channel_id')
-            if not ch_id and request.is_json:
+            req_ch = request.args.get('channel_id')
+            if not req_ch and request.is_json:
                 data = request.get_json(silent=True) or {}
-                ch_id = data.get('channel_id')
-            if not ch_id:
-                ch_id = request.headers.get('X-Channel-Id') or request.form.get('channel_id')
+                req_ch = data.get('channel_id')
+            if not req_ch:
+                req_ch = request.headers.get('X-Channel-Id') or request.form.get('channel_id')
+            if req_ch and str(req_ch).strip().lower() != "default":
+                return str(req_ch).strip()
     except Exception:
         pass
 
-    if not ch_id and 'active_channel_id' in session and session['active_channel_id']:
-        ch_id = session['active_channel_id']
+    try:
+        sess_ch = session.get('active_channel_id')
+        if sess_ch and str(sess_ch).strip().lower() != "default":
+            return str(sess_ch).strip()
+    except Exception:
+        pass
 
-    if not ch_id:
-        try:
-            acc_key = session.get('active_account_key')
-            store = load_accounts_store()
-            if acc_key and acc_key in store and store[acc_key].get('active_channel_id'):
-                ch_id = store[acc_key]['active_channel_id']
-            elif store:
-                for acc in store.values():
-                    if acc.get('active_channel_id'):
-                        ch_id = acc['active_channel_id']
-                        break
-                    elif acc.get('channels') and len(acc['channels']) > 0:
-                        ch_id = acc['channels'][0].get('id')
-                        break
-        except Exception:
-            pass
+    try:
+        acc_key = session.get('active_account_key') if session else None
+        store = load_accounts_store()
+        if acc_key and acc_key in store and store[acc_key].get('active_channel_id'):
+            cand = str(store[acc_key]['active_channel_id']).strip()
+            if cand and cand.lower() != "default":
+                return cand
+        if store:
+            for acc in store.values():
+                if acc.get('active_channel_id') and str(acc['active_channel_id']).strip().lower() != "default":
+                    return str(acc['active_channel_id']).strip()
+                elif acc.get('channels') and len(acc['channels']) > 0:
+                    cid = str(acc['channels'][0].get('id') or '').strip()
+                    if cid and cid.lower() != "default":
+                        return cid
+    except Exception:
+        pass
 
-    return str(ch_id).strip() if ch_id else "default"
+    return ch_id if ch_id else "default"
 
 def get_oauth_redirect_uri():
     # Force HTTPS when behind reverse proxy like Render or if request is secure
@@ -9951,7 +9961,7 @@ def clipper_tts_preview():
         tone = (data.get('tone') or data.get('tone_style') or 'Narrative Deep Storytelling').strip()
         language = (data.get('language') or 'Hindi').strip()
         custom_text = (data.get('text') or '').strip()
-        ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+        ch_id = get_active_channel_id_or_default(data.get('channel_id'))
 
         # Standardized 5-second suspense dialogue in Hindi or English
         sample_text = custom_text or (
@@ -9995,12 +10005,14 @@ def clipper_tts_calibrate():
         language = (data.get('language') or 'Hindi').strip()
         job_id = (data.get('job_id') or '').strip()
         force_live = bool(data.get('force_live', False))
+        ch_id = get_active_channel_id_or_default(data.get('channel_id'))
 
         result = clipper_engine.calibrate_voice_speed(
             voice_name=voice,
             tone_style=tone,
             language=language,
-            force_live=force_live
+            force_live=force_live,
+            channel_id=ch_id
         )
         if job_id:
             try:
@@ -10056,7 +10068,7 @@ def tts_generate():
     elif audio_mode == 'original':
         return jsonify({'success': False, 'error': 'Original audio mode does not generate TTS audio'}), 200
 
-    ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+    ch_id = get_active_channel_id_or_default(data.get('channel_id'))
 
     if not script and not keeper_clips:
         return jsonify({'success': False, 'error': 'Narration script or keeper_clips is required'}), 200
@@ -10216,7 +10228,7 @@ def explainer_start_job():
 
     job_id = str(uuid.uuid4())[:10]
     creds = get_stored_credentials()
-    ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+    ch_id = get_active_channel_id_or_default(data.get('channel_id'))
 
     explainer_async_jobs[job_id] = {
         'job_id': job_id,
@@ -10316,6 +10328,7 @@ def trimmer_gemini_autocut():
     target_duration = data.get('target_duration')
     language = data.get('language', 'Hindi')
     custom_prompt = data.get('custom_prompt', '')
+    ch_id = get_active_channel_id_or_default(data.get('channel_id'))
 
     if target_duration:
         try:
@@ -10339,7 +10352,8 @@ def trimmer_gemini_autocut():
         focus_style=focus_style,
         target_duration=target_duration,
         language=language,
-        custom_prompt=custom_prompt
+        custom_prompt=custom_prompt,
+        channel_id=ch_id
     )
     return jsonify(result)
 
@@ -10372,7 +10386,7 @@ def trimmer_plan_explainer():
 
     try:
         creds = get_stored_credentials()
-        ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
+        ch_id = get_active_channel_id_or_default(data.get('channel_id'))
         synthesize_audio_master = bool(data.get('synthesize_audio_master', data.get('generate_audio', False)))
         storyboard = clipper_engine.generate_cinema_explainer_storyboard(
             youtube_url=youtube_url,
@@ -10400,7 +10414,7 @@ def _execute_trimmer_export_worker(task_id: str, payload: Dict[str, Any]):
     voice_name = payload.get('voice_name', 'Kore')
     tone_style = payload.get('tone_style', 'Narrative Deep')
     script = payload.get('script', '')
-    ch_id = payload.get('channel_id') or get_active_channel_id_or_default()
+    ch_id = get_active_channel_id_or_default(payload.get('channel_id'))
 
     def progress_cb(pct: int, msg: str):
         if task_id in trimmer_export_tasks:
