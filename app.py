@@ -163,6 +163,14 @@ def get_active_channel_id_or_default(explicit_channel_id: str = None) -> str:
     except Exception:
         pass
 
+    try:
+        import channel_key_store
+        db_cid = channel_key_store.get_first_authenticated_channel_id()
+        if db_cid and db_cid.lower() != "default":
+            return db_cid
+    except Exception:
+        pass
+
     return ch_id if ch_id else "default"
 
 def get_oauth_redirect_uri():
@@ -7298,7 +7306,8 @@ HTML_MAIN = """
                         voice_name: voice,
                         tone_style: tone,
                         language: lang,
-                        force_live: true
+                        force_live: true,
+                        channel_id: window.currentActiveChannelId || 'default'
                     })
                 });
                 const calData = await calRes.json();
@@ -7590,7 +7599,8 @@ HTML_MAIN = """
                     updateSeqStepPills(5);
 
                     if (explainerPipelineStatusTitle) {
-                        const lockEngineBadge = data.locked_voice_engine ? ` • Voice Lock: ${data.locked_voice_engine}` : '';
+                        const lockEngineName = data.voice_engine_locked || data.locked_voice_engine || '';
+                        const lockEngineBadge = lockEngineName ? ` • Voice Lock: ${lockEngineName}` : '';
                         explainerPipelineStatusTitle.innerHTML = `✅ <b>Audio-Master 1:1 Storyboard &amp; Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie • Δ 0.00s drift${lockEngineBadge}) synced to Step 5 CapCut timeline.`;
                     }
                 } catch (err) {
@@ -7682,7 +7692,8 @@ HTML_MAIN = """
                             tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
                             language: 'Hindi',
                             audio_mode: audioMode,
-                            include_bgm: includeBgm
+                            include_bgm: includeBgm,
+                            channel_id: window.currentActiveChannelId || 'default'
                         })
                     });
                     const data = await res.json();

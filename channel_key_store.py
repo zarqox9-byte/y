@@ -197,11 +197,94 @@ def rehydrate_from_backups_if_empty():
         logger.warning(f"Rehydrate check notice: {e}")
 
 
-def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
+def _is_valid_real_gemini_key(k: Any) -> bool:
+    if not isinstance(k, str):
+        return False
+    ks = k.strip()
+    if len(ks) < 25:
+        return False
+    lower_k = ks.lower()
+    if any(tok in lower_k for tok in ["dummy", "testkey", "fakekey", "testing", "your_api_key", "placeholder"]):
+        return False
+    return True
+
+
+def get_first_authenticated_channel_id() -> str:
+    """
+    Returns the first channel_id that has at least one valid Gemini API key
+    from user_accounts.json, channel_gemini_keys DB table, or backup JSON.
+    Falls back to 'default'.
+    """
+    # 1. Check user_accounts.json first for real connected YouTube channels (UC...)
+    if os.path.exists(ACCOUNTS_STORE_FILE):
+        try:
+            with open(ACCOUNTS_STORE_FILE, "r", encoding="utf-8") as f:
+                acc_store = json.load(f)
+            if isinstance(acc_store, dict):
+                for acc in acc_store.values():
+                    if isinstance(acc, dict):
+                        cid = str(acc.get("active_channel_id") or "").strip()
+                        if cid and cid.lower() != "default" and not cid.lower().startswith("test_chan"):
+                            return cid
+                        ch_list = acc.get("channels") or []
+                        if isinstance(ch_list, list) and ch_list:
+                            c0 = str(ch_list[0].get("id") or "").strip()
+                            if c0 and c0.lower() != "default" and not c0.lower().startswith("test_chan"):
+                                return c0
+        except Exception:
+            pass
+
+    # 2. Check channel_gemini_keys DB table for non-test channels with valid real keys
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT channel_id, keys_json FROM channel_gemini_keys ORDER BY updated_at DESC")
+        rows = cur.fetchall() or []
+        conn.close()
+        for r in rows:
+            cid = str(r[0] if isinstance(r, (tuple, list)) else r["channel_id"]).strip()
+            raw_j = r[1] if isinstance(r, (tuple, list)) else r["keys_json"]
+            if not cid or cid.lower() == "default" or cid.lower().startswith("test_chan"):
+                continue
+            try:
+                k_list = json.loads(raw_j)
+                if isinstance(k_list, list) and any(_is_valid_real_gemini_key(k) for k in k_list):
+                    return cid
+            except Exception:
+                pass
+        for r in rows:
+            cid = str(r[0] if isinstance(r, (tuple, list)) else r["channel_id"]).strip()
+            raw_j = r[1] if isinstance(r, (tuple, list)) else r["keys_json"]
+            if cid.lower().startswith("test_chan"):
+                continue
+            try:
+                k_list = json.loads(raw_j)
+                if cid and isinstance(k_list, list) and any(_is_valid_real_gemini_key(k) for k in k_list):
+                    return cid
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"get_first_authenticated_channel_id DB notice: {e}")
+
+    # 3. Check backup JSON
+    backup_data = load_backup_json()
+    if isinstance(backup_data, dict):
+        for cid, k_list in backup_data.items():
+            if cid and cid.lower() != "default" and not cid.lower().startswith("test_chan") and isinstance(k_list, list) and any(_is_valid_real_gemini_key(k) for k in k_list):
+                return str(cid).strip()
+        for cid, k_list in backup_data.items():
+            if cid and not cid.lower().startswith("test_chan") and isinstance(k_list, list) and any(_is_valid_real_gemini_key(k) for k in k_list):
+                return str(cid).strip()
+
+    return "default"
+
+
+def get_channel_keys(channel_id: Optional[str] = None, strict_channel_only: bool = False) -> List[str]:
     """
     Retrieves the array of up to 10 Gemini API keys for a channel ID.
-    If no keys configured for that channel ID, falls back to any active channel pool in DB,
-    'default' pool, backup JSON, user_accounts.json, gemini_config.json, or GEMINI_API_KEY env.
+    Prioritizes keys bound to `channel_id`, and (unless strict_channel_only=True)
+    appends any additional failover keys from other configured channels in DB,
+    backup JSON, user_accounts.json, gemini_config.json, and GEMINI_API_KEY env.
     """
     clean_id = (channel_id or "").strip() or "default"
     keys: List[str] = []
@@ -220,19 +303,22 @@ def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
             raw_json = row[0] if isinstance(row, (tuple, list)) else row["keys_json"]
             parsed = json.loads(raw_json)
             if isinstance(parsed, list):
-                keys = [k.strip() for k in parsed if isinstance(k, str) and k.strip()]
+                keys.extend(k.strip() for k in parsed if _is_valid_real_gemini_key(k))
 
-        # 1b. If exact channel_id had no keys, pool keys from any configured channel in DB (e.g. UC... <-> default)
-        if not keys:
-            cur.execute("SELECT keys_json FROM channel_gemini_keys ORDER BY updated_at DESC")
+        # 1b. Pool additional failover keys from any configured channel in DB
+        if not strict_channel_only:
+            cur.execute("SELECT channel_id, keys_json FROM channel_gemini_keys ORDER BY updated_at DESC")
             all_rows = cur.fetchall() or []
             for r in all_rows:
-                raw_j = r[0] if isinstance(r, (tuple, list)) else r["keys_json"]
+                row_cid = str(r[0] if isinstance(r, (tuple, list)) else r["channel_id"]).strip()
+                if row_cid.lower().startswith("test_chan"):
+                    continue
+                raw_j = r[1] if isinstance(r, (tuple, list)) else r["keys_json"]
                 try:
                     p_list = json.loads(raw_j)
                     if isinstance(p_list, list):
                         for k in p_list:
-                            if isinstance(k, str) and k.strip():
+                            if _is_valid_real_gemini_key(k):
                                 keys.append(k.strip())
                 except Exception:
                     pass
@@ -240,23 +326,33 @@ def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
     except Exception as e:
         logger.warning(f"DB query error for channel {clean_id}: {e}")
 
-    # 2. Fallback to Backup JSON if DB query returned nothing
-    if not keys:
-        backup_data = load_backup_json()
-        if isinstance(backup_data, dict):
-            if clean_id in backup_data and isinstance(backup_data[clean_id], list):
-                keys = [k.strip() for k in backup_data[clean_id] if isinstance(k, str) and k.strip()]
-            if not keys:
-                for ch_k, k_list in backup_data.items():
-                    if isinstance(k_list, list):
-                        for k in k_list:
-                            if isinstance(k, str) and k.strip():
-                                keys.append(k.strip())
-            if keys:
-                save_channel_keys_to_db(clean_id, keys, mirror_backup=False)
+    # 2. Check Backup JSON
+    backup_data = load_backup_json()
+    if isinstance(backup_data, dict):
+        if clean_id in backup_data and isinstance(backup_data[clean_id], list):
+            for k in backup_data[clean_id]:
+                if _is_valid_real_gemini_key(k):
+                    keys.append(k.strip())
+        if not strict_channel_only:
+            for ch_k, k_list in backup_data.items():
+                if str(ch_k).lower().startswith("test_chan"):
+                    continue
+                if isinstance(k_list, list):
+                    for k in k_list:
+                        if _is_valid_real_gemini_key(k):
+                            keys.append(k.strip())
 
-    # 3. Fallback to user_accounts.json if keys were saved on account objects
-    if not keys and os.path.exists(ACCOUNTS_STORE_FILE):
+    if strict_channel_only:
+        seen_s = set()
+        dedup_s = []
+        for k in keys:
+            if k not in seen_s:
+                seen_s.add(k)
+                dedup_s.append(k)
+        return dedup_s[:10]
+
+    # 3. Check user_accounts.json if keys were saved on account objects
+    if os.path.exists(ACCOUNTS_STORE_FILE):
         try:
             with open(ACCOUNTS_STORE_FILE, "r", encoding="utf-8") as f:
                 acc_store = json.load(f)
@@ -266,42 +362,39 @@ def get_channel_keys(channel_id: Optional[str] = None) -> List[str]:
                         acc_keys = acc.get("gemini_keys") or acc.get("api_keys") or []
                         if isinstance(acc_keys, list):
                             for k in acc_keys:
-                                if isinstance(k, str) and k.strip():
+                                if _is_valid_real_gemini_key(k):
                                     keys.append(k.strip())
                         single_k = acc.get("gemini_api_key") or acc.get("api_key")
-                        if isinstance(single_k, str) and single_k.strip():
+                        if _is_valid_real_gemini_key(single_k):
                             keys.append(single_k.strip())
         except Exception:
             pass
 
-    # 4. Fallback to gemini_config.json
-    if not keys and os.path.exists(CONFIG_FILE):
+    # 4. Check gemini_config.json
+    if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
                 k = cfg.get("api_key", "").strip()
-                if k:
-                    keys = [k]
-                    save_channel_keys_to_db(clean_id, keys, mirror_backup=True)
+                if _is_valid_real_gemini_key(k):
+                    keys.append(k)
                 extra_pool = cfg.get("keys_pool") or cfg.get("keys") or []
                 if isinstance(extra_pool, list):
                     for ek in extra_pool:
-                        if isinstance(ek, str) and ek.strip():
+                        if _is_valid_real_gemini_key(ek):
                             keys.append(ek.strip())
         except Exception:
             pass
 
-    # 5. Fallback to GEMINI_API_KEY / GOOGLE_API_KEY environment variables
-    if not keys:
-        for env_var in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
-            env_key = os.environ.get(env_var, "").strip()
-            if env_key:
-                keys = [k.strip() for k in env_key.split(",") if k.strip()]
-                if keys:
-                    save_channel_keys_to_db(clean_id, keys, mirror_backup=True)
-                    break
+    # 5. Check GEMINI_API_KEY / GOOGLE_API_KEY environment variables
+    for env_var in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+        env_key = os.environ.get(env_var, "").strip()
+        if env_key:
+            for k in env_key.split(","):
+                if _is_valid_real_gemini_key(k):
+                    keys.append(k.strip())
 
-    # Deduplicate while preserving order and limit to 10
+    # Deduplicate while preserving priority order and limit to 10
     seen = set()
     deduped = []
     for k in keys:
@@ -419,7 +512,7 @@ def add_channel_key(channel_id: str, new_key: str, verify: bool = True) -> Tuple
     if not clean_key:
         return False, "API key cannot be empty"
 
-    current_keys = get_channel_keys(channel_id)
+    current_keys = get_channel_keys(channel_id, strict_channel_only=True)
     if clean_key in current_keys:
         return False, "This API key is already in this channel's pool"
 
@@ -443,7 +536,9 @@ def remove_channel_key(channel_id: str, index: int) -> Tuple[bool, str]:
     Removes a key from the channel's pool by its index (0 to 9).
     Manual delete only.
     """
-    current_keys = get_channel_keys(channel_id)
+    current_keys = get_channel_keys(channel_id, strict_channel_only=True)
+    if not current_keys:
+        current_keys = get_channel_keys(channel_id)
     if index < 0 or index >= len(current_keys):
         return False, f"Invalid key index: {index}"
 
@@ -460,7 +555,9 @@ def update_channel_key(channel_id: str, index: int, new_key: str, verify: bool =
     if not clean_key:
         return False, "New key cannot be empty"
 
-    current_keys = get_channel_keys(channel_id)
+    current_keys = get_channel_keys(channel_id, strict_channel_only=True)
+    if not current_keys:
+        current_keys = get_channel_keys(channel_id)
     if index < 0 or index >= len(current_keys):
         return False, f"Invalid key slot: {index}"
 
@@ -478,7 +575,7 @@ def get_next_channel_key(channel_id: Optional[str] = None) -> Optional[str]:
     """
     Returns the next Gemini API key in round-robin sequence for this channel.
     """
-    clean_id = (channel_id or "").strip() or "default"
+    clean_id = (channel_id or "").strip() or get_first_authenticated_channel_id()
     keys = get_channel_keys(clean_id)
     if not keys:
         return None
@@ -494,7 +591,9 @@ def get_channel_key_pool_status(channel_id: Optional[str] = None) -> Dict[str, A
     """
     Returns detailed status of the channel's 10-key pool for the UI modal.
     """
-    clean_id = (channel_id or "").strip() or "default"
+    clean_id = (channel_id or "").strip()
+    if not clean_id or clean_id.lower() == "default":
+        clean_id = get_first_authenticated_channel_id()
     keys = get_channel_keys(clean_id)
     curr_idx = _ROTATION_INDICES.get(clean_id, 0) % max(len(keys), 1) if keys else 0
 
@@ -531,14 +630,19 @@ def get_channel_key_pool_status(channel_id: Optional[str] = None) -> Dict[str, A
 
 def execute_with_channel_key_rotation(
     channel_id: Optional[str],
-    operation_name: str,
-    action_fn: Callable[[Any, str], Any]
+    operation_name: Any,
+    action_fn: Optional[Callable[[Any, str], Any]] = None
 ) -> Any:
     """
     Executes action_fn(client, api_key) with automatic round-robin and
-    instant failover on HTTP 429 (RESOURCE_EXHAUSTED) across the 10-key pool.
+    instant failover across all available keys in the channel's pool.
     """
-    clean_id = (channel_id or "").strip() or "default"
+    if action_fn is None and callable(operation_name):
+        action_fn = operation_name
+        operation_name = "GeminiOperation"
+    clean_id = (channel_id or "").strip()
+    if not clean_id or clean_id.lower() == "default":
+        clean_id = get_first_authenticated_channel_id()
     keys = get_channel_keys(clean_id)
 
     if not keys:
@@ -562,38 +666,27 @@ def execute_with_channel_key_rotation(
         try:
             client = genai.Client(api_key=key)
             res = action_fn(client, key)
-            # On success, advance the round-robin index for the next call
-            _ROTATION_INDICES[clean_id] = (idx + 1) % total_keys
-            return res
-        except Exception as e:
-            err_str = str(e)
-            is_quota_error = any(
-                term in err_str for term in [
-                    "429", "RESOURCE_EXHAUSTED", "quota", "Quota exceeded",
-                    "rate limit", "RATE_LIMIT_EXCEEDED"
-                ]
+            if res is not False and res is not None:
+                _ROTATION_INDICES[clean_id] = (idx + 1) % total_keys
+                return res
+            logger.warning(
+                f"[{operation_name}] Key Slot #{idx + 1} ({masked}) returned empty/false result. "
+                f"Rotating to next key in pool ({attempt + 1}/{total_keys})..."
             )
+        except Exception as e:
+            last_err = e
+            logger.warning(
+                f"[{operation_name}] Key Slot #{idx + 1} ({masked}) encountered error ({e}). "
+                f"Rotating to next key in channel pool ({attempt + 1}/{total_keys})..."
+            )
+            continue
 
-            if is_quota_error:
-                logger.warning(
-                    f"[{operation_name}] Key Slot #{idx + 1} ({masked}) hit quota limit (429). "
-                    f"Failing over to next key in channel pool ({attempt + 1}/{total_keys})..."
-                )
-                last_err = e
-                continue
-            else:
-                # Non-quota error (e.g. invalid parameter), don't silently loop all keys unless it's permission denied
-                if "PERMISSION_DENIED" in err_str or "API_KEY_INVALID" in err_str:
-                    logger.warning(f"[{operation_name}] Key Slot #{idx + 1} ({masked}) permission error: {e}. Trying next...")
-                    last_err = e
-                    continue
-                raise e
-
-    # If all keys in pool hit quota limits
-    raise RuntimeError(
-        f"All {total_keys} Gemini API keys in channel pool '{clean_id}' are currently exhausted (Quota 429). "
-        f"Last error: {last_err}. Please add additional keys in the Settings modal."
-    )
+    if last_err:
+        raise RuntimeError(
+            f"All {total_keys} Gemini API keys in channel pool '{clean_id}' failed or hit quota limits. "
+            f"Last error: {last_err}."
+        )
+    return False
 
 
 # Automatically initialize DB tables on import

@@ -574,8 +574,8 @@ _BANNED_FEMALE_ACTORS = [
 
 def sanitize_actor_names_to_character_roles(text: str, language: str = "Hindi") -> str:
     """
-    Strictly scrubs any real-life actor/celebrity names from narration text and replaces them
-    with in-universe character roles ('नायक' / 'नायिका' or 'the protagonist' / 'the heroine').
+    Strictly scrubs any real-life actor/celebrity/director names and fourth-wall meta film terms
+    from narration text and replaces them with in-universe character roles ('नायक' / 'नायिका' / 'किरदार').
     """
     if not text or not isinstance(text, str):
         return ""
@@ -596,9 +596,31 @@ def sanitize_actor_names_to_character_roles(text: str, language: str = "Hindi") 
         if hi_name:
             out = out.replace(hi_name, female_role)
 
-    # Also scrub generic "अभिनेता <Name>" or "एक्टर <Name>"
-    out = re.sub(r"\b(actor|actress|superstar|megastar)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?", male_role, out, flags=re.IGNORECASE)
-    return out
+    banned_directors = [
+        ("Rohit Shetty", "रोहित शेट्टी"),
+        ("S. S. Rajamouli", "राजामौली"),
+        ("Karan Johar", "करण जौहर"),
+        ("Sanjay Leela Bhansali", "संजय लीला भंसाली"),
+        ("Prashanth Neel", "प्रशांत नील"),
+        ("Lokesh Kanagaraj", "लोकेश कनगराज"),
+        ("Sandeep Reddy Vanga", "संदीप रेड्डी वांगा"),
+        ("Christopher Nolan", "क्रिस्टोफर नोलन"),
+    ]
+    for en_d, hi_d in banned_directors:
+        out = re.sub(rf"\b{re.escape(en_d)}\b", male_role, out, flags=re.IGNORECASE)
+        if hi_d:
+            out = out.replace(hi_d, male_role)
+
+    # Scrub generic "अभिनेता <Name>", "Directed by <Name>", or fourth-wall meta words
+    out = re.sub(r"\b(actor|actress|superstar|megastar|directed by|director)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?", male_role, out, flags=re.IGNORECASE)
+    out = re.sub(r"\bdirected by\b", "", out, flags=re.IGNORECASE)
+    if is_hi:
+        out = out.replace("डायरेक्टर", "किरदार").replace("अभिनेता", "नायक").replace("अभिनेत्री", "नायिका")
+        out = out.replace("अभिनय", "संघर्ष").replace("इस फिल्म में", "इस कहानी में").replace("फिल्म", "कहानी")
+    return out.strip()
+
+
+sanitize_character_only_narration = sanitize_actor_names_to_character_roles
 
 
 def analyze_movie_narrative_for_shorts(
@@ -3197,6 +3219,10 @@ def _build_metadata_driven_scene_beats(
         ]
         real_lines.extend(desc_sentences)
 
+    # Zero Fake Content Policy: If no real transcript, chapter, or synopsis lines exist, return empty list
+    if not real_lines:
+        return []
+
     num_beats = max(12, min(20, int(round(target_duration / 18.0)) or 12))
     phases = [
         ("Phase 1: Setup & Inciting Incident", "[Suspense Hook]"),
@@ -3213,27 +3239,15 @@ def _build_metadata_driven_scene_beats(
         phase_name, beat_tag = phases[phase_idx]
         anchor_s = round(max(0.0, idx * span + (span * 0.15)), 2)
 
-        if real_lines:
-            src_line = real_lines[idx % len(real_lines)]
-            if is_hi:
-                narr = f"{clean_title} के दृश्य {idx + 1} में {src_line}"
-                if not narr.endswith(("।", ".", "!", "?")):
-                    narr += "।"
-            else:
-                narr = f"In scene {idx + 1} of {clean_title}, {src_line}"
-                if not narr.endswith((".", "!", "?")):
-                    narr += "."
+        src_line = real_lines[idx % len(real_lines)]
+        if is_hi:
+            narr = f"{clean_title} के दृश्य {idx + 1} में {src_line}"
+            if not narr.endswith(("।", ".", "!", "?")):
+                narr += "।"
         else:
-            if is_hi:
-                narr = (
-                    f"{clean_title} के भाग {idx + 1} में नायक और अन्वेषक के सामने कहानी का अगला रहस्य खुलता है, "
-                    f"जहाँ हर निर्णय उन्हें अंतिम सच के और करीब ले जाता है।"
-                )
-            else:
-                narr = (
-                    f"In scene {idx + 1} of {clean_title}, the protagonist uncovers the next layer of the mystery "
-                    f"as every decision brings the hidden truth closer to light."
-                )
+            narr = f"In scene {idx + 1} of {clean_title}, {src_line}"
+            if not narr.endswith((".", "!", "?")):
+                narr += "."
 
         est_dur = round(max(4.0, len(narr.split()) / max(1.5, wps)), 2)
         beats.append({
@@ -3452,6 +3466,8 @@ def execute_audio_master_1to1_pipeline(
                 "audio_duration": d_audio,
                 "audio_start": audio_start,
                 "audio_end": audio_end,
+                "audioStart": audio_start,
+                "audioEnd": audio_end,
                 "sync_drift_sec": 0.0,
                 "title": sanitize_actor_names_to_character_roles(str(rb.get("title") or f"Scene {idx}"), language),
                 "reason": sanitize_actor_names_to_character_roles(str(rb.get("reason") or "Audio-Master 1:1 locked scene"), language),
@@ -3522,6 +3538,8 @@ def execute_audio_master_1to1_pipeline(
             last_c["duration"] = round(max(1.0, last_c["duration"] + diff_ms), 3)
             last_c["end"] = round(last_c["start"] + last_c["duration"], 3)
             last_c["end_ts"] = format_seconds_to_timestamp(last_c["end"])
+            last_c["audio_end"] = round(last_c["audio_start"] + last_c["duration"], 3)
+            last_c["audioEnd"] = last_c["audio_end"]
             total_cuts_duration = round(sum(c["duration"] for c in final_keeper_clips), 3)
 
         sync_delta = round(abs(measured_master_audio - total_cuts_duration), 3)
@@ -3535,8 +3553,10 @@ def execute_audio_master_1to1_pipeline(
             "audio_duration": round(measured_master_audio, 2),
             "video_duration": round(total_cuts_duration, 2),
             "duration_delta": sync_delta,
+            "sync_drift_sec": sync_delta,
             "synced_1to1": sync_delta <= 0.5,
             "voice_engine_locked": active_engine,
+            "locked_voice_engine": active_engine,
             "locked_engine": active_engine,
             "voice_name": voice_name,
             "tone_style": tone_style,
@@ -3575,6 +3595,11 @@ def synthesize_scene_by_scene_synced_audio(
     Synthesizes scene beats using Single-Engine Voice Lock, measures natural `D_audio` for each beat,
     and updates `keeper_clips` cut durations so `Total_Audio_Duration == Total_Video_Duration` (0.0s drift).
     """
+    if not keeper_clips and kwargs.get("scene_beats"):
+        keeper_clips = kwargs.get("scene_beats")
+    if not output_path:
+        output_path = os.path.join(TEMP_DIR, f"synced_master_{uuid.uuid4().hex[:8]}.mp3")
+
     effective_wps = float(wps or 2.35)
     effective_cps = float(cps or 12.5)
     clean_script = sanitize_actor_names_to_character_roles(script or "", language).strip()
@@ -3584,6 +3609,8 @@ def synthesize_scene_by_scene_synced_audio(
         for idx, kc in enumerate(keeper_clips, 1):
             if isinstance(kc, dict):
                 c_copy = dict(kc)
+                if "start" not in c_copy and "start_seconds" in c_copy:
+                    c_copy["start"] = float(c_copy["start_seconds"])
                 c_copy["narration"] = sanitize_actor_names_to_character_roles(
                     str(c_copy.get("narration") or c_copy.get("script_segment") or "").strip(),
                     language
@@ -3617,8 +3644,8 @@ def synthesize_scene_by_scene_synced_audio(
             })
             cursor = round(cursor + est_d + 5.0, 2)
 
-    max_end = max((float(b.get("end", 0.0)) for b in beats_input), default=600.0)
-    src_dur = max(600.0, max_end * 1.2, float(target_duration_sec or 0.0) * 5.0)
+    max_end = max((float(b.get("end", b.get("start", 0.0) + 10.0)) for b in beats_input), default=600.0)
+    src_dur = max(600.0, float(kwargs.get("video_duration") or 0.0), max_end * 1.2, float(target_duration_sec or 0.0) * 5.0)
 
     return execute_audio_master_1to1_pipeline(
         scene_beats=beats_input,
@@ -3786,6 +3813,50 @@ JSON Format:
         "keeper_clips": keeper_clips,
         "script": full_script
     }
+
+
+def parse_storyboard_json_payload(resp_text: str) -> Dict[str, Any]:
+    """
+    Robustly extracts and parses JSON storyboard objects from Gemini responses,
+    cleaning trailing commas and recovering scenes/keeper_clips even when
+    unescaped inner quotes occur inside Hindi narration strings.
+    """
+    txt = (resp_text or "").strip()
+    if not txt:
+        return {}
+    m_json = re.search(r"\{[\s\S]*\}", txt)
+    if m_json:
+        txt = m_json.group(0)
+    # Clean trailing commas before closing brackets/braces
+    txt_clean = re.sub(r",\s*([\]}])", r"\1", txt)
+    try:
+        data = json.loads(txt_clean)
+        if isinstance(data, dict):
+            if "keeper_clips" in data and "scenes" not in data:
+                data["scenes"] = data["keeper_clips"]
+            elif "scenes" in data and "keeper_clips" not in data:
+                data["keeper_clips"] = data["scenes"]
+            return data
+    except Exception:
+        pass
+
+    # Regex recovery if Gemini included unescaped quotes inside Hindi narration strings
+    recovered_clips = []
+    for m_obj in re.finditer(
+        r'\{[^{}]*?"(?:start|start_seconds)"\s*:\s*([0-9.]+)[^{}]*?"(?:narration|script_segment)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z_]+"\s*:|\s*\})',
+        txt_clean
+    ):
+        recovered_clips.append({
+            "start": float(m_obj.group(1)),
+            "start_seconds": float(m_obj.group(1)),
+            "narration": m_obj.group(2).replace('\\"', '"')
+        })
+    if recovered_clips:
+        return {"summary": "", "keeper_clips": recovered_clips, "scenes": recovered_clips}
+    return {}
+
+
+_parse_storyboard_response = parse_storyboard_json_payload
 
 
 def generate_cinema_explainer_storyboard(
@@ -3992,20 +4063,17 @@ Return STRICT JSON ONLY:
             "gemini-3.1-flash-lite-preview"
         ]
 
-        def _parse_storyboard_response(resp_text: str, mode_label: str, model_name: str, masked_k: str) -> bool:
+        def _parse_storyboard_response(resp_text: str, mode_label: str = "direct", model_name: str = "gemini-2.5-flash", masked_k: str = "") -> bool:
             nonlocal raw_scene_beats, summary, source
-            txt = (resp_text or "").strip()
-            if not txt:
+            data = parse_storyboard_json_payload(resp_text)
+            if not isinstance(data, dict):
                 return False
-            m_json = re.search(r"\{[\s\S]*\}", txt)
-            if m_json:
-                txt = m_json.group(0)
-            data = json.loads(txt)
-            rc_list = data.get("keeper_clips") or []
+
+            rc_list = data.get("keeper_clips") or data.get("scenes") or data.get("beats") or []
             if isinstance(rc_list, list) and len(rc_list) >= 6:
                 parsed = []
                 for idx, rc in enumerate(rc_list, 1):
-                    s = max(0.0, min(duration - 2.0, float(rc.get("start", 0))))
+                    s = max(0.0, min(duration - 2.0, float(rc.get("start", rc.get("start_seconds", 0)) or 0)))
                     narr = sanitize_actor_names_to_character_roles(
                         str(rc.get("narration") or rc.get("script_segment") or "").strip(),
                         language
@@ -4020,13 +4088,13 @@ Return STRICT JSON ONLY:
                             "end": round(min(float(duration), s + est_d), 2),
                             "duration": est_d,
                             "title": sanitize_actor_names_to_character_roles(rc.get("title", f"Scene {idx}"), language),
-                            "reason": sanitize_actor_names_to_character_roles(rc.get("reason", "PardaCine story beat"), language),
+                            "reason": sanitize_actor_names_to_character_roles(rc.get("reason", rc.get("visual_description", "PardaCine story beat")), language),
                             "narration": narr
                         })
                 if len(parsed) >= 6:
                     parsed.sort(key=lambda x: x["start"])
                     raw_scene_beats = parsed
-                    summary = sanitize_actor_names_to_character_roles(data.get("summary", ""), language)
+                    summary = sanitize_actor_names_to_character_roles(data.get("summary", data.get("title", "")), language)
                     source = f"gemini ({model_name} | {mode_label}) [{masked_k}] + {transcript_source}"
                     return True
             return False
@@ -4036,8 +4104,8 @@ Return STRICT JSON ONLY:
             is_yt = bool(youtube_url_clean and ("youtube.com" in youtube_url_clean or "youtu.be" in youtube_url_clean))
 
             for model_name in candidate_models:
-                # Pass A: If YouTube URL is provided and runtime <= 5400s, try direct Multimodal YouTube Video ingestion first
-                if is_yt and duration <= 5400 and model_name in ["gemini-2.5-flash", "gemini-3-flash-preview"]:
+                # Pass A: If YouTube URL is provided, try direct Multimodal YouTube Video ingestion first
+                if is_yt and model_name in ["gemini-2.5-flash", "gemini-3-flash-preview"]:
                     try:
                         logger.info(f"Attempting direct YouTube video multimodal story extraction with {model_name} [{masked_k}]...")
                         mm_contents = types.Content(
@@ -4049,7 +4117,7 @@ Return STRICT JSON ONLY:
                         resp = client.models.generate_content(
                             model=model_name,
                             contents=mm_contents,
-                            config=types.GenerateContentConfig(temperature=0.25)
+                            config=types.GenerateContentConfig(temperature=0.25, response_mime_type="application/json")
                         )
                         if resp and resp.text and _parse_storyboard_response(resp.text, "youtube_video_multimodal", model_name, masked_k):
                             return True
@@ -4076,12 +4144,12 @@ Return STRICT JSON ONLY:
                         raise gs_err
                     logger.info(f"Google Search grounded pass notice on {model_name}: {gs_err}")
 
-                # Pass C: Direct Prompt with Full Transcript & Metadata
+                # Pass C: Direct Structured JSON Prompt with Full Transcript & Metadata
                 try:
                     resp = client.models.generate_content(
                         model=model_name,
                         contents=prompt,
-                        config=types.GenerateContentConfig(temperature=0.25)
+                        config=types.GenerateContentConfig(temperature=0.25, response_mime_type="application/json")
                     )
                     if resp and resp.text and _parse_storyboard_response(resp.text, "transcript_and_synopsis", model_name, masked_k):
                         return True
@@ -4110,6 +4178,15 @@ Return STRICT JSON ONLY:
             f"PardaCine Cinema Explainer for '{sanitize_actor_names_to_character_roles(title, language)}' "
             f"(extracted from {transcript_source})."
         )
+
+    if not raw_scene_beats:
+        return {
+            "success": False,
+            "error": (
+                f"Could not determine a verified storyline for '{title}' (no subtitles/synopsis available and Gemini API "
+                "could not ground the plot). Please verify your channel's Gemini API key in Settings or provide plot context."
+            )
+        }
 
     # Stage 4: Execute Audio-Master 1:1 Sync (Generate audio per beat first -> set cut length = D_audio)
     narration_audio_url = None
