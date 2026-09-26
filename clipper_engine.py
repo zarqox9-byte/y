@@ -17,6 +17,7 @@ import sys
 import json
 import uuid
 import time
+import math
 import asyncio
 import logging
 import subprocess
@@ -70,10 +71,14 @@ CLIPPER_DIR = os.path.join(BASE_DIR, "uploads", "clipper_shorts")
 TEMP_DIR = os.path.join(BASE_DIR, "uploads", "clipper_temp")
 JOBS_DIR = os.path.join(BASE_DIR, "uploads", "clipper_jobs")
 CUTS_DIR = os.path.join(BASE_DIR, "uploads", "clipper_cuts")
+TRIMMER_VIDEOS_DIR = os.path.join(BASE_DIR, "uploads", "trimmer_videos")
+TRIMMER_EXPORTS_DIR = os.path.join(BASE_DIR, "uploads", "trimmer_exports")
 os.makedirs(CLIPPER_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(JOBS_DIR, exist_ok=True)
 os.makedirs(CUTS_DIR, exist_ok=True)
+os.makedirs(TRIMMER_VIDEOS_DIR, exist_ok=True)
+os.makedirs(TRIMMER_EXPORTS_DIR, exist_ok=True)
 
 
 # =====================================================================
@@ -2486,4 +2491,450 @@ def process_single_short_pipeline(
         progress_callback=progress_callback
     )
     return vertical_short
+
+
+# =====================================================================
+# TIMELINE VIDEO TRIMMER & NARRATIVE SLICER ENGINE (ORIGINAL RESOLUTION)
+# =====================================================================
+
+def get_video_metadata(video_path: str) -> Dict[str, Any]:
+    """
+    Extracts metadata from a video file using ffprobe.
+    Preserves and reports exact native width, height, aspect ratio, fps, and duration.
+    """
+    meta = {
+        "path": video_path,
+        "filename": os.path.basename(video_path),
+        "duration": 0.0,
+        "duration_str": "00:00:00",
+        "width": 1920,
+        "height": 1080,
+        "aspect_ratio": "16:9",
+        "fps": 30.0,
+        "size_bytes": 0,
+        "size_mb": 0.0,
+        "has_audio": True,
+        "video_codec": "h264"
+    }
+    if not os.path.exists(video_path):
+        return meta
+
+    meta["size_bytes"] = os.path.getsize(video_path)
+    meta["size_mb"] = round(meta["size_bytes"] / (1024 * 1024), 2)
+
+    ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
+    try:
+        cmd = [
+            ffprobe_bin, "-v", "error",
+            "-show_entries", "stream=codec_type,codec_name,width,height,r_frame_rate,duration",
+            "-show_entries", "format=duration",
+            "-of", "json",
+            video_path
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        if res.returncode == 0 and res.stdout:
+            data = json.loads(res.stdout)
+            fmt_dur = data.get("format", {}).get("duration")
+            if fmt_dur:
+                try:
+                    meta["duration"] = round(float(fmt_dur), 2)
+                except Exception:
+                    pass
+
+            has_audio = False
+            for s in data.get("streams", []):
+                ctype = s.get("codec_type")
+                if ctype == "video" and s.get("width"):
+                    meta["width"] = int(s.get("width"))
+                    meta["height"] = int(s.get("height"))
+                    meta["video_codec"] = s.get("codec_name", "h264")
+                    if not meta["duration"] and s.get("duration"):
+                        try:
+                            meta["duration"] = round(float(s["duration"]), 2)
+                        except Exception:
+                            pass
+                    r_rate = s.get("r_frame_rate", "30/1")
+                    if "/" in r_rate:
+                        num, den = r_rate.split("/")
+                        try:
+                            meta["fps"] = round(float(num) / max(1.0, float(den)), 2)
+                        except Exception:
+                            pass
+                elif ctype == "audio":
+                    has_audio = True
+
+            meta["has_audio"] = has_audio
+    except Exception as e:
+        logger.warning(f"ffprobe metadata notice: {e}")
+
+    if meta["duration"] <= 0:
+        meta["duration"] = 60.0
+
+    mins = int(meta["duration"] // 60)
+    secs = int(meta["duration"] % 60)
+    hrs = int(mins // 60)
+    mins = int(mins % 60)
+    if hrs > 0:
+        meta["duration_str"] = f"{hrs:02d}:{mins:02d}:{secs:02d}"
+    else:
+        meta["duration_str"] = f"{mins:02d}:{secs:02d}"
+
+    w, h = meta["width"], meta["height"]
+    gcd_val = math.gcd(w, h) if w > 0 and h > 0 else 1
+    if gcd_val > 0 and (w // gcd_val) in [16, 4, 21, 9] and (h // gcd_val) in [9, 3, 16]:
+        meta["aspect_ratio"] = f"{w // gcd_val}:{h // gcd_val}"
+    else:
+        ratio = round(w / max(1, h), 2)
+        meta["aspect_ratio"] = f"{ratio}:1"
+
+    return meta
+
+
+def analyze_video_timeline_autocut(
+    video_path: str,
+    duration: float = 0.0,
+    title: str = "",
+    focus_style: str = "highlights",
+    target_duration: Optional[int] = None,
+    language: str = "Hindi",
+    custom_prompt: str = ""
+) -> Dict[str, Any]:
+    """
+    Analyzes video timeline and discovers key narrative timestamps.
+    Automatically identifies keeper scenes, discards filler, and returns keeper intervals + recap script.
+    """
+    if duration <= 0:
+        meta = get_video_metadata(video_path)
+        duration = meta.get("duration", 60.0)
+
+    duration = float(duration)
+    if duration < 5:
+        duration = 60.0
+
+    if not target_duration or target_duration <= 0:
+        if duration <= 90:
+            target_duration = int(duration * 0.7)
+        elif duration <= 300:
+            target_duration = 60
+        elif duration <= 1200:
+            target_duration = 180
+        elif duration <= 3600:
+            target_duration = 300
+        else:
+            target_duration = 480
+
+    target_duration = min(int(duration), max(20, int(target_duration)))
+
+    keeper_clips = []
+    script = ""
+    source = "algorithmic"
+
+    client = gemini_engine.get_genai_client()
+    if client:
+        prompt = f"""You are a master Hollywood film editor and cinema director.
+Analyze this video storyline:
+- Title: {title or os.path.basename(video_path)}
+- Total Video Duration: {int(duration)} seconds ({int(duration // 60)}m {int(duration % 60)}s)
+- Target Highlight Duration: ~{target_duration} seconds
+- Editing Style / Focus: {focus_style}
+- Language: {language}
+{f"- Additional Instructions: {custom_prompt}" if custom_prompt else ""}
+
+YOUR GOAL:
+1. Discover the most important narrative turning points, tension spikes, hooks, and climaxes across the ENTIRE duration.
+2. Select between 4 and 8 high-impact keeper clips that together tell a complete, compelling story within ~{target_duration} seconds.
+3. Every second not included in these keeper clips will be automatically deleted as filler.
+4. Write a synchronized storytelling recap narration in {language} for these keeper scenes.
+
+RULES:
+- Return STRICT JSON ONLY. No markdown, no explanations outside JSON.
+- Timestamps must be numeric seconds between 0.0 and {duration}.
+- Each keeper clip must have a duration between 5 and 60 seconds.
+- Clips must be strictly in chronological order with no overlaps.
+
+JSON Format:
+{{
+  "keeper_clips": [
+    {{
+      "start": 5.0,
+      "end": 20.0,
+      "title": "Scene 1: Opening Hook",
+      "reason": "Establishes danger and introduces the hero"
+    }}
+  ],
+  "script": "कहानी की शुरुआत में... (Hindi recap narration matching the scenes)"
+}}
+"""
+        try:
+            config = gemini_engine.get_gemini_config()
+            model_name = config.get("model") or "gemini-2.5-flash"
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            txt = resp.text.strip()
+            txt = re.sub(r"^```(?:json)?", "", txt, flags=re.IGNORECASE).strip()
+            txt = re.sub(r"```$", "", txt).strip()
+            data = json.loads(txt)
+            raw_clips = data.get("keeper_clips") or []
+            if isinstance(raw_clips, list) and len(raw_clips) >= 2:
+                for idx, rc in enumerate(raw_clips):
+                    s = max(0.0, min(duration - 1.0, float(rc.get("start", 0))))
+                    e = max(s + 2.0, min(duration, float(rc.get("end", s + 10))))
+                    if e > s:
+                        keeper_clips.append({
+                            "id": idx + 1,
+                            "start": round(s, 2),
+                            "end": round(e, 2),
+                            "duration": round(e - s, 2),
+                            "title": rc.get("title", f"Scene {idx + 1}"),
+                            "reason": rc.get("reason", "Key narrative highlight")
+                        })
+                if keeper_clips:
+                    keeper_clips.sort(key=lambda x: x["start"])
+                    script = data.get("script", "")
+                    source = "gemini"
+        except Exception as ge:
+            logger.warning(f"Gemini timeline autocut notice: {ge}. Using algorithmic cuts.")
+
+    if not keeper_clips:
+        ratios = [
+            (0.05, 0.20, "Act 1: The Inciting Hook", "Initial tension grip"),
+            (0.35, 0.50, "Act 2: The Midpoint Escalation", "High-stakes conflict"),
+            (0.70, 0.88, "Act 3: The Climax & Resolution", "Peak confrontation")
+        ]
+        base_dur = max(6.0, target_duration / len(ratios))
+        for idx, (r_start, r_end, title_act, reason_act) in enumerate(ratios):
+            center = duration * ((r_start + r_end) / 2.0)
+            s = max(0.0, center - (base_dur / 2.0))
+            e = min(duration, s + base_dur)
+            if e - s < 3.0:
+                e = min(duration, s + 5.0)
+            keeper_clips.append({
+                "id": idx + 1,
+                "start": round(s, 2),
+                "end": round(e, 2),
+                "duration": round(e - s, 2),
+                "title": title_act,
+                "reason": reason_act
+            })
+        if language.lower().startswith("hi"):
+            script = "कहानी की शुरुआत एक रहस्यमयी घटना से होती है, जहाँ नायक को खतरे का सामना करना पड़ता है। धीरे-धीरे रहस्य गहराता जाता है और अंत में नायक सच का सामना करता है।"
+        else:
+            script = "The story begins with an unexpected crisis that challenges our protagonist. As the stakes escalate, a stunning revelation changes everything."
+
+    total_kept = sum(c["duration"] for c in keeper_clips)
+    total_filler = max(0.0, duration - total_kept)
+    filler_pct = round((total_filler / max(1.0, duration)) * 100, 1)
+
+    return {
+        "success": True,
+        "source": source,
+        "video_duration": round(duration, 2),
+        "total_kept_duration": round(total_kept, 2),
+        "filler_removed_duration": round(total_filler, 2),
+        "filler_removed_percent": filler_pct,
+        "keeper_clips": keeper_clips,
+        "script": script
+    }
+
+
+def export_timeline_trimmed_video(
+    source_video_path: str,
+    keeper_clips: List[Dict[str, Any]],
+    output_path: str,
+    audio_mode: str = "original",  # "original", "tts", "tts_bgm"
+    voice_name: str = "Kore",
+    tone_style: str = "Narrative Deep",
+    script: str = "",
+    progress_callback: Optional[Any] = None
+) -> Dict[str, Any]:
+    """
+    Slices and concatenates keeper clips from source_video_path WITHOUT changing resolution
+    or aspect ratio.
+    Keeps 100% original video size (native width & height, e.g. 1920x1080).
+    """
+    def notify(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+        logger.info(f"Trimmer export progress [{pct}%]: {msg}")
+
+    if not os.path.exists(source_video_path):
+        raise FileNotFoundError(f"Source video not found: {source_video_path}")
+
+    sanitized = []
+    for c in keeper_clips:
+        try:
+            s = float(c.get("start", 0))
+            e = float(c.get("end", 0))
+            if e > s + 0.3:
+                sanitized.append({"start": s, "end": e, "title": c.get("title", "")})
+        except Exception:
+            pass
+
+    if not sanitized:
+        raise ValueError("No valid keeper clips provided for export.")
+
+    sanitized.sort(key=lambda x: x["start"])
+    total_clips = len(sanitized)
+
+    task_id = uuid.uuid4().hex[:8]
+    task_temp = os.path.join(TEMP_DIR, f"trim_{task_id}")
+    os.makedirs(task_temp, exist_ok=True)
+
+    ffmpeg_bin = get_ffmpeg_bin()
+    sliced_paths = []
+
+    try:
+        notify(5, f"Preparing to slice {total_clips} clips at original resolution...")
+
+        # 1. Slice each keeper clip WITHOUT RESIZING (keeps native resolution & aspect ratio)
+        for i, clip in enumerate(sanitized):
+            s = clip["start"]
+            e = clip["end"]
+            clip_out = os.path.join(task_temp, f"clip_{i:03d}.mp4")
+
+            cmd = [
+                ffmpeg_bin, "-y",
+                "-ss", str(s),
+                "-to", str(e),
+                "-i", source_video_path,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "20"
+            ]
+            if audio_mode == "original":
+                cmd.extend(["-c:a", "aac", "-b:a", "192k"])
+            else:
+                cmd.extend(["-an"])  # strip audio for TTS narration
+            cmd.extend(["-avoid_negative_ts", "make_zero", clip_out])
+
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res.returncode == 0 and os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
+                sliced_paths.append(clip_out)
+            else:
+                logger.warning(f"Slice failed for clip {i} ({s}-{e}), retrying stream copy: {res.stderr[:200]}")
+                cmd_copy = [
+                    ffmpeg_bin, "-y",
+                    "-ss", str(s),
+                    "-to", str(e),
+                    "-i", source_video_path,
+                    "-c", "copy",
+                    "-avoid_negative_ts", "make_zero",
+                    clip_out
+                ]
+                subprocess.run(cmd_copy, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
+                    sliced_paths.append(clip_out)
+
+            pct = 10 + int(50 * ((i + 1) / total_clips))
+            notify(pct, f"Sliced keeper clip {i+1}/{total_clips} ({e-s:.1f}s)")
+
+        if not sliced_paths:
+            raise RuntimeError("Failed to slice keeper clips from source video.")
+
+        # 2. Concat keeper clips
+        notify(65, "Stitching keeper clips into seamless montage...")
+        concat_txt = os.path.join(task_temp, "concat.txt")
+        with open(concat_txt, "w", encoding="utf-8") as f:
+            for p in sliced_paths:
+                clean_p = os.path.abspath(p).replace("\\", "/")
+                f.write(f"file '{clean_p}'\n")
+
+        stitched_video = os.path.join(task_temp, "stitched.mp4")
+        concat_cmd = [
+            ffmpeg_bin, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_txt,
+            "-c", "copy",
+            stitched_video
+        ]
+        res_concat = subprocess.run(concat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res_concat.returncode != 0 or not os.path.exists(stitched_video) or os.path.getsize(stitched_video) == 0:
+            # Fallback to re-encode concat filter
+            filter_parts = "".join(f"[{j}:v]" for j in range(len(sliced_paths)))
+            cmd_filter = [ffmpeg_bin, "-y"]
+            for p in sliced_paths:
+                cmd_filter.extend(["-i", p])
+            cmd_filter.extend([
+                "-filter_complex", f"{filter_parts}concat=n={len(sliced_paths)}:v=1:a=0[v]",
+                "-map", "[v]",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                stitched_video
+            ])
+            subprocess.run(cmd_filter, check=True)
+
+        # 3. Audio handling
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        if audio_mode == "original":
+            notify(90, "Finalizing video with original native audio...")
+            shutil.copyfile(stitched_video, output_path)
+        else:
+            notify(75, "Generating dramatic Neural Storytelling Voiceover...")
+            tts_audio_path = os.path.join(task_temp, "tts_narration.mp3")
+            clean_script = script.strip() or "कहानी की शुरुआत में नायक को सच्चाई का पता चलता है और रोमांचक मोड़ आता है।"
+            gen_ok = generate_gemini_tts_audio(
+                text=clean_script,
+                output_path=tts_audio_path,
+                voice_name=voice_name,
+                tone_style=tone_style
+            )
+            if not gen_ok:
+                generate_voiceover_audio(text=clean_script, output_path=tts_audio_path, language="Hindi")
+
+            if audio_mode == "tts_bgm":
+                notify(85, "Mixing ducked cinematic background music + voiceover...")
+                bgm_path = ensure_background_music_exists()
+                mix_cmd = [
+                    ffmpeg_bin, "-y",
+                    "-i", stitched_video,
+                    "-i", tts_audio_path,
+                    "-i", bgm_path,
+                    "-filter_complex", "[1:a]volume=1.0[v_a];[2:a]volume=0.15[b_a];[v_a][b_a]amix=inputs=2:duration=first[aout]",
+                    "-map", "0:v",
+                    "-map", "[aout]",
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k",
+                    "-shortest",
+                    output_path
+                ]
+                subprocess.run(mix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            else:
+                notify(85, "Overlaying neural voiceover onto stitched video...")
+                ov_cmd = [
+                    ffmpeg_bin, "-y",
+                    "-i", stitched_video,
+                    "-i", tts_audio_path,
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k",
+                    "-shortest",
+                    output_path
+                ]
+                subprocess.run(ov_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            shutil.copyfile(stitched_video, output_path)
+
+        notify(100, "Export complete! Final video is ready.")
+        meta = get_video_metadata(output_path)
+        return {
+            "success": True,
+            "output_path": output_path,
+            "filename": os.path.basename(output_path),
+            "duration": meta.get("duration", 0),
+            "duration_str": meta.get("duration_str", "00:00:00"),
+            "width": meta.get("width", 1920),
+            "height": meta.get("height", 1080),
+            "aspect_ratio": meta.get("aspect_ratio", "16:9"),
+            "size_mb": meta.get("size_mb", 0)
+        }
+    finally:
+        try:
+            shutil.rmtree(task_temp, ignore_errors=True)
+        except Exception:
+            pass
 

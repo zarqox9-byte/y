@@ -6,6 +6,7 @@ import time
 import shutil
 import threading
 import tempfile
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import socket
 import ssl
@@ -1848,6 +1849,11 @@ HTML_MAIN = """
                     <span>YouTube URL to Shorts</span>
                     <span class="tab-badge" style="background: linear-gradient(135deg, #ff0055, #ff5500); color: white;">AUTO-CLIPPER</span>
                 </button>
+                <button class="mode-tab" id="tabTrimmerMode">
+                    <span>✂️</span>
+                    <span>Timeline Video Trimmer</span>
+                    <span class="tab-badge" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white;">ORIGINAL ASPECT RATIO</span>
+                </button>
                 <button class="mode-tab" id="tabManualMode">
                     <span>🛠️</span>
                     <span>Standard Manual Studio</span>
@@ -2384,7 +2390,236 @@ HTML_MAIN = """
             </div>
 
             <!-- ============================================== -->
-            <!-- 3. STANDARD MANUAL STUDIO FORM PANEL           -->
+            <!-- 3. TIMELINE VIDEO TRIMMER & SLICER (ORIGINAL RESOLUTION) -->
+            <!-- ============================================== -->
+            <div class="card" id="trimmerSection" style="display: none; padding: 24px; background: var(--bg-surface); border-radius: var(--card-radius); border: 1px solid var(--border-color);">
+                
+                <!-- Hero Banner -->
+                <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: 12px; padding: 18px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                            <span style="font-size: 24px;">✂️</span>
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #e0f2fe;">Timeline Video Trimmer &amp; Narrative Slicer</h3>
+                            <span style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">100% NATIVE RESOLUTION</span>
+                            <span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">NO 9:16 RESIZING</span>
+                        </div>
+                        <p style="margin: 0; font-size: 13px; color: #94a3b8; max-width: 820px; line-height: 1.45;">
+                            Upload any length video (10m to 2h+). Keep 100% of your video's original resolution and aspect ratio (no vertical crop, no distortion).
+                            Manually split at any second, delete unwanted filler, or let Gemini auto-detect dramatic story scenes and stitch only keeper clips seamlessly in real time.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Video Input / Source Selector -->
+                <div style="background: var(--bg-elevated); border: 1px dashed #0284c7; border-radius: 10px; padding: 20px; margin-bottom: 20px; text-align: center;" id="trimmerDropzone">
+                    <input type="file" id="trimmerVideoFileInput" accept="video/mp4,video/x-matroska,video/quicktime,video/webm" style="display: none;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <span style="font-size: 36px;">🎬</span>
+                        <div style="font-size: 15px; font-weight: 600; color: #f0f9ff;">Drag &amp; Drop Video Here, or <button type="button" class="btn-populate" id="btnBrowseTrimmerFile" style="padding: 4px 12px; font-size: 13px; display: inline-block;">Browse Local File</button></div>
+                        <div style="font-size: 12px; color: var(--text-muted);">Supports MP4, MKV, MOV, WEBM &bull; Any duration from 10 minutes to 2+ hours</div>
+                        <div id="trimmerFileInfoBadge" style="display: none; margin-top: 10px; padding: 8px 16px; background: rgba(6, 182, 212, 0.15); border: 1px solid #06b6d4; border-radius: 20px; font-size: 13px; color: #bae6fd; font-weight: 600;"></div>
+                    </div>
+                </div>
+
+                <!-- Main HTML5 Video Player Area -->
+                <div style="position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 16px;">
+                    <video id="trimmerPlayer" playsinline preload="auto" style="width: 100%; max-height: 480px; display: block; object-fit: contain; margin: 0 auto; background: #000;"></video>
+                    
+                    <!-- Live Overlay HUD -->
+                    <div style="position: absolute; top: 12px; left: 14px; display: flex; gap: 8px; z-index: 5;">
+                        <span id="trimmerHudClipBadge" style="background: rgba(0,0,0,0.75); color: #38bdf8; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.4); backdrop-filter: blur(4px);">
+                            Clip 1 of 1
+                        </span>
+                        <span id="trimmerHudResBadge" style="background: rgba(0,0,0,0.75); color: #a7f3d0; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4); backdrop-filter: blur(4px);">
+                            Native Resolution
+                        </span>
+                    </div>
+
+                    <div style="position: absolute; top: 12px; right: 14px; display: flex; gap: 8px; z-index: 5;">
+                        <span id="trimmerHudTimeBadge" style="background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(4px);">
+                            00:00:00 / 00:00:00
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Precision Transport & Editing Toolbar -->
+                <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <!-- Left: Manual Cut & Delete Tools -->
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <button type="button" id="btnTrimmerSplit" class="btn-upload" style="background: linear-gradient(135deg, #0284c7, #2563eb); padding: 8px 16px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                            <span>✂️</span> <span>Cut / Split at Playhead</span>
+                        </button>
+                        <button type="button" id="btnTrimmerDeleteClip" class="btn-populate" style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 8px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <span>🗑️</span> <span>Delete Active Clip</span>
+                        </button>
+                        <button type="button" id="btnTrimmerReset" class="btn-populate" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); padding: 8px 12px; font-size: 12px; color: var(--text-secondary);">
+                            <span>🔄</span> <span>Reset All</span>
+                        </button>
+                    </div>
+
+                    <!-- Center: Frame Stepping / Transport -->
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button type="button" id="btnTrimmerPrevClip" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="Previous Keeper Clip">⏮️</button>
+                        <button type="button" id="btnTrimmerStepBack" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="-1 Second">⏪ -1s</button>
+                        <button type="button" id="btnTrimmerPlayPause" class="btn-populate" style="padding: 6px 14px; font-size: 13px; font-weight: 700; background: rgba(6, 182, 212, 0.2); border-color: #06b6d4; color: #38bdf8;">▶️ Play</button>
+                        <button type="button" id="btnTrimmerStepFwd" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="+1 Second">+1s ⏩</button>
+                        <button type="button" id="btnTrimmerNextClip" class="btn-populate" style="padding: 6px 10px; font-size: 12px;" title="Next Keeper Clip">⏭️</button>
+                    </div>
+
+                    <!-- Right: Gemini Auto-Cut Trigger -->
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="trimmerFocusSelect" class="form-control" style="width: auto; padding: 6px 10px; font-size: 12px;">
+                            <option value="Key Dramatic Highlights">✨ Dramatic Turning Points</option>
+                            <option value="Action &amp; Climax Moments">💥 Action &amp; Climax Scenes</option>
+                            <option value="Dialogue &amp; Story Arc">🗣️ Dialogue &amp; Storyline</option>
+                            <option value="Viral 60s Trailer">🔥 Viral 60s Trailer</option>
+                            <option value="5-10 Min Summary">🎬 5-10 Min Summary</option>
+                        </select>
+                        <select id="trimmerTargetDurSelect" class="form-control" style="width: auto; padding: 6px 10px; font-size: 12px;">
+                            <option value="0">Auto Length</option>
+                            <option value="60">1 Minute</option>
+                            <option value="180">3 Minutes</option>
+                            <option value="300" selected>5 Minutes</option>
+                            <option value="600">10 Minutes</option>
+                        </select>
+                        <button type="button" id="btnTrimmerGeminiAutoCut" class="btn-populate" style="background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: white; padding: 8px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);">
+                            <span>🤖</span> <span>Gemini Auto-Cut &amp; Trim</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Visual Timeline Track Container -->
+                <div style="background: #141414; border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--text-muted);">
+                        <span>Timeline Track &bull; Click to scrub &bull; Keeper clips highlighted</span>
+                        <span id="trimmerTimelinePlayheadTime" style="color: #38bdf8; font-weight: 700;">Playhead: 00:00:00</span>
+                    </div>
+
+                    <!-- Visual Timeline Bar -->
+                    <div id="trimmerTimelineTrack" style="position: relative; width: 100%; height: 50px; background: #222; border-radius: 6px; overflow: hidden; cursor: pointer; border: 1px solid #444; user-select: none;">
+                        <div id="trimmerClipsContainer" style="position: absolute; inset: 0;"></div>
+                        <!-- Playhead Cursor Line -->
+                        <div id="trimmerPlayhead" style="position: absolute; top: 0; bottom: 0; left: 0%; width: 3px; background: #ff0055; box-shadow: 0 0 8px #ff0055; z-index: 10; pointer-events: none; transition: left 0.05s linear;">
+                            <div style="width: 11px; height: 11px; background: #ff0055; border-radius: 50%; position: absolute; top: -4px; left: -4px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Stats Bar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; flex-wrap: wrap; gap: 10px; padding: 6px 10px; background: rgba(255,255,255,0.02); border-radius: 6px;">
+                        <span id="trimmerStatOrig">⏱️ Original Length: 00:00</span>
+                        <span id="trimmerStatKept" style="color: #38bdf8; font-weight: 700;">✂️ Kept Montage: 00:00</span>
+                        <span id="trimmerStatRemoved" style="color: #f43f5e; font-weight: 700;">🗑️ Filler Discarded: 00:00 (0%)</span>
+                        <span id="trimmerStatCount" style="color: #a855f7; font-weight: 700;">🎬 Keeper Clips: 1</span>
+                    </div>
+                </div>
+
+                <!-- Keeper Clips Deck -->
+                <div style="background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f3e8ff;">🎬 Keeper Clips Sequence (Plays Seamlessly Back-to-Back)</h4>
+                        <span style="font-size: 12px; color: var(--text-muted);">Click any clip to jump player &bull; Edit timestamps if needed</span>
+                    </div>
+                    <div id="trimmerClipsDeck" style="display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto;"></div>
+                </div>
+
+                <!-- Export & Audio Options -->
+                <div style="background: #181524; border: 1px solid #7c3aed; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 700; color: #ede9fe;">🚀 Export Settings (100% Original Resolution Preserved)</h4>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <!-- Audio Mode -->
+                        <div>
+                            <label style="font-size: 13px; font-weight: 600; color: #ddd; display: block; margin-bottom: 6px;">Audio Narration Mode:</label>
+                            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="radio" name="trimmerAudioMode" value="original" checked>
+                                    <span>🎵 <b>Original Video Audio</b> (Keep native voices and sounds)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="radio" name="trimmerAudioMode" value="tts">
+                                    <span>🎙️ <b>Gemini 3.8 Flash Neural Voiceover</b> (Hindi / English Story Narration)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="radio" name="trimmerAudioMode" value="tts_bgm">
+                                    <span>🎧 <b>Ducked BGM + Neural Voiceover</b> (0% original sound, 100% copyright safe)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Voice & Tone Settings (for TTS) -->
+                        <div id="trimmerTtsOptionsContainer" style="display: none; background: rgba(0,0,0,0.25); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 12px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                                <div>
+                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Voice:</label>
+                                    <select id="trimmerTtsVoiceSelect" class="form-control" style="width: 100%; padding: 6px 8px; font-size: 12px;">
+                                        <option value="Kore">Kore (Hindi Deep Male)</option>
+                                        <option value="Fenrir">Fenrir (Dramatic Intense Male)</option>
+                                        <option value="Puck">Puck (Fast-Paced Male)</option>
+                                        <option value="Algenib">Algenib (Authoritative Male)</option>
+                                        <option value="Charon">Charon (Deep Mysterious Male)</option>
+                                        <option value="Aoede">Aoede (Expressive Female)</option>
+                                        <option value="Algieba">Algieba (Soft Dramatic Female)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Tone Style:</label>
+                                    <select id="trimmerTtsToneSelect" class="form-control" style="width: 100%; padding: 6px 8px; font-size: 12px;">
+                                        <option value="Suspense / Thriller">Suspense / Thriller</option>
+                                        <option value="Movie Trailer Dramatic">Movie Trailer Dramatic</option>
+                                        <option value="Narrative Deep Storytelling">Narrative Deep Storytelling</option>
+                                        <option value="Fast-Paced Action Punch">Fast-Paced Action Punch</option>
+                                        <option value="Emotional Cinema Drama">Emotional Cinema Drama</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Recap Story Narration Script:</label>
+                            <textarea id="trimmerNarrationScript" class="form-control" style="width: 100%; height: 60px; font-size: 12px; resize: vertical;" placeholder="Script automatically generated by Gemini or enter your own custom narration..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Export Button -->
+                    <button type="button" id="btnExportFinalVideo" class="btn-upload" style="width: 100%; background: linear-gradient(135deg, #0284c7, #7c3aed); padding: 14px; font-size: 16px; font-weight: 700; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);">
+                        <span id="btnExportIcon">🚀</span>
+                        <span id="btnExportText">Export Final Video (Preserve Original Resolution)</span>
+                    </button>
+                </div>
+
+                <!-- Export Progress & Download Card -->
+                <div id="trimmerExportCard" style="display: none; background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span id="trimmerExportStepText" style="font-size: 14px; font-weight: 600; color: #e0f2fe;">Processing Export...</span>
+                        <span id="trimmerExportPercentText" style="font-size: 14px; font-weight: 700; color: #38bdf8;">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
+                        <div id="trimmerExportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #06b6d4, #38bdf8); transition: width 0.3s ease;"></div>
+                    </div>
+
+                    <!-- Completed Video Preview & Download -->
+                    <div id="trimmerExportResultBox" style="display: none;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;">
+                            <div>
+                                <video id="trimmerExportedPlayer" controls playsinline style="width: 100%; max-height: 280px; border-radius: 8px; background: #000; object-fit: contain;"></video>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 16px;">✅ Export Ready!</h4>
+                                <div id="trimmerExportMetaDetails" style="font-size: 13px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.6;"></div>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <a id="btnDownloadExportedVideo" href="#" download class="btn-upload" style="text-decoration: none; padding: 10px 18px; font-size: 13px; background: #10b981; display: inline-flex; align-items: center; gap: 6px;">
+                                        <span>⬇️</span> <span>Download MP4</span>
+                                    </a>
+                                    <button type="button" id="btnSendExportToYouTube" class="btn-populate" style="padding: 10px 18px; font-size: 13px; background: rgba(255, 0, 85, 0.2); border-color: #ff0055; color: #fda4af;">
+                                        <span>📤</span> <span>Send to YouTube Upload</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- 4. STANDARD MANUAL STUDIO FORM PANEL           -->
             <!-- ============================================== -->
             <div class="card" id="manualStudioSection" style="display: none;">
                 <div class="workspace-header">
@@ -2655,23 +2890,28 @@ HTML_MAIN = """
         // Tab Switching
         const tabGeminiMode = document.getElementById('tabGeminiMode');
         const tabClipperMode = document.getElementById('tabClipperMode');
+        const tabTrimmerMode = document.getElementById('tabTrimmerMode');
         const tabManualMode = document.getElementById('tabManualMode');
         const geminiStudioSection = document.getElementById('geminiStudioSection');
         const clipperSection = document.getElementById('clipperSection');
+        const trimmerSection = document.getElementById('trimmerSection');
         const manualStudioSection = document.getElementById('manualStudioSection');
 
         function switchWorkspaceTab(activeTab) {
             tabGeminiMode.className = 'mode-tab' + (activeTab === 'gemini' ? ' active-ai' : '');
             tabClipperMode.className = 'mode-tab' + (activeTab === 'clipper' ? ' active-ai' : '');
+            tabTrimmerMode.className = 'mode-tab' + (activeTab === 'trimmer' ? ' active-ai' : '');
             tabManualMode.className = 'mode-tab' + (activeTab === 'manual' ? ' active-manual' : '');
 
             geminiStudioSection.style.display = (activeTab === 'gemini') ? 'block' : 'none';
             clipperSection.style.display = (activeTab === 'clipper') ? 'block' : 'none';
+            trimmerSection.style.display = (activeTab === 'trimmer') ? 'block' : 'none';
             manualStudioSection.style.display = (activeTab === 'manual') ? 'block' : 'none';
         }
 
         tabGeminiMode.addEventListener('click', () => switchWorkspaceTab('gemini'));
         tabClipperMode.addEventListener('click', () => switchWorkspaceTab('clipper'));
+        tabTrimmerMode.addEventListener('click', () => switchWorkspaceTab('trimmer'));
         tabManualMode.addEventListener('click', () => switchWorkspaceTab('manual'));
 
         // Gemini Key Modal
@@ -4637,6 +4877,670 @@ HTML_MAIN = """
             });
         }
 
+        // ==============================================================
+        // TIMELINE VIDEO TRIMMER & NARRATIVE SLICER ENGINE
+        // ==============================================================
+        const trimmerDropzone = document.getElementById('trimmerDropzone');
+        const trimmerVideoInput = document.getElementById('trimmerVideoFileInput');
+        const btnBrowseTrimmerFile = document.getElementById('btnBrowseTrimmerFile');
+        const trimmerFileInfoBadge = document.getElementById('trimmerFileInfoBadge');
+        const trimmerPlayer = document.getElementById('trimmerPlayer');
+        const trimmerHudClipBadge = document.getElementById('trimmerHudClipBadge');
+        const trimmerHudResBadge = document.getElementById('trimmerHudResBadge');
+        const trimmerHudTimeBadge = document.getElementById('trimmerHudTimeBadge');
+        const btnTrimmerSplit = document.getElementById('btnTrimmerSplit');
+        const btnTrimmerDeleteClip = document.getElementById('btnTrimmerDeleteClip');
+        const btnTrimmerReset = document.getElementById('btnTrimmerReset');
+        const btnTrimmerPrevClip = document.getElementById('btnTrimmerPrevClip');
+        const btnTrimmerStepBack = document.getElementById('btnTrimmerStepBack');
+        const btnTrimmerPlayPause = document.getElementById('btnTrimmerPlayPause');
+        const btnTrimmerStepFwd = document.getElementById('btnTrimmerStepFwd');
+        const btnTrimmerNextClip = document.getElementById('btnTrimmerNextClip');
+        const trimmerFocusSelect = document.getElementById('trimmerFocusSelect');
+        const trimmerTargetDurSelect = document.getElementById('trimmerTargetDurSelect');
+        const btnTrimmerGeminiAutoCut = document.getElementById('btnTrimmerGeminiAutoCut');
+        const trimmerTimelineTrack = document.getElementById('trimmerTimelineTrack');
+        const trimmerClipsContainer = document.getElementById('trimmerClipsContainer');
+        const trimmerPlayhead = document.getElementById('trimmerPlayhead');
+        const trimmerTimelinePlayheadTime = document.getElementById('trimmerTimelinePlayheadTime');
+        const trimmerStatOrig = document.getElementById('trimmerStatOrig');
+        const trimmerStatKept = document.getElementById('trimmerStatKept');
+        const trimmerStatRemoved = document.getElementById('trimmerStatRemoved');
+        const trimmerStatCount = document.getElementById('trimmerStatCount');
+        const trimmerClipsDeck = document.getElementById('trimmerClipsDeck');
+        const trimmerTtsOptionsContainer = document.getElementById('trimmerTtsOptionsContainer');
+        const trimmerTtsVoiceSelect = document.getElementById('trimmerTtsVoiceSelect');
+        const trimmerTtsToneSelect = document.getElementById('trimmerTtsToneSelect');
+        const trimmerNarrationScript = document.getElementById('trimmerNarrationScript');
+        const btnExportFinalVideo = document.getElementById('btnExportFinalVideo');
+        const btnExportIcon = document.getElementById('btnExportIcon');
+        const btnExportText = document.getElementById('btnExportText');
+        const trimmerExportCard = document.getElementById('trimmerExportCard');
+        const trimmerExportStepText = document.getElementById('trimmerExportStepText');
+        const trimmerExportPercentText = document.getElementById('trimmerExportPercentText');
+        const trimmerExportProgressBar = document.getElementById('trimmerExportProgressBar');
+        const trimmerExportResultBox = document.getElementById('trimmerExportResultBox');
+        const trimmerExportedPlayer = document.getElementById('trimmerExportedPlayer');
+        const trimmerExportMetaDetails = document.getElementById('trimmerExportMetaDetails');
+        const btnDownloadExportedVideo = document.getElementById('btnDownloadExportedVideo');
+        const btnSendExportToYouTube = document.getElementById('btnSendExportToYouTube');
+
+        // State variables
+        let trimmerTotalDuration = 0;
+        let trimmerVideoWidth = 1920;
+        let trimmerVideoHeight = 1080;
+        let trimmerAspectRatio = '16:9';
+        let trimmerServerFilename = null;
+        let trimmerLocalFile = null;
+        let trimmerKeeperClips = [];
+        let trimmerActiveClipIndex = 0;
+        let nextClipId = 1;
+        let exportPollInterval = null;
+
+        // Toggle TTS voiceover options UI when audio mode changes
+        document.querySelectorAll('input[name="trimmerAudioMode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const mode = e.target.value;
+                if (mode === 'tts' || mode === 'tts_bgm') {
+                    trimmerTtsOptionsContainer.style.display = 'block';
+                } else {
+                    trimmerTtsOptionsContainer.style.display = 'none';
+                }
+            });
+        });
+
+        // File selection handling
+        if (btnBrowseTrimmerFile && trimmerVideoInput) {
+            btnBrowseTrimmerFile.addEventListener('click', () => trimmerVideoInput.click());
+        }
+        if (trimmerDropzone) {
+            trimmerDropzone.addEventListener('click', (e) => {
+                if (e.target !== btnBrowseTrimmerFile && trimmerVideoInput) trimmerVideoInput.click();
+            });
+            trimmerDropzone.addEventListener('dragover', (e) => { e.preventDefault(); trimmerDropzone.style.borderColor = '#38bdf8'; });
+            trimmerDropzone.addEventListener('dragleave', () => { trimmerDropzone.style.borderColor = '#0284c7'; });
+            trimmerDropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                trimmerDropzone.style.borderColor = '#0284c7';
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleTrimmerVideoFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
+
+        if (trimmerVideoInput) {
+            trimmerVideoInput.addEventListener('change', (e) => {
+                if (trimmerVideoInput.files && trimmerVideoInput.files[0]) {
+                    handleTrimmerVideoFile(trimmerVideoInput.files[0]);
+                }
+            });
+        }
+
+        function formatSecs(sec) {
+            sec = Math.max(0, Math.round(sec));
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            const h = Math.floor(m / 60);
+            const remM = m % 60;
+            if (h > 0) {
+                return `${h.toString().padStart(2, '0')}:${remM.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        async function handleTrimmerVideoFile(file) {
+            trimmerLocalFile = file;
+            const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+            
+            // 0-second instant local playback
+            const objectUrl = URL.createObjectURL(file);
+            trimmerPlayer.src = objectUrl;
+            
+            trimmerPlayer.onloadedmetadata = () => {
+                trimmerTotalDuration = trimmerPlayer.duration || 60;
+                trimmerVideoWidth = trimmerPlayer.videoWidth || 1920;
+                trimmerVideoHeight = trimmerPlayer.videoHeight || 1080;
+                
+                // Aspect Ratio calculation
+                const ratio = (trimmerVideoWidth / Math.max(1, trimmerVideoHeight)).toFixed(2);
+                trimmerAspectRatio = `${trimmerVideoWidth}x${trimmerVideoHeight} (${ratio}:1)`;
+                
+                trimmerHudResBadge.textContent = `${trimmerVideoWidth}x${trimmerVideoHeight} (Original Aspect Ratio)`;
+                trimmerFileInfoBadge.innerHTML = `🎥 <b>${file.name}</b> &bull; ${formatSecs(trimmerTotalDuration)} &bull; ${sizeMb} MB &bull; ${trimmerAspectRatio}`;
+                trimmerFileInfoBadge.style.display = 'inline-block';
+
+                // Initialize with full video as 1 clip
+                resetTrimmerClips();
+            };
+
+            // Upload in background to server for FFmpeg slicing
+            uploadTrimmerFileToServer(file);
+        }
+
+        async function uploadTrimmerFileToServer(file) {
+            const formData = new FormData();
+            formData.append('video_file', file);
+            try {
+                trimmerFileInfoBadge.innerHTML += ` &bull; <span id="trimmerUploadStatusSpan" style="color: #facc15;">Uploading to cloud...</span>`;
+                const res = await fetch('/api/trimmer/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    trimmerServerFilename = data.filename;
+                    const statusSpan = document.getElementById('trimmerUploadStatusSpan');
+                    if (statusSpan) {
+                        statusSpan.style.color = '#6ee7b7';
+                        statusSpan.textContent = 'Ready for Slicing & Export';
+                    }
+                }
+            } catch (err) {
+                console.warn('Background trimmer upload notice:', err);
+            }
+        }
+
+        function resetTrimmerClips() {
+            nextClipId = 1;
+            trimmerKeeperClips = [{
+                id: nextClipId++,
+                start: 0,
+                end: trimmerTotalDuration,
+                duration: trimmerTotalDuration,
+                title: 'Full Original Sequence',
+                reason: 'Uncut source clip'
+            }];
+            trimmerActiveClipIndex = 0;
+            renderTrimmerTimelineUI();
+            updateTrimmerStats();
+            updateTrimmerDeck();
+        }
+
+        if (btnTrimmerReset) {
+            btnTrimmerReset.addEventListener('click', resetTrimmerClips);
+        }
+
+        // Timeline rendering
+        function renderTrimmerTimelineUI() {
+            if (!trimmerClipsContainer) return;
+            trimmerClipsContainer.innerHTML = '';
+            if (trimmerTotalDuration <= 0) return;
+
+            const colors = [
+                'linear-gradient(135deg, #0284c7, #2563eb)',
+                'linear-gradient(135deg, #7c3aed, #9333ea)',
+                'linear-gradient(135deg, #059669, #10b981)',
+                'linear-gradient(135deg, #d97706, #f59e0b)',
+                'linear-gradient(135deg, #e11d48, #f43f5e)',
+                'linear-gradient(135deg, #4f46e5, #6366f1)'
+            ];
+
+            // Render each keeper clip block
+            trimmerKeeperClips.forEach((clip, idx) => {
+                const startPct = Math.max(0, (clip.start / trimmerTotalDuration) * 100);
+                const widthPct = Math.max(0.5, ((clip.end - clip.start) / trimmerTotalDuration) * 100);
+                const color = colors[idx % colors.length];
+
+                const block = document.createElement('div');
+                block.className = 'trimmer-clip-block';
+                block.style.position = 'absolute';
+                block.style.left = `${startPct}%`;
+                block.style.width = `${widthPct}%`;
+                block.style.top = '2px';
+                block.style.bottom = '2px';
+                block.style.background = color;
+                block.style.borderRadius = '4px';
+                block.style.border = (idx === trimmerActiveClipIndex) ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)';
+                block.style.boxShadow = (idx === trimmerActiveClipIndex) ? '0 0 10px rgba(56, 189, 248, 0.6)' : 'none';
+                block.style.display = 'flex';
+                block.style.alignItems = 'center';
+                block.style.padding = '0 6px';
+                block.style.fontSize = '11px';
+                block.style.fontWeight = '700';
+                block.style.color = '#fff';
+                block.style.overflow = 'hidden';
+                block.style.whiteSpace = 'nowrap';
+                block.style.textOverflow = 'ellipsis';
+                block.style.cursor = 'pointer';
+                block.title = `${clip.title || 'Clip ' + (idx + 1)}: ${formatSecs(clip.start)} - ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)`;
+                block.textContent = `#${idx + 1} (${clip.duration.toFixed(0)}s)`;
+
+                block.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    trimmerActiveClipIndex = idx;
+                    trimmerPlayer.currentTime = clip.start;
+                    trimmerPlayer.play();
+                    renderTrimmerTimelineUI();
+                    updateTrimmerDeck();
+                });
+
+                trimmerClipsContainer.appendChild(block);
+            });
+        }
+
+        function updateTrimmerStats() {
+            const keptTotal = trimmerKeeperClips.reduce((acc, c) => acc + (c.end - c.start), 0);
+            const fillerTotal = Math.max(0, trimmerTotalDuration - keptTotal);
+            const fillerPct = trimmerTotalDuration > 0 ? ((fillerTotal / trimmerTotalDuration) * 100).toFixed(1) : 0;
+
+            if (trimmerStatOrig) trimmerStatOrig.textContent = `⏱️ Original: ${formatSecs(trimmerTotalDuration)}`;
+            if (trimmerStatKept) trimmerStatKept.textContent = `✂️ Kept: ${formatSecs(keptTotal)}`;
+            if (trimmerStatRemoved) trimmerStatRemoved.textContent = `🗑️ Filler Discarded: ${formatSecs(fillerTotal)} (${fillerPct}%)`;
+            if (trimmerStatCount) trimmerStatCount.textContent = `🎬 Keeper Clips: ${trimmerKeeperClips.length}`;
+            if (trimmerHudClipBadge) trimmerHudClipBadge.textContent = `Clip ${trimmerActiveClipIndex + 1} of ${trimmerKeeperClips.length}`;
+        }
+
+        function updateTrimmerDeck() {
+            if (!trimmerClipsDeck) return;
+            trimmerClipsDeck.innerHTML = '';
+            trimmerKeeperClips.forEach((clip, idx) => {
+                const card = document.createElement('div');
+                card.style.display = 'flex';
+                card.style.justifyContent = 'space-between';
+                card.style.alignItems = 'center';
+                card.style.padding = '8px 14px';
+                card.style.background = (idx === trimmerActiveClipIndex) ? 'rgba(2, 132, 199, 0.15)' : 'rgba(255,255,255,0.03)';
+                card.style.border = (idx === trimmerActiveClipIndex) ? '1px solid #0284c7' : '1px solid rgba(255,255,255,0.06)';
+                card.style.borderRadius = '6px';
+                card.style.gap = '12px';
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                        <span style="font-weight: 700; color: #38bdf8; font-size: 13px;">#${idx + 1}</span>
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: #f1f5f9;">${clip.title || 'Scene ' + (idx + 1)}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">${clip.reason || 'Keeper clip'}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; font-weight: 700; color: #bae6fd; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">
+                            ${formatSecs(clip.start)} ➔ ${formatSecs(clip.end)} (${clip.duration.toFixed(1)}s)
+                        </span>
+                        <button type="button" class="btn-populate" style="padding: 4px 8px; font-size: 12px;" onclick="playKeeperClipByIndex(${idx})">▶️</button>
+                        <button type="button" class="btn-populate" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="deleteKeeperClipByIndex(${idx})">🗑️</button>
+                    </div>
+                `;
+                trimmerClipsDeck.appendChild(card);
+            });
+        }
+
+        window.playKeeperClipByIndex = (idx) => {
+            if (idx >= 0 && idx < trimmerKeeperClips.length) {
+                trimmerActiveClipIndex = idx;
+                trimmerPlayer.currentTime = trimmerKeeperClips[idx].start;
+                trimmerPlayer.play();
+                renderTrimmerTimelineUI();
+                updateTrimmerDeck();
+            }
+        };
+
+        window.deleteKeeperClipByIndex = (idx) => {
+            if (trimmerKeeperClips.length <= 1) {
+                alert('You must have at least one keeper clip. Reset timeline if you want to restore full video.');
+                return;
+            }
+            trimmerKeeperClips.splice(idx, 1);
+            if (trimmerActiveClipIndex >= trimmerKeeperClips.length) {
+                trimmerActiveClipIndex = trimmerKeeperClips.length - 1;
+            }
+            trimmerPlayer.currentTime = trimmerKeeperClips[trimmerActiveClipIndex].start;
+            renderTrimmerTimelineUI();
+            updateTrimmerStats();
+            updateTrimmerDeck();
+        };
+
+        // Manual Split / Cut at Playhead
+        if (btnTrimmerSplit) {
+            btnTrimmerSplit.addEventListener('click', () => {
+                if (trimmerKeeperClips.length === 0) return;
+                const cur = trimmerPlayer.currentTime;
+
+                // Find which clip contains playhead
+                const clipIdx = trimmerKeeperClips.findIndex(c => cur > c.start + 0.3 && cur < c.end - 0.3);
+                if (clipIdx === -1) {
+                    alert('Playhead must be inside a clip with at least 0.5s margin to cut.');
+                    return;
+                }
+
+                const target = trimmerKeeperClips[clipIdx];
+                const clipA = {
+                    id: nextClipId++,
+                    start: target.start,
+                    end: cur,
+                    duration: cur - target.start,
+                    title: `${target.title || 'Scene'} (Part A)`,
+                    reason: target.reason
+                };
+                const clipB = {
+                    id: nextClipId++,
+                    start: cur,
+                    end: target.end,
+                    duration: target.end - cur,
+                    title: `${target.title || 'Scene'} (Part B)`,
+                    reason: target.reason
+                };
+
+                trimmerKeeperClips.splice(clipIdx, 1, clipA, clipB);
+                trimmerActiveClipIndex = clipIdx;
+                renderTrimmerTimelineUI();
+                updateTrimmerStats();
+                updateTrimmerDeck();
+            });
+        }
+
+        // Delete Active Clip
+        if (btnTrimmerDeleteClip) {
+            btnTrimmerDeleteClip.addEventListener('click', () => {
+                if (trimmerKeeperClips.length <= 1) {
+                    alert('Cannot delete the only remaining clip.');
+                    return;
+                }
+                deleteKeeperClipByIndex(trimmerActiveClipIndex);
+            });
+        }
+
+        // Transport Controls
+        if (btnTrimmerPlayPause) {
+            btnTrimmerPlayPause.addEventListener('click', () => {
+                if (trimmerPlayer.paused) trimmerPlayer.play();
+                else trimmerPlayer.pause();
+            });
+            trimmerPlayer.addEventListener('play', () => btnTrimmerPlayPause.innerHTML = '⏸️ Pause');
+            trimmerPlayer.addEventListener('pause', () => btnTrimmerPlayPause.innerHTML = '▶️ Play');
+        }
+
+        if (btnTrimmerStepBack) {
+            btnTrimmerStepBack.addEventListener('click', () => {
+                trimmerPlayer.currentTime = Math.max(0, trimmerPlayer.currentTime - 1);
+            });
+        }
+        if (btnTrimmerStepFwd) {
+            btnTrimmerStepFwd.addEventListener('click', () => {
+                trimmerPlayer.currentTime = Math.min(trimmerTotalDuration, trimmerPlayer.currentTime + 1);
+            });
+        }
+        if (btnTrimmerPrevClip) {
+            btnTrimmerPrevClip.addEventListener('click', () => {
+                if (trimmerActiveClipIndex > 0) {
+                    playKeeperClipByIndex(trimmerActiveClipIndex - 1);
+                }
+            });
+        }
+        if (btnTrimmerNextClip) {
+            btnTrimmerNextClip.addEventListener('click', () => {
+                if (trimmerActiveClipIndex < trimmerKeeperClips.length - 1) {
+                    playKeeperClipByIndex(trimmerActiveClipIndex + 1);
+                }
+            });
+        }
+
+        // Click on timeline scrubber
+        if (trimmerTimelineTrack) {
+            trimmerTimelineTrack.addEventListener('click', (e) => {
+                if (trimmerTotalDuration <= 0) return;
+                const rect = trimmerTimelineTrack.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const targetTime = (clickX / rect.width) * trimmerTotalDuration;
+
+                // Check if inside a keeper clip or filler
+                const foundIdx = trimmerKeeperClips.findIndex(c => targetTime >= c.start && targetTime <= c.end);
+                if (foundIdx !== -1) {
+                    trimmerActiveClipIndex = foundIdx;
+                    trimmerPlayer.currentTime = targetTime;
+                } else {
+                    // Inside deleted filler gap! Snap to start of next keeper clip
+                    const nextIdx = trimmerKeeperClips.findIndex(c => c.start > targetTime);
+                    if (nextIdx !== -1) {
+                        trimmerActiveClipIndex = nextIdx;
+                        trimmerPlayer.currentTime = trimmerKeeperClips[nextIdx].start;
+                    } else if (trimmerKeeperClips.length > 0) {
+                        trimmerActiveClipIndex = 0;
+                        trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+                    }
+                }
+                renderTrimmerTimelineUI();
+                updateTrimmerDeck();
+            });
+        }
+
+        // SEAMLESS BACK-TO-BACK REAL-TIME PLAYBACK ENGINE
+        if (trimmerPlayer) {
+            trimmerPlayer.addEventListener('timeupdate', () => {
+                if (trimmerTotalDuration <= 0 || trimmerKeeperClips.length === 0) return;
+                const cur = trimmerPlayer.currentTime;
+
+                // Update playhead UI
+                const playheadPct = Math.min(100, Math.max(0, (cur / trimmerTotalDuration) * 100));
+                if (trimmerPlayhead) trimmerPlayhead.style.left = `${playheadPct}%`;
+                if (trimmerTimelinePlayheadTime) trimmerTimelinePlayheadTime.textContent = `Playhead: ${formatSecs(cur)}`;
+                if (trimmerHudTimeBadge) trimmerHudTimeBadge.textContent = `${formatSecs(cur)} / ${formatSecs(trimmerTotalDuration)}`;
+
+                const activeClip = trimmerKeeperClips[trimmerActiveClipIndex];
+                if (activeClip) {
+                    // If reached end of active keeper clip: jump seamlessly to next keeper clip!
+                    if (cur >= activeClip.end - 0.05) {
+                        if (trimmerActiveClipIndex < trimmerKeeperClips.length - 1) {
+                            trimmerActiveClipIndex++;
+                            trimmerPlayer.currentTime = trimmerKeeperClips[trimmerActiveClipIndex].start;
+                            renderTrimmerTimelineUI();
+                            updateTrimmerDeck();
+                            updateTrimmerStats();
+                        } else {
+                            // End of all clips
+                            trimmerPlayer.pause();
+                            trimmerActiveClipIndex = 0;
+                            trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+                            renderTrimmerTimelineUI();
+                            updateTrimmerDeck();
+                            updateTrimmerStats();
+                        }
+                    } else if (cur < activeClip.start - 0.1) {
+                        // Check if jumped into another clip or gap
+                        const found = trimmerKeeperClips.findIndex(c => cur >= c.start && cur <= c.end);
+                        if (found !== -1) {
+                            trimmerActiveClipIndex = found;
+                            renderTrimmerTimelineUI();
+                            updateTrimmerDeck();
+                            updateTrimmerStats();
+                        } else {
+                            // In gap: snap forward to next clip start
+                            const next = trimmerKeeperClips.find(c => c.start > cur);
+                            if (next) {
+                                trimmerActiveClipIndex = trimmerKeeperClips.indexOf(next);
+                                trimmerPlayer.currentTime = next.start;
+                                renderTrimmerTimelineUI();
+                                updateTrimmerDeck();
+                                updateTrimmerStats();
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // GEMINI AUTO-DISCOVERY CUT & DELETE
+        if (btnTrimmerGeminiAutoCut) {
+            btnTrimmerGeminiAutoCut.addEventListener('click', async () => {
+                if (trimmerTotalDuration <= 0) {
+                    alert('Please upload or load a video first.');
+                    return;
+                }
+
+                btnTrimmerGeminiAutoCut.disabled = true;
+                btnTrimmerGeminiAutoCut.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; display: inline-block;"></span> Analyzing Story Arc...';
+
+                const payload = {
+                    filename: trimmerServerFilename || (trimmerLocalFile ? trimmerLocalFile.name : ''),
+                    duration: trimmerTotalDuration,
+                    focus_style: trimmerFocusSelect ? trimmerFocusSelect.value : 'Key Dramatic Highlights',
+                    target_duration: parseInt(trimmerTargetDurSelect ? trimmerTargetDurSelect.value : '0') || 0,
+                    language: 'Hindi'
+                };
+
+                try {
+                    const res = await fetch('/api/trimmer/gemini_autocut', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data.success && data.keeper_clips && data.keeper_clips.length > 0) {
+                        nextClipId = 1;
+                        trimmerKeeperClips = data.keeper_clips.map(c => ({
+                            id: nextClipId++,
+                            start: c.start,
+                            end: c.end,
+                            duration: c.duration,
+                            title: c.title,
+                            reason: c.reason
+                        }));
+                        trimmerActiveClipIndex = 0;
+
+                        // Automatically update narration script
+                        if (data.script && trimmerNarrationScript) {
+                            trimmerNarrationScript.value = data.script;
+                        }
+
+                        // Seamlessly update player to start of first keeper clip
+                        trimmerPlayer.currentTime = trimmerKeeperClips[0].start;
+                        trimmerPlayer.play();
+
+                        renderTrimmerTimelineUI();
+                        updateTrimmerStats();
+                        updateTrimmerDeck();
+
+                        alert(`Gemini Auto-Cut Complete! Applied ${trimmerKeeperClips.length} narrative keeper cuts and discarded ${data.filler_removed_percent}% filler.`);
+                    } else {
+                        alert('Gemini auto-cut did not return clips. Please check logs.');
+                    }
+                } catch (err) {
+                    alert('Error during Gemini Auto-Cut: ' + err.message);
+                } finally {
+                    btnTrimmerGeminiAutoCut.disabled = false;
+                    btnTrimmerGeminiAutoCut.innerHTML = '<span>🤖</span> <span>Gemini Auto-Cut &amp; Trim</span>';
+                }
+            });
+        }
+
+        // EXPORT FINAL VIDEO PIPELINE (100% ORIGINAL RESOLUTION PRESERVED)
+        if (btnExportFinalVideo) {
+            btnExportFinalVideo.addEventListener('click', async () => {
+                if (trimmerKeeperClips.length === 0) {
+                    alert('No clips to export.');
+                    return;
+                }
+
+                if (!trimmerServerFilename) {
+                    alert('Video is still uploading to server. Please wait a few moments and try again.');
+                    return;
+                }
+
+                const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
+                const audioMode = audioModeInput ? audioModeInput.value : 'original';
+                const payload = {
+                    filename: trimmerServerFilename,
+                    keeper_clips: trimmerKeeperClips,
+                    audio_mode: audioMode,
+                    voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
+                    tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep',
+                    script: trimmerNarrationScript ? trimmerNarrationScript.value : ''
+                };
+
+                btnExportFinalVideo.disabled = true;
+                if (btnExportIcon) btnExportIcon.textContent = '⏳';
+                if (btnExportText) btnExportText.textContent = 'Starting Export...';
+                if (trimmerExportCard) trimmerExportCard.style.display = 'block';
+                if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'none';
+                if (trimmerExportProgressBar) trimmerExportProgressBar.style.width = '5%';
+                if (trimmerExportPercentText) trimmerExportPercentText.textContent = '5%';
+                if (trimmerExportStepText) trimmerExportStepText.textContent = 'Initiating FFmpeg original-size export...';
+
+                try {
+                    const res = await fetch('/api/trimmer/export', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data.success && data.task_id) {
+                        pollTrimmerExport(data.task_id);
+                    } else {
+                        throw new Error(data.error || 'Failed to start export');
+                    }
+                } catch (err) {
+                    alert('Export failed: ' + err.message);
+                    btnExportFinalVideo.disabled = false;
+                    if (btnExportIcon) btnExportIcon.textContent = '🚀';
+                    if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
+                }
+            });
+        }
+
+        function pollTrimmerExport(taskId) {
+            if (exportPollInterval) clearInterval(exportPollInterval);
+            exportPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/trimmer/export_status/${taskId}`);
+                    const task = await res.json();
+                    
+                    if (task.progress !== undefined && trimmerExportProgressBar && trimmerExportPercentText) {
+                        trimmerExportProgressBar.style.width = `${task.progress}%`;
+                        trimmerExportPercentText.textContent = `${task.progress}%`;
+                    }
+                    if (task.step && trimmerExportStepText) {
+                        trimmerExportStepText.textContent = task.step;
+                    }
+
+                    if (task.status === 'completed') {
+                        clearInterval(exportPollInterval);
+                        if (btnExportFinalVideo) btnExportFinalVideo.disabled = false;
+                        if (btnExportIcon) btnExportIcon.textContent = '🚀';
+                        if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
+
+                        // Display result
+                        const r = task.result;
+                        if (trimmerExportResultBox) trimmerExportResultBox.style.display = 'block';
+                        if (trimmerExportedPlayer) trimmerExportedPlayer.src = r.video_url;
+                        if (btnDownloadExportedVideo) btnDownloadExportedVideo.href = r.download_url;
+                        
+                        const meta = r.metadata || {};
+                        if (trimmerExportMetaDetails) {
+                            trimmerExportMetaDetails.innerHTML = `
+                                <div><b>File:</b> ${r.filename}</div>
+                                <div><b>Resolution:</b> ${meta.width || trimmerVideoWidth}x${meta.height || trimmerVideoHeight} (${meta.aspect_ratio || '16:9'} Native)</div>
+                                <div><b>Duration:</b> ${meta.duration_str || formatSecs(meta.duration || 0)}</div>
+                                <div><b>Size:</b> ${meta.size_mb || 0} MB</div>
+                                <div style="color: #6ee7b7; font-weight: 600; margin-top: 4px;">✅ Zero Aspect-Ratio Distortion &bull; 100% Native Size Maintained</div>
+                            `;
+                        }
+
+                        // Connect YouTube upload button
+                        if (btnSendExportToYouTube) {
+                            btnSendExportToYouTube.onclick = () => {
+                                tabManualMode.click();
+                                document.getElementById('videoTitle').value = `Highlights Montage (${formatSecs(meta.duration || 0)})`;
+                                document.getElementById('existingVideoFilename').value = r.filename;
+                                document.getElementById('videoFileInfo').textContent = `Using Exported Video: ${r.filename} (${meta.size_mb || 0} MB)`;
+                                document.getElementById('videoFileInfo').style.display = 'block';
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            };
+                        }
+                    } else if (task.status === 'error') {
+                        clearInterval(exportPollInterval);
+                        if (btnExportFinalVideo) btnExportFinalVideo.disabled = false;
+                        if (btnExportIcon) btnExportIcon.textContent = '🚀';
+                        if (btnExportText) btnExportText.textContent = 'Export Final Video (Preserve Original Resolution)';
+                        if (trimmerExportStepText) {
+                            trimmerExportStepText.textContent = `Error: ${task.error || 'Export failed'}`;
+                            trimmerExportStepText.style.color = '#f87171';
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Poll error:', err);
+                }
+            }, 1200);
+        }
+
         // Initialize on page load
         loadChannelInfo();
         loadRecentVideos();
@@ -6283,6 +7187,190 @@ def clipper_tts_calibrate():
 def clipper_serve_tts_sample(filename):
     resp = send_from_directory(clipper_engine.TEMP_DIR, secure_filename(filename), conditional=True)
     resp.headers['Accept-Ranges'] = 'bytes'
+    return resp
+
+
+# ==============================================================
+# TIMELINE VIDEO TRIMMER & SLICER ENGINE (ORIGINAL SIZE PRESERVED)
+# ==============================================================
+trimmer_export_tasks: Dict[str, Dict[str, Any]] = {}
+
+@app.route('/api/trimmer/upload', methods=['POST'])
+def trimmer_upload():
+    """
+    Uploads video file (any length from 10m to 2h+) for timeline trimming,
+    probes and returns exact original resolution, aspect ratio, duration, and metadata.
+    """
+    file = request.files.get('video_file')
+    if not file or file.filename == '':
+        return jsonify({'error': 'No video file provided'}), 400
+
+    video_id = str(uuid.uuid4())[:12]
+    safe_name = secure_filename(f"trimmer_{video_id}_{file.filename}")
+    saved_path = os.path.join(clipper_engine.TRIMMER_VIDEOS_DIR, safe_name)
+    file.save(saved_path)
+
+    meta = clipper_engine.get_video_metadata(saved_path)
+    return jsonify({
+        'success': True,
+        'video_id': video_id,
+        'filename': safe_name,
+        'stream_url': f"/api/trimmer/stream/{safe_name}",
+        'metadata': meta
+    })
+
+
+@app.route('/api/trimmer/stream/<path:filename>')
+def trimmer_stream(filename):
+    """
+    Streams trimmer video with full HTTP Range request support for smooth scrubbing.
+    """
+    safe_name = secure_filename(filename)
+    for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, clipper_engine.CLIPPER_DIR, UPLOAD_FOLDER]:
+        if os.path.exists(os.path.join(cand_dir, safe_name)):
+            resp = send_from_directory(cand_dir, safe_name, conditional=True)
+            resp.headers['Accept-Ranges'] = 'bytes'
+            return resp
+    return jsonify({'error': 'Video file not found'}), 404
+
+
+@app.route('/api/trimmer/gemini_autocut', methods=['POST'])
+def trimmer_gemini_autocut():
+    """
+    Discovers key narrative turning points and timestamps with Gemini.
+    Automatically marks keeper cuts, discards filler, and generates synchronized story script.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    filename = data.get('filename')
+    duration = float(data.get('duration', 0.0))
+    title = data.get('title', '')
+    focus_style = data.get('focus_style', 'Key Dramatic Highlights')
+    target_duration = data.get('target_duration')
+    language = data.get('language', 'Hindi')
+    custom_prompt = data.get('custom_prompt', '')
+
+    if target_duration:
+        try:
+            target_duration = int(target_duration)
+        except Exception:
+            target_duration = None
+
+    video_path = ""
+    if filename:
+        safe_name = secure_filename(filename)
+        for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, clipper_engine.CLIPPER_DIR, UPLOAD_FOLDER]:
+            p = os.path.join(cand_dir, safe_name)
+            if os.path.exists(p):
+                video_path = p
+                break
+
+    result = clipper_engine.analyze_video_timeline_autocut(
+        video_path=video_path,
+        duration=duration,
+        title=title,
+        focus_style=focus_style,
+        target_duration=target_duration,
+        language=language,
+        custom_prompt=custom_prompt
+    )
+    return jsonify(result)
+
+
+def _execute_trimmer_export_worker(task_id: str, payload: Dict[str, Any]):
+    filename = payload.get('filename')
+    keeper_clips = payload.get('keeper_clips', [])
+    audio_mode = payload.get('audio_mode', 'original')
+    voice_name = payload.get('voice_name', 'Kore')
+    tone_style = payload.get('tone_style', 'Narrative Deep')
+    script = payload.get('script', '')
+
+    def progress_cb(pct: int, msg: str):
+        if task_id in trimmer_export_tasks:
+            trimmer_export_tasks[task_id]['progress'] = pct
+            trimmer_export_tasks[task_id]['step'] = msg
+
+    try:
+        video_path = ""
+        if filename:
+            safe_name = secure_filename(filename)
+            for cand_dir in [clipper_engine.TRIMMER_VIDEOS_DIR, clipper_engine.CLIPPER_DIR, UPLOAD_FOLDER]:
+                p = os.path.join(cand_dir, safe_name)
+                if os.path.exists(p):
+                    video_path = p
+                    break
+
+        if not video_path or not os.path.exists(video_path):
+            raise FileNotFoundError(f"Source video file not found: {filename}")
+
+        out_filename = f"trimmed_montage_{task_id}.mp4"
+        out_path = os.path.join(clipper_engine.TRIMMER_EXPORTS_DIR, out_filename)
+
+        meta = clipper_engine.export_timeline_trimmed_video(
+            source_video_path=video_path,
+            keeper_clips=keeper_clips,
+            output_path=out_path,
+            audio_mode=audio_mode,
+            voice_name=voice_name,
+            tone_style=tone_style,
+            script=script,
+            progress_callback=progress_cb
+        )
+
+        trimmer_export_tasks[task_id]['status'] = 'completed'
+        trimmer_export_tasks[task_id]['progress'] = 100
+        trimmer_export_tasks[task_id]['step'] = 'Trimmed video exported successfully at original resolution!'
+        trimmer_export_tasks[task_id]['result'] = {
+            'filename': out_filename,
+            'video_url': f"/api/trimmer/media/{out_filename}",
+            'download_url': f"/api/trimmer/media/{out_filename}?download=1",
+            'metadata': meta
+        }
+    except Exception as e:
+        print(f"Trimmer export error: {e}")
+        if task_id in trimmer_export_tasks:
+            trimmer_export_tasks[task_id]['status'] = 'error'
+            trimmer_export_tasks[task_id]['error'] = str(e)
+
+
+@app.route('/api/trimmer/export', methods=['POST'])
+def trimmer_export():
+    """
+    Exports keeper clips stitched seamlessly without aspect-ratio resizing.
+    Preserves 100% original video resolution.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    task_id = str(uuid.uuid4())[:8]
+
+    trimmer_export_tasks[task_id] = {
+        'status': 'processing',
+        'progress': 0,
+        'step': 'Starting trimmer export...',
+        'error': None,
+        'result': None
+    }
+
+    thread = threading.Thread(target=_execute_trimmer_export_worker, args=(task_id, data))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'success': True, 'task_id': task_id})
+
+
+@app.route('/api/trimmer/export_status/<task_id>', methods=['GET'])
+def trimmer_export_status(task_id):
+    task = trimmer_export_tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Export task not found'}), 404
+    return jsonify(task)
+
+
+@app.route('/api/trimmer/media/<path:filename>')
+def trimmer_serve_media(filename):
+    safe_name = secure_filename(filename)
+    resp = send_from_directory(clipper_engine.TRIMMER_EXPORTS_DIR, safe_name, conditional=True)
+    resp.headers['Accept-Ranges'] = 'bytes'
+    if request.args.get('download'):
+        resp.headers['Content-Disposition'] = f'attachment; filename="{safe_name}"'
     return resp
 
 
