@@ -487,7 +487,7 @@ def verify_gemini_key_online(key: str) -> Tuple[bool, str]:
         client = genai.Client(api_key=clean_k)
         # Fast lightweight ping
         client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite-preview",
             contents="PING"
         )
         return True, "Key verified successfully"

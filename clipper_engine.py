@@ -4057,13 +4057,14 @@ Return STRICT JSON ONLY:
         from google.genai import types
 
         candidate_models = [
-            "gemini-2.5-flash",
             "gemini-3-flash-preview",
-            "gemini-2.5-flash-lite",
-            "gemini-3.1-flash-lite-preview"
+            "gemini-3.8-flash",
+            "gemini-2.5-flash",
+            "gemini-3.1-flash-lite-preview",
+            "gemini-2.5-flash-lite"
         ]
 
-        def _parse_storyboard_response(resp_text: str, mode_label: str = "direct", model_name: str = "gemini-2.5-flash", masked_k: str = "") -> bool:
+        def _parse_storyboard_response(resp_text: str, mode_label: str = "direct", model_name: str = "gemini-3-flash-preview", masked_k: str = "") -> bool:
             nonlocal raw_scene_beats, summary, source
             data = parse_storyboard_json_payload(resp_text)
             if not isinstance(data, dict):
@@ -4105,7 +4106,7 @@ Return STRICT JSON ONLY:
 
             for model_name in candidate_models:
                 # Pass A: If YouTube URL is provided, try direct Multimodal YouTube Video ingestion first
-                if is_yt and model_name in ["gemini-2.5-flash", "gemini-3-flash-preview"]:
+                if is_yt and model_name in ["gemini-3-flash-preview", "gemini-3.8-flash", "gemini-2.5-flash"]:
                     try:
                         logger.info(f"Attempting direct YouTube video multimodal story extraction with {model_name} [{masked_k}]...")
                         mm_contents = types.Content(
@@ -4276,9 +4277,11 @@ Return STRICT JSON ONLY:
         "voice_name": voice_name,
         "tone_style": tone_style,
         "voice_engine_locked": locked_engine_used,
+        "locked_voice_engine": locked_engine_used,
         "language": language,
         "total_duration_sec": round(tot_kept, 2),
         "audio_duration": round(tot_kept, 2),
+        "audio_duration_sec": round(tot_kept, 2),
         "duration_delta": sync_drift_sec,
         "narration_audio_url": narration_audio_url,
         "narration_filename": narration_filename,
