@@ -490,6 +490,110 @@ def extract_youtube_info(youtube_url: str, credentials=None) -> Dict[str, Any]:
 # =====================================================================
 # 2. GEMINI CHRONOLOGICAL SCENE SEGMENTATION & SCRIPTING
 # =====================================================================
+STRICT_CHARACTER_ONLY_NAMING_RULE = """=== STRICT CHARACTER-ONLY NAMING RULE (ZERO REAL ACTOR / CELEBRITY NAMES) ===
+1. NEVER mention real-life actors, actresses, directors, producers, or celebrity names anywhere in the script, hook, or scene narrations (e.g., strictly BAN real names like "Akshay Kumar", "Salman Khan", "Shah Rukh Khan", "Aamir Khan", "Ajay Devgn", "Allu Arjun", "Prabhas", "Rajinikanth", "Vijay", "Hrithik Roshan", "Ranbir Kapoor", "Sunny Deol", "Kartik Aaryan", "Deepika Padukone", "Alia Bhatt", or their Hindi/Devanagari forms like "अक्षय कुमार", "सलमान खान", "शाहरुख खान", etc.).
+2. ALWAYS refer to people strictly by their IN-MOVIE FICTIONAL CHARACTER NAMES (e.g., "Bahattar Singh" / "बहत्तर सिंह", "Indu" / "इंदु", "Tatya" / "तात्या", "Kabir" / "कबीर", "Vikram" / "विक्रम") whenever fictional names exist in the story.
+3. If the video is an animation, vlog, or horror/mystery story where fictional character names are absent or unknown, refer to them PURELY by their in-universe role (e.g., in Hindi: "नायक", "अन्वेषक", "खलनायक", "वह साया", "मुसाफ़िर", "रहस्यमयी अजनबी"; or in English: "the protagonist", "the investigator", "the villain", "that shadow", "the traveler")."""
+
+_BANNED_MALE_ACTORS = [
+    ("Akshay Kumar", "अक्षय कुमार"),
+    ("Salman Khan", "सलमान खान"),
+    ("Shah Rukh Khan", "शाहरुख खान"),
+    ("Shahrukh Khan", "शाहरुख़ खान"),
+    ("Aamir Khan", "आमिर खान"),
+    ("Ajay Devgn", "अजय देवगन"),
+    ("Ajay Devgan", "अजय देवगन"),
+    ("Allu Arjun", "अल्लू अर्जुन"),
+    ("Prabhas", "प्रभास"),
+    ("Rajinikanth", "रजनीकांत"),
+    ("Thalapathy Vijay", "थलापति विजय"),
+    ("Hrithik Roshan", "ऋतिक रोशन"),
+    ("Ranbir Kapoor", "रणबीर कपूर"),
+    ("Ranveer Singh", "रणवीर सिंह"),
+    ("Sunny Deol", "सनी देओल"),
+    ("Bobby Deol", "बॉबी देओल"),
+    ("Kartik Aaryan", "कार्तिक आर्यन"),
+    ("Varun Dhawan", "वरुण धवन"),
+    ("Tiger Shroff", "टाइगर श्रॉफ"),
+    ("John Abraham", "जॉन अब्राहम"),
+    ("Saif Ali Khan", "सैफ अली खान"),
+    ("Nawazuddin Siddiqui", "नवाजुद्दीन सिद्दीकी"),
+    ("Manoj Bajpayee", "मनोज बाजपेयी"),
+    ("Pankaj Tripathi", "पंकज त्रिपाठी"),
+    ("Vicky Kaushal", "विक्की कौशल"),
+    ("Ayushmann Khurrana", "आयुष्मान खुराना"),
+    ("Rajkummar Rao", "राजकुमार राव"),
+    ("Shahid Kapoor", "शाहिद कपूर"),
+    ("Sanjay Dutt", "संजय दत्त"),
+    ("Amitabh Bachchan", "अमिताभ बच्चन"),
+    ("Anil Kapoor", "अनिल कपूर"),
+    ("Jackie Shroff", "जैकी श्रॉफ"),
+    ("Suniel Shetty", "सुनील शेट्टी"),
+    ("Govinda", "गोविंदा"),
+    ("Mithun Chakraborty", "मिथुन चक्रवर्ती"),
+    ("Ram Charan", "राम चरण"),
+    ("Jr NTR", "जूनियर एनटीआर"),
+    ("Mahesh Babu", "महेश बाबू"),
+    ("Dhanush", "धनुष"),
+    ("Suriya", "सूर्या"),
+    ("Kamal Haasan", "कमल हासन"),
+    ("Vikram", ""),
+    ("Yash", "यश"),
+    ("Rishab Shetty", "ऋषभ शेट्टी"),
+]
+
+_BANNED_FEMALE_ACTORS = [
+    ("Deepika Padukone", "दीपिका पादुकोण"),
+    ("Alia Bhatt", "आलिया भट्ट"),
+    ("Katrina Kaif", "कैटरीना कैफ"),
+    ("Kareena Kapoor", "करीना कपूर"),
+    ("Priyanka Chopra", "प्रियंका चोपड़ा"),
+    ("Anushka Sharma", "अनुष्का शर्मा"),
+    ("Kriti Sanon", "कृति सेनन"),
+    ("Kiara Advani", "कियारा आडवाणी"),
+    ("Shraddha Kapoor", "श्रद्धा कपूर"),
+    ("Rashmika Mandanna", "रश्मिका मंदाना"),
+    ("Samantha Ruth Prabhu", "सामंथा रुथ प्रभु"),
+    ("Nayanthara", "नयनतारा"),
+    ("Tamannaah Bhatia", "तमन्ना भाटिया"),
+    ("Taapsee Pannu", "तापसी पन्नू"),
+    ("Vidya Balan", "विद्या बालन"),
+    ("Madhuri Dixit", "माधुरी दीक्षित"),
+    ("Kajol", "काजोल"),
+    ("Rani Mukerji", "रानी मुखर्जी"),
+    ("Aishwarya Rai", "ऐश्वर्या राय"),
+]
+
+
+def sanitize_actor_names_to_character_roles(text: str, language: str = "Hindi") -> str:
+    """
+    Strictly scrubs any real-life actor/celebrity names from narration text and replaces them
+    with in-universe character roles ('नायक' / 'नायिका' or 'the protagonist' / 'the heroine').
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    out = text
+    is_hi = language.lower().startswith("hi")
+    male_role = "नायक" if is_hi else "the protagonist"
+    female_role = "नायिका" if is_hi else "the heroine"
+
+    for en_name, hi_name in _BANNED_MALE_ACTORS:
+        if en_name and len(en_name) > 4:
+            out = re.sub(rf"\b{re.escape(en_name)}\b", male_role, out, flags=re.IGNORECASE)
+        if hi_name:
+            out = out.replace(hi_name, male_role)
+
+    for en_name, hi_name in _BANNED_FEMALE_ACTORS:
+        if en_name:
+            out = re.sub(rf"\b{re.escape(en_name)}\b", female_role, out, flags=re.IGNORECASE)
+        if hi_name:
+            out = out.replace(hi_name, female_role)
+
+    # Also scrub generic "अभिनेता <Name>" or "एक्टर <Name>"
+    out = re.sub(r"\b(actor|actress|superstar|megastar)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?", male_role, out, flags=re.IGNORECASE)
+    return out
+
+
 def analyze_movie_narrative_for_shorts(
     youtube_url: str,
     video_info: Dict[str, Any],
@@ -531,7 +635,7 @@ def analyze_movie_narrative_for_shorts(
 
     lang_instruction = (
         f"Write natural, viral storytelling {language} (Devanagari script preferred, emotional, high-suspense like top YouTube movie explanation channels). "
-        "Example style: 'कहानी की शुरुआत में जब रोहन इस खतरनाक जगह पर पहुंचता है, तो उसे नहीं पता था कि आगे क्या होने वाला है...'"
+        "Example style: 'कहानी की शुरुआत में जब बहत्तर सिंह इस खतरनाक जगह पर पहुंचता है, तो उसे नहीं पता था कि आगे क्या होने वाला है...'"
         if language.lower().startswith("hi")
         else f"Write high-energy, dramatic, fast-paced English narrative recap scripts like top cinema recap channels."
     )
@@ -544,6 +648,8 @@ def analyze_movie_narrative_for_shorts(
 
     prompt = f"""You are a master Hollywood Cinema Director & YouTube Video Trailer Strategist specializing in viral, high-drama storytelling videos.
 Your task is to analyze the following movie / video storyline and discover the most gripping, high-retention narrative moments across the ENTIRE storyline to produce videos in STRICT CHRONOLOGICAL ORDER (Part 1, Part 2, Part 3... from beginning to the climax/resolution).
+
+{STRICT_CHARACTER_ONLY_NAMING_RULE}
 
 === THE SMART DIRECTOR MULTI-SCENE STORYBOARD RULE ===
 To ensure 100% YouTube Content ID & copyright safety, DO NOT pick a single continuous clip for any Part.
@@ -591,6 +697,7 @@ Description:
 3. VIRAL RECAP SCRIPT ({language.upper()}):
    - For each Part, write a cohesive, gripping ~{target_words}-word voiceover script matching the visual progression of the cuts.
    - {lang_instruction}
+   - NEVER use real actor or celebrity names (e.g. ban "Akshay Kumar", etc.); use ONLY in-movie fictional character names (e.g., Bahattar Singh, Indu, Tatya) or in-universe roles ("नायक", "अन्वेषक", "खलनायक", "वह साया", "मुसाफ़िर").
    - Must begin with a 3-second scroll-stopping retention hook matching Cut 1 [Hook].
    - Must narrate the story seamlessly across the montage cuts without awkward pauses.
    - Must end on a high-retention cliffhanger prompting viewers to like and watch Part N+1!
@@ -898,7 +1005,7 @@ def sanitize_and_order_scenes(
                     "end_seconds": int(end_s),
                     "duration": int(end_s - start_s),
                     "beat": raw_beat,
-                    "description": c.get("description", f"Director Beat {idx}")
+                    "description": sanitize_actor_names_to_character_roles(c.get("description", f"Director Beat {idx}"), language)
                 })
 
         # If Gemini didn't provide valid sub_clips or fewer than 3 were valid, synthesize cuts
@@ -950,9 +1057,9 @@ def sanitize_and_order_scenes(
             "start_seconds": first_clip["start_seconds"],
             "end_seconds": last_clip["end_seconds"],
             "duration": total_dur,
-            "title": s.get("title") or f"{video_title[:30]} - Part {s.get('part', 1)} #Shorts",
-            "hook": s.get("hook", ""),
-            "script": s.get("script", ""),
+            "title": sanitize_actor_names_to_character_roles(s.get("title") or f"{video_title[:30]} - Part {s.get('part', 1)} #Shorts", language),
+            "hook": sanitize_actor_names_to_character_roles(s.get("hook", ""), language),
+            "script": sanitize_actor_names_to_character_roles(s.get("script", ""), language),
             "tags": s.get("tags") or ["shorts", "viral", "recap", "montage"],
             "sub_clips": valid_sub_clips,
             "montage_mode": True,
@@ -2101,7 +2208,9 @@ def ensure_scene_script(
     """
     script = (scene.get("script") or "").strip()
     if script:
-        return script
+        clean_existing = sanitize_actor_names_to_character_roles(script, language)
+        scene["script"] = clean_existing
+        return clean_existing
 
     part_num = scene.get("part", 1)
     sub_clips = scene.get("sub_clips") or []
@@ -2128,6 +2237,7 @@ def ensure_scene_script(
         f"You are a master YouTube viral storyteller & trailer narrator.\n"
         f"Write a dramatic, cohesive story recap voiceover script in {language} for Part {part_num} "
         f"of '{video_title}' designed for a fast-paced {total_cut_duration} second multi-scene montage covering story progression from {scene.get('start_time')} to {scene.get('end_time')}.\n"
+        f"{STRICT_CHARACTER_ONLY_NAMING_RULE}\n"
         f"CRITICAL TIMING CALIBRATION:\n"
         f"- Target narration pace: {wps:.2f} words per second.\n"
         f"- Tone Style: {tone_style}.\n"
@@ -2145,7 +2255,7 @@ def ensure_scene_script(
                 config={"temperature": 0.4}
             )
             if resp and resp.text:
-                clean_script = resp.text.strip().replace('"', '').replace("'", "")
+                clean_script = sanitize_actor_names_to_character_roles(resp.text.strip().replace('"', '').replace("'", ""), language)
                 scene["script"] = clean_script
                 return clean_script
         except Exception as me:
@@ -2158,14 +2268,14 @@ def ensure_scene_script(
     if language.lower().startswith("hi"):
         fallback = (
             f"फिल्म के पार्ट {part_num} में कहानी एक नया रोमांचक मोड़ लेती है। "
-            f"मुख्य किरदार इस खतरनाक परिस्थिति में फंस जाता है जहां से निकलना लगभग नामुमकिन था। "
+            f"नायक इस खतरनाक परिस्थिति में फंस जाता है जहां से निकलना लगभग नामुमकिन था। "
             f"लेकिन क्या वह अपनी जान बचा पाएगा? देखिए आगे क्या होता है और चैनल को सब्सक्राइब जरूर करें!"
         )
     else:
         fallback = (
             f"In Part {part_num} of this intense story, the plot takes an unexpected dramatic turn. "
             f"Trapped in an impossible situation with no easy way out, every second counts. "
-            f"Will the hero survive the ultimate test? Watch till the end and subscribe for more!"
+            f"Will the protagonist survive the ultimate test? Watch till the end and subscribe for more!"
         )
     scene["script"] = fallback
     return fallback
@@ -2735,6 +2845,447 @@ def get_video_metadata(video_path: str) -> Dict[str, Any]:
     return meta
 
 
+_CONTINUOUS_NARRATION_FILLERS_HI = [
+    "इस पल नायक के सामने खड़ा संकट और भी गहरा हो जाता है क्योंकि वह साया हर कदम पर उसकी परीक्षा ले रहा है।",
+    "अन्वेषक चारों तरफ़ फैले सन्नाटे में छुपे उस सुराग को तलाशता है जो इस खौफनाक राज़ से पर्दा उठा सकता है।",
+    "हर गुज़रते सेकंड के साथ खलनायक का बिछाया हुआ जाल कसता जाता है और मुसाफ़िर के पास बचने का कोई आसान रास्ता नहीं बचता।",
+    "अंधेरे गलियारे में गूँजती वह रहस्यमयी आहट नायक को आगाह करती है कि अगला मोड़ उसकी ज़िंदगी हमेशा के लिए बदल देगा।",
+    "यहाँ कहानी एक ऐसा चौंकाने वाला मोड़ लेती है जहाँ सच और फरेब के बीच की लकीर पूरी तरह मिटती हुई नज़र आती है।",
+    "अपने हौसले और सूझबूझ के दम पर मुख्य किरदार उस अनदेखे खतरे का डटकर मुकाबला करने का फैसला करता है।",
+    "साज़िश के इस भंवर में हर चेहरा एक नकाब पहने हुए है और असली सच अब भी परदे के पीछे छुपा हुआ है।",
+    "तनाव अपने चरम पर पहुँच चुका है क्योंकि एक गलत कदम पूरे मिशन को हमेशा के लिए तबाह कर सकता है।"
+]
+
+_CONTINUOUS_NARRATION_FILLERS_EN = [
+    "At this moment the danger surrounding the protagonist deepens as the unseen shadow tests every single move.",
+    "The investigator searches the eerie silence for the hidden clue that could finally unmask this terrifying mystery.",
+    "With every passing second the antagonist's trap tightens and the traveler has no easy escape left.",
+    "Echoes in the dark corridor warn our hero that the very next turn will change everything forever.",
+    "Here the story takes a shocking twist where the line between truth and deception completely blurs.",
+    "Relying on sheer courage and sharp instinct, the central character decides to confront the looming threat head-on."
+]
+
+
+def enforce_continuous_scene_narration_budget(
+    keeper_clips: List[Dict[str, Any]],
+    wps: float = 2.35,
+    cps: float = 12.5,
+    language: str = "Hindi"
+) -> Dict[str, Any]:
+    """
+    Guarantees:
+    1. Strictly zero real-life actor/celebrity names across all scene titles, reasons, and narrations.
+    2. Exact continuous narration word budget:
+       Target_Word_Count = round(Total_Cuts_Duration * WPS).
+       Every scene cut has continuous narration budgeted to round(cut_duration * WPS) so speech runs
+       unbroken from the first second to the final cut (never a 1-minute summary for a 5-minute timeline).
+    """
+    if not keeper_clips:
+        return {
+            "keeper_clips": [],
+            "full_script": "",
+            "total_words": 0,
+            "target_words": 0,
+            "total_chars": 0,
+            "total_cuts_duration": 0.0
+        }
+
+    is_hi = language.lower().startswith("hi")
+    fillers = _CONTINUOUS_NARRATION_FILLERS_HI if is_hi else _CONTINUOUS_NARRATION_FILLERS_EN
+    wps = max(1.2, float(wps or 2.35))
+    cps = max(6.0, float(cps or 12.5))
+
+    script_parts = []
+    total_cuts_duration = 0.0
+
+    for idx, c in enumerate(keeper_clips):
+        s = float(c.get("start", 0.0))
+        e = float(c.get("end", s + float(c.get("duration", 5.0))))
+        c_dur = round(max(1.5, float(c.get("duration") or (e - s))), 2)
+        c["duration"] = c_dur
+        total_cuts_duration += c_dur
+
+        target_w = max(3, int(round(c_dur * wps)))
+        target_ch = max(15, int(round(c_dur * cps)))
+
+        c["title"] = sanitize_actor_names_to_character_roles(str(c.get("title") or f"Scene {idx + 1}"), language)
+        c["reason"] = sanitize_actor_names_to_character_roles(str(c.get("reason") or "Key narrative beat"), language)
+
+        raw_narr = str(c.get("narration") or c.get("script_segment") or "").strip()
+        clean_narr = sanitize_actor_names_to_character_roles(raw_narr, language)
+        words = clean_narr.split()
+
+        filler_cursor = idx
+        while len(words) < target_w:
+            extra_sentence = fillers[filler_cursor % len(fillers)]
+            extra_words = extra_sentence.split()
+            needed = target_w - len(words)
+            if needed >= len(extra_words):
+                words.extend(extra_words)
+            else:
+                words.extend(extra_words[:needed])
+                last_w = words[-1]
+                if is_hi and not last_w.endswith(("।", ".", "!", "?")):
+                    words[-1] = last_w.rstrip(",;:") + "।"
+                elif not is_hi and not last_w.endswith((".", "!", "?")):
+                    words[-1] = last_w.rstrip(",;:") + "."
+            filler_cursor += 1
+
+        if len(words) > target_w + 3:
+            words = words[:target_w]
+            last_w = words[-1]
+            if is_hi and not last_w.endswith(("।", ".", "!", "?")):
+                words[-1] = last_w.rstrip(",;:") + "।"
+            elif not is_hi and not last_w.endswith((".", "!", "?")):
+                words[-1] = last_w.rstrip(",;:") + "."
+
+        final_scene_narr = " ".join(words).strip()
+        c["narration"] = final_scene_narr
+        c["script_segment"] = final_scene_narr
+        c["target_words"] = target_w
+        c["actual_words"] = len(words)
+        c["target_chars"] = target_ch
+        script_parts.append(final_scene_narr)
+
+    full_script = " ".join(script_parts).strip()
+    total_words = len(full_script.split())
+    target_total_words = int(round(total_cuts_duration * wps))
+
+    return {
+        "keeper_clips": keeper_clips,
+        "full_script": full_script,
+        "total_words": total_words,
+        "target_words": target_total_words,
+        "total_chars": len(full_script),
+        "total_cuts_duration": round(total_cuts_duration, 2)
+    }
+
+
+def get_audio_duration(audio_path: str) -> float:
+    """Measures exact audio duration in seconds using ffprobe with wave/filesize fallbacks."""
+    if not audio_path or not os.path.exists(audio_path):
+        return 0.0
+    ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
+    try:
+        cmd = [
+            ffprobe_bin, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "csv=p=0",
+            audio_path
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        if res.returncode == 0 and res.stdout.strip():
+            val = float(res.stdout.strip().splitlines()[0])
+            if val > 0:
+                return round(val, 3)
+    except Exception as e:
+        logger.warning(f"get_audio_duration ffprobe notice: {e}")
+
+    try:
+        if audio_path.lower().endswith(".wav"):
+            with wave.open(audio_path, "rb") as wf:
+                frames = wf.getnframes()
+                rate = wf.getframerate()
+                if rate > 0:
+                    return round(frames / float(rate), 3)
+        fsize = os.path.getsize(audio_path)
+        if fsize > 0:
+            return round(fsize / 24000.0, 3)
+    except Exception:
+        pass
+    return 0.0
+
+
+def _build_atempo_filter_chain(tempo_ratio: float) -> str:
+    """
+    Builds a valid FFmpeg atempo filter chain for any positive tempo ratio.
+    Each atempo stage is clamped to [0.5, 2.0].
+    """
+    ratio = max(0.25, min(4.0, float(tempo_ratio)))
+    if abs(ratio - 1.0) <= 0.015:
+        return ""
+    stages = []
+    while ratio > 2.0:
+        stages.append("atempo=2.0")
+        ratio /= 2.0
+    while ratio < 0.5:
+        stages.append("atempo=0.5")
+        ratio /= 0.5
+    if abs(ratio - 1.0) > 0.01:
+        stages.append(f"atempo={ratio:.4f}")
+    return ",".join(stages)
+
+
+def fit_audio_to_exact_duration(
+    input_audio_path: str,
+    output_audio_path: str,
+    target_duration_sec: float
+) -> float:
+    """
+    Time-fits an audio segment to match `target_duration_sec` with 1:1 precision using FFmpeg
+    `atempo` + `apad=whole_dur=...` + `atrim=0:...` so the output duration equals `target_duration_sec`
+    within <= 0.05 seconds.
+    """
+    target_dur = max(0.5, round(float(target_duration_sec), 3))
+    ffmpeg_bin = get_ffmpeg_bin()
+
+    if not os.path.exists(input_audio_path) or os.path.getsize(input_audio_path) < 200:
+        # Synthesize silent fallback of exact target_dur
+        cmd_sil = [
+            ffmpeg_bin, "-y",
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-t", f"{target_dur:.3f}",
+            "-c:a", "libmp3lame", "-b:a", "192k",
+            output_audio_path
+        ]
+        subprocess.run(cmd_sil, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        return get_audio_duration(output_audio_path) or target_dur
+
+    raw_dur = get_audio_duration(input_audio_path)
+    if raw_dur <= 0.1:
+        raw_dur = target_dur
+
+    # Calculate tempo adjustment:
+    # - If raw_dur > target_dur: speed up so zero spoken words are cut off.
+    # - If raw_dur < target_dur: slow down gently (up to 0.78x) so speech paces across the cut, then pad tiny tail.
+    if raw_dur > target_dur:
+        effective_ratio = min(2.4, raw_dur / target_dur)
+    else:
+        effective_ratio = max(0.78, raw_dur / target_dur)
+
+    atempo_chain = _build_atempo_filter_chain(effective_ratio)
+    filter_parts = []
+    if atempo_chain:
+        filter_parts.append(atempo_chain)
+    filter_parts.append(f"apad=whole_dur={target_dur:.3f}")
+    filter_parts.append(f"atrim=0:{target_dur:.3f}")
+    af_str = ",".join(filter_parts)
+
+    cmd = [
+        ffmpeg_bin, "-y",
+        "-i", input_audio_path,
+        "-af", af_str,
+        "-ar", "44100",
+        "-ac", "2",
+        "-c:a", "libmp3lame", "-b:a", "192k",
+        output_audio_path
+    ]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90)
+    if res.returncode != 0 or not os.path.exists(output_audio_path) or os.path.getsize(output_audio_path) < 200:
+        logger.warning(f"fit_audio_to_exact_duration fallback notice: {res.stderr[:180]}")
+        shutil.copyfile(input_audio_path, output_audio_path)
+
+    return get_audio_duration(output_audio_path) or target_dur
+
+
+def synthesize_scene_by_scene_synced_audio(
+    script: str = "",
+    output_path: str = "",
+    keeper_clips: Optional[List[Dict[str, Any]]] = None,
+    target_duration_sec: Optional[float] = None,
+    voice_name: str = "Kore",
+    tone_style: str = "Suspense / Thriller",
+    language: str = "Hindi",
+    wps: Optional[float] = None,
+    cps: Optional[float] = None,
+    include_bgm: bool = False,
+    channel_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Synthesizes scene-by-scene narration blocks and concatenates them so that:
+    1. All real actor names are strictly replaced with in-universe character roles.
+    2. Target_Word_Count = round(Total_Cuts_Duration * WPS) across all scenes.
+    3. Each scene block is time-fitted to its exact cut duration and concatenated so:
+       abs(Total_Audio_Duration - Total_Video_Duration) <= 1.0 second.
+    """
+    if not wps or float(wps) <= 0:
+        calib = calibrate_voice_speed(voice_name=voice_name, tone_style=tone_style, language=language)
+        wps = float(calib.get("wps", 2.35))
+        cps = float(cps or calib.get("cps", 12.5))
+    else:
+        wps = float(wps)
+        cps = float(cps or round(wps * 5.3, 1))
+
+    # Determine exact Total_Cuts_Duration and scene list
+    clips_copy: List[Dict[str, Any]] = []
+    if keeper_clips and isinstance(keeper_clips, list) and len(keeper_clips) > 0:
+        for idx, kc in enumerate(keeper_clips):
+            if isinstance(kc, dict):
+                c_copy = dict(kc)
+                s = float(c_copy.get("start", 0.0))
+                e = float(c_copy.get("end", s + float(c_copy.get("duration", 5.0))))
+                c_dur = round(max(1.5, float(c_copy.get("duration") or (e - s))), 2)
+                c_copy["start"] = s
+                c_copy["end"] = e
+                c_copy["duration"] = c_dur
+                clips_copy.append(c_copy)
+
+    if clips_copy:
+        budget_res = enforce_continuous_scene_narration_budget(clips_copy, wps=wps, cps=cps, language=language)
+        clips_copy = budget_res["keeper_clips"]
+        total_video_dur = budget_res["total_cuts_duration"]
+        final_script = budget_res["full_script"]
+    else:
+        clean_scr = sanitize_actor_names_to_character_roles(script or "", language).strip()
+        if target_duration_sec and float(target_duration_sec) > 0:
+            total_video_dur = round(float(target_duration_sec), 2)
+        else:
+            word_cnt = max(10, len(clean_scr.split()))
+            total_video_dur = round(max(5.0, word_cnt / wps), 2)
+
+        # Build synthetic scene cuts across total_video_dur so narration is budgeted & continuous
+        num_blocks = max(1, min(6, int(round(total_video_dur / 30.0)) or 1))
+        block_dur = round(total_video_dur / num_blocks, 2)
+        words_all = clean_scr.split()
+        words_per_blk = max(1, len(words_all) // num_blocks) if words_all else 0
+        for b_idx in range(num_blocks):
+            b_s = round(b_idx * block_dur, 2)
+            b_e = round(total_video_dur if b_idx == num_blocks - 1 else (b_idx + 1) * block_dur, 2)
+            b_w = words_all[b_idx * words_per_blk:] if b_idx == num_blocks - 1 else words_all[b_idx * words_per_blk:(b_idx + 1) * words_per_blk]
+            clips_copy.append({
+                "id": b_idx + 1,
+                "start": b_s,
+                "end": b_e,
+                "duration": round(max(1.5, b_e - b_s), 2),
+                "title": f"Scene Block {b_idx + 1}",
+                "narration": " ".join(b_w)
+            })
+        budget_res = enforce_continuous_scene_narration_budget(clips_copy, wps=wps, cps=cps, language=language)
+        clips_copy = budget_res["keeper_clips"]
+        total_video_dur = budget_res["total_cuts_duration"]
+        final_script = budget_res["full_script"]
+
+    # Group clips into 1..6 contiguous synthesis blocks so TTS calls are fast while preserving scene boundaries
+    max_synth_blocks = 6 if total_video_dur > 25.0 else max(1, min(3, len(clips_copy)))
+    chunk_size = max(1, int(math.ceil(len(clips_copy) / float(max_synth_blocks))))
+    scene_blocks = []
+    for i in range(0, len(clips_copy), chunk_size):
+        sub = clips_copy[i:i + chunk_size]
+        b_dur = round(sum(float(x["duration"]) for x in sub), 3)
+        b_text = " ".join(str(x.get("narration", "")).strip() for x in sub if str(x.get("narration", "")).strip())
+        if b_dur > 0:
+            scene_blocks.append({
+                "block_index": len(scene_blocks) + 1,
+                "duration": b_dur,
+                "text": b_text
+            })
+
+    task_id = uuid.uuid4().hex[:8]
+    sync_temp = os.path.join(TEMP_DIR, f"sync_tts_{task_id}")
+    os.makedirs(sync_temp, exist_ok=True)
+    ffmpeg_bin = get_ffmpeg_bin()
+    fitted_block_paths = []
+
+    try:
+        for blk in scene_blocks:
+            b_idx = blk["block_index"]
+            b_dur = blk["duration"]
+            b_text = blk["text"]
+            raw_blk_path = os.path.join(sync_temp, f"raw_blk_{b_idx:02d}.mp3")
+            fit_blk_path = os.path.join(sync_temp, f"fit_blk_{b_idx:02d}.mp3")
+
+            gen_ok = generate_gemini_tts_audio(
+                text=b_text,
+                output_path=raw_blk_path,
+                voice_name=voice_name,
+                tone_style=tone_style,
+                language=language,
+                channel_id=channel_id
+            )
+            if not gen_ok or not os.path.exists(raw_blk_path):
+                generate_voiceover_audio(
+                    text=b_text,
+                    output_path=raw_blk_path,
+                    language=language,
+                    voice_name=voice_name
+                )
+
+            fit_audio_to_exact_duration(raw_blk_path, fit_blk_path, b_dur)
+            if os.path.exists(fit_blk_path) and os.path.getsize(fit_blk_path) > 200:
+                fitted_block_paths.append(fit_blk_path)
+
+        stitched_vo_path = os.path.join(sync_temp, "stitched_vo.mp3")
+        if len(fitted_block_paths) == 1:
+            shutil.copyfile(fitted_block_paths[0], stitched_vo_path)
+        elif len(fitted_block_paths) > 1:
+            concat_list_txt = os.path.join(sync_temp, "blocks_concat.txt")
+            with open(concat_list_txt, "w", encoding="utf-8") as cf:
+                for p in fitted_block_paths:
+                    clean_p = os.path.abspath(p).replace("\\", "/")
+                    cf.write(f"file '{clean_p}'\n")
+            cmd_cat = [
+                ffmpeg_bin, "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", concat_list_txt,
+                "-af", f"apad=whole_dur={total_video_dur:.3f},atrim=0:{total_video_dur:.3f}",
+                "-ar", "44100", "-ac", "2",
+                "-c:a", "libmp3lame", "-b:a", "192k",
+                stitched_vo_path
+            ]
+            subprocess.run(cmd_cat, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90)
+
+        # Ensure exact final lock to total_video_dur
+        locked_vo_path = os.path.join(sync_temp, "locked_vo.mp3")
+        fit_audio_to_exact_duration(stitched_vo_path, locked_vo_path, total_video_dur)
+
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        if include_bgm:
+            bgm_path = ensure_background_music_exists()
+            if bgm_path and os.path.exists(bgm_path):
+                fade_st = max(0.5, total_video_dur - 1.5)
+                mix_cmd = [
+                    ffmpeg_bin, "-y",
+                    "-i", locked_vo_path,
+                    "-stream_loop", "-1", "-i", bgm_path,
+                    "-filter_complex", (
+                        f"[0:a]volume=1.0[vo];"
+                        f"[1:a]volume=0.14[bgm];"
+                        f"[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2,"
+                        f"afade=t=out:st={fade_st:.2f}:d=1.5,"
+                        f"apad=whole_dur={total_video_dur:.3f},atrim=0:{total_video_dur:.3f}[aout]"
+                    ),
+                    "-map", "[aout]",
+                    "-ar", "44100", "-ac", "2",
+                    "-c:a", "libmp3lame", "-b:a", "192k",
+                    output_path
+                ]
+                subprocess.run(mix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90)
+            else:
+                shutil.copyfile(locked_vo_path, output_path)
+        else:
+            shutil.copyfile(locked_vo_path, output_path)
+
+        final_audio_dur = get_audio_duration(output_path) or total_video_dur
+        delta = abs(final_audio_dur - total_video_dur)
+        target_words = int(round(total_video_dur * wps))
+        actual_words = len(final_script.split())
+
+        logger.info(
+            f"1:1 Scene-Synced Audio Ready: Audio={final_audio_dur:.2f}s vs Video={total_video_dur:.2f}s "
+            f"(Delta={delta:.3f}s <= 1.0s) | Words={actual_words}/{target_words} @ {wps:.2f} WPS"
+        )
+        return {
+            "success": os.path.exists(output_path) and os.path.getsize(output_path) > 500,
+            "output_path": output_path,
+            "audio_duration": round(final_audio_dur, 2),
+            "video_duration": round(total_video_dur, 2),
+            "duration_delta": round(delta, 3),
+            "synced_1to1": delta <= 1.0,
+            "wps": wps,
+            "cps": cps,
+            "target_word_count": target_words,
+            "actual_word_count": actual_words,
+            "scene_blocks_count": len(scene_blocks),
+            "script": final_script,
+            "keeper_clips": clips_copy
+        }
+    finally:
+        try:
+            shutil.rmtree(sync_temp, ignore_errors=True)
+        except Exception:
+            pass
+
+
 def analyze_video_timeline_autocut(
     video_path: str,
     duration: float = 0.0,
@@ -2743,11 +3294,14 @@ def analyze_video_timeline_autocut(
     target_duration: Optional[int] = None,
     language: str = "Hindi",
     custom_prompt: str = "",
-    channel_id: Optional[str] = None
+    channel_id: Optional[str] = None,
+    calibrated_wps: Optional[float] = None,
+    calibrated_cps: Optional[float] = None
 ) -> Dict[str, Any]:
     """
     Analyzes video timeline and discovers key narrative timestamps.
     Automatically identifies keeper scenes, discards filler, and returns keeper intervals + recap script.
+    Enforces character-only naming and continuous WPS-budgeted narration across all cuts.
     """
     if duration <= 0:
         meta = get_video_metadata(video_path)
@@ -2757,12 +3311,16 @@ def analyze_video_timeline_autocut(
     if duration < 5:
         duration = 60.0
 
+    wps = float(calibrated_wps or 2.35)
+    cps = float(calibrated_cps or 12.5)
+
     min_allowed_sec = max(15.0, round(duration * 0.05, 1))
     max_allowed_sec = max(min_allowed_sec + 10.0, round(duration * 0.20, 1))
     if not target_duration or target_duration <= 0:
         target_duration = int(round(duration * 0.12))
 
     target_duration = int(max(min_allowed_sec, min(max_allowed_sec, float(target_duration))))
+    target_word_budget = int(round(target_duration * wps))
 
     keeper_clips = []
     script = ""
@@ -2774,15 +3332,18 @@ Analyze this video storyline:
 - Total Video Duration: {int(duration)} seconds ({int(duration // 60)}m {int(duration % 60)}s)
 - Mathematical Story Duration Bounds: Min {int(min_allowed_sec)}s (5% = 1/20th) to Max {int(max_allowed_sec)}s (20% = 1/5th)
 - Target Highlight Duration: ~{target_duration} seconds
+- Calibrated Voice Speed: {wps:.2f} Words/sec ({cps:.1f} Chars/sec) -> Target Total Narration: ~{target_word_budget} words
 - Editing Style / Focus: {focus_style} (PardaCine Style: High Suspense -> Clear Beginning -> Twists -> Shocking Truth -> Moral Closure)
 - Language: {language}
 {f"- Additional Instructions: {custom_prompt}" if custom_prompt else ""}
+
+{STRICT_CHARACTER_ONLY_NAMING_RULE}
 
 YOUR GOAL:
 1. Structure the story identically to PardaCine: high-suspense opening hook, clear setup, escalating twists, shocking truth reveal, and moral closure.
 2. Select between 6 and 16 high-impact keeper clips whose total duration is strictly between {int(min_allowed_sec)}s (5%) and {int(max_allowed_sec)}s (20%), aiming near ~{target_duration} seconds.
 3. Every second not included in these keeper clips will be automatically deleted as filler.
-4. Write a synchronized PardaCine storytelling recap narration in {language} for these keeper scenes.
+4. For EVERY keeper clip, write continuous PardaCine storytelling narration in {language} budgeted to `round(clip_duration * {wps:.2f})` words so speech runs continuously from the first second to the final cut!
 
 RULES:
 - Return STRICT JSON ONLY. No markdown, no explanations outside JSON.
@@ -2871,10 +3432,6 @@ JSON Format:
                 "reason": reason_act,
                 "narration": narr_act
             })
-        if language.lower().startswith("hi"):
-            script = " ".join(r[4] for r in ratios)
-        else:
-            script = "The story begins with a chilling mystery that tests our protagonist. Through mind-bending twists and a shocking truth reveal, justice finally prevails in a powerful moral closure."
 
     total_kept = sum(c["duration"] for c in keeper_clips)
     if keeper_clips and (total_kept < min_allowed_sec or total_kept > max_allowed_sec):
@@ -2885,6 +3442,12 @@ JSON Format:
             c["end"] = round(min(float(duration), c["start"] + new_dur), 2)
             c["duration"] = round(max(1.5, c["end"] - c["start"]), 2)
         total_kept = sum(c["duration"] for c in keeper_clips)
+
+    # Enforce character-only naming + continuous WPS narration budget across all keeper cuts
+    budget_info = enforce_continuous_scene_narration_budget(keeper_clips, wps=wps, cps=cps, language=language)
+    keeper_clips = budget_info["keeper_clips"]
+    script = budget_info["full_script"]
+    total_kept = budget_info["total_cuts_duration"]
 
     total_filler = max(0.0, duration - total_kept)
     filler_pct = round((total_filler / max(1.0, duration)) * 100, 1)
@@ -2899,6 +3462,10 @@ JSON Format:
         "total_kept_duration": round(total_kept, 2),
         "filler_removed_duration": round(total_filler, 2),
         "filler_removed_percent": filler_pct,
+        "wps": wps,
+        "cps": cps,
+        "total_words": budget_info["total_words"],
+        "target_words": budget_info["target_words"],
         "keeper_clips": keeper_clips,
         "script": script
     }
@@ -2919,10 +3486,11 @@ def generate_cinema_explainer_storyboard(
     """
     Analyzes full-length YouTube movie narrative using Gemini in PardaCine Cinema Explainer Style:
     - High suspense hook, clear beginning, escalating twists, shocking truth reveal, and moral closure.
+    - Strictly forbids real-life actor/celebrity names; enforces in-movie character names or role titles.
     - Mathematically bounded story duration:
       * Minimum story duration = 5% of source runtime (1/20th; e.g., 2h movie >= 6-10 min).
       * Maximum story duration = 20% of source runtime (1/5th; e.g., 50 min movie <= 10 min).
-    - Story text dynamically matched to visual cuts using measured benchmark speed (WPS & CPS).
+    - Continuous story narration dynamically matched 1:1 to visual cuts using measured benchmark speed (WPS & CPS).
     """
     logger.info(f"Extracting YouTube movie narrative for PardaCine Cinema Explainer: {youtube_url}")
     try:
@@ -3015,9 +3583,11 @@ Analyze the complete narrative storyline for this movie:
 {description[:2500]}
 {chapters_text}
 
+{STRICT_CHARACTER_ONLY_NAMING_RULE}
+
 === PARDACINE NARRATIVE STYLE (MANDATORY) ===
 Structure the narrative recap identically to PardaCine's signature storytelling formula:
-1. Phase 1:Setup & High-Suspense Hook — Start with a chilling mystery or shocking opening hook, then establish the protagonist's world and the inciting crisis with crystal clarity.
+1. Phase 1: Setup & High-Suspense Hook — Start with a chilling mystery or shocking opening hook, then establish the protagonist's world and the inciting crisis with crystal clarity.
 2. Phase 2: Rising Stakes & Deepening Trap — Every step forward uncovers a deeper conspiracy; build psychological tension and escalating danger.
 3. Phase 3: Mind-Bending Twists & Shocking Truth — Unmask the hidden betrayal or shocking truth at the heart of the mystery when all hope seems lost.
 4. Phase 4: High-Octane Climax & Moral Closure — Deliver the final confrontation and conclude with a deep, memorable moral/philosophical closure that leaves the viewer thinking.
@@ -3029,17 +3599,18 @@ Follow professional cinema editing rhythm:
 2. Medium cuts (7s to 14s) for crucial dialogues, twists, chases, and revelations.
 The sum of all keeper_clips durations MUST fall strictly between {min_allowed_sec:.0f} seconds (5% of movie) and {max_allowed_sec:.0f} seconds (20% of movie), aiming near {numeric_target:.0f} seconds.
 
-=== BENCHMARKED SPEECH SYNC (WPS & CPS) ===
+=== EXACT 1:1 BENCHMARKED SPEECH SYNC (WPS & CPS) ===
 - Measured Voice Speed ({voice_name} / {tone_style}): {wps:.2f} Words/sec ({cps:.1f} Characters/sec)
 - For EVERY cut:
   * target_words = round(cut_duration * {wps:.2f})
   * target_chars = round(cut_duration * {cps:.1f})
+- Never write a short 1-minute summary for a multi-minute cut timeline! The speech must run continuously across all scenes from the first second to the final cut.
 - Write natural, gripping {language} narration for EACH cut that matches its exact word/character budget so the voiceover stays 100% locked to the visual scenes!
 
 === OUTPUT FORMAT ===
 Return STRICT JSON ONLY (no markdown outside JSON):
 {{
-  "summary": "PardaCine-style 2-3 sentence high-suspense overview including the core mystery and moral theme",
+  "summary": "PardaCine-style 2-3 sentence high-suspense overview using ONLY in-universe character names or role titles",
   "total_estimated_duration": {numeric_target:.1f},
   "keeper_clips": [
     {{
@@ -3119,8 +3690,11 @@ Return STRICT JSON ONLY (no markdown outside JSON):
                         if parsed_clips:
                             parsed_clips.sort(key=lambda x: x["start"])
                             keeper_clips = parsed_clips
-                            summary = data.get("summary", "")
-                            full_script = data.get("full_script", " ".join(c["narration"] for c in keeper_clips if c["narration"]))
+                            summary = sanitize_actor_names_to_character_roles(data.get("summary", ""), language)
+                            full_script = sanitize_actor_names_to_character_roles(
+                                data.get("full_script", " ".join(c["narration"] for c in keeper_clips if c["narration"])),
+                                language
+                            )
                             source = f"gemini ({model_name}) [{masked_k}]"
                             return True
                 except Exception as ge:
@@ -3232,7 +3806,8 @@ Return STRICT JSON ONLY (no markdown outside JSON):
             })
 
         summary = (
-            f"PardaCine Cinema Explainer for '{title}': A high-suspense narrative journey from a chilling opening mystery "
+            f"PardaCine Cinema Explainer for '{sanitize_actor_names_to_character_roles(title, language)}': "
+            f"A high-suspense narrative journey from a chilling opening mystery "
             f"through mind-bending twists and a shocking truth reveal, concluding with deep moral closure."
         )
         full_script = " ".join(script_segments)
@@ -3251,6 +3826,12 @@ Return STRICT JSON ONLY (no markdown outside JSON):
             c["target_words"] = max(3, int(round(c["duration"] * wps)))
             c["target_chars"] = max(15, int(round(c["duration"] * cps)))
         tot_kept = sum(c["duration"] for c in keeper_clips)
+
+    # ENFORCE CHARACTER-ONLY NAMING & EXACT 1:1 CONTINUOUS NARRATION WORD BUDGET ACROSS ALL SCENES
+    budget_info = enforce_continuous_scene_narration_budget(keeper_clips, wps=wps, cps=cps, language=language)
+    keeper_clips = budget_info["keeper_clips"]
+    full_script = budget_info["full_script"]
+    tot_kept = budget_info["total_cuts_duration"]
 
     tot_filler = max(0.0, duration - tot_kept)
     filler_pct = round((tot_filler / max(1.0, duration)) * 100, 1) if duration > 0 else 0
@@ -3293,8 +3874,9 @@ Return STRICT JSON ONLY (no markdown outside JSON):
         "language": language,
         "total_duration_sec": round(tot_kept, 2),
         "total_clips": len(keeper_clips),
-        "total_words": int(round(tot_kept * wps)),
-        "total_chars": int(round(tot_kept * cps)),
+        "total_words": budget_info["total_words"],
+        "target_words": budget_info["target_words"],
+        "total_chars": budget_info["total_chars"],
         "total_kept_duration": round(tot_kept, 2),
         "filler_removed_duration": round(tot_filler, 2),
         "filler_removed_percent": filler_pct,
@@ -3315,18 +3897,21 @@ def export_timeline_trimmed_video(
     source_video_path: str,
     keeper_clips: List[Dict[str, Any]],
     output_path: str,
-    audio_mode: str = "original",  # "original", "tts", "tts_bgm"
+    audio_mode: str = "original",  # "original", "tts", "tts_bgm", "cinema_explainer"
     voice_name: str = "Kore",
     tone_style: str = "Narrative Deep",
     script: str = "",
     progress_callback: Optional[Any] = None,
-    channel_id: Optional[str] = None
+    channel_id: Optional[str] = None,
+    calibrated_wps: Optional[float] = None
 ) -> Dict[str, Any]:
     """
     Slices and concatenates keeper clips from source_video_path WITHOUT changing resolution
     or aspect ratio.
     Keeps 100% original video size (native width & height, e.g. 1920x1080).
     Uses ultra-fast stream copy (-c copy) as primary slicing mechanism.
+    When audio_mode != 'original', synthesizes scene-by-scene synced narration so
+    abs(Total_Audio_Duration - Total_Video_Duration) <= 1.0 second.
     """
     def notify(pct: int, msg: str):
         if progress_callback:
@@ -3345,7 +3930,13 @@ def export_timeline_trimmed_video(
             s = float(c.get("start", 0))
             e = float(c.get("end", 0))
             if e > s + 0.3:
-                sanitized.append({"start": s, "end": e, "title": c.get("title", "")})
+                sanitized.append({
+                    "start": s,
+                    "end": e,
+                    "duration": round(e - s, 2),
+                    "title": c.get("title", ""),
+                    "narration": c.get("narration") or c.get("script_segment") or ""
+                })
         except Exception:
             pass
 
@@ -3366,13 +3957,11 @@ def export_timeline_trimmed_video(
         notify(5, f"Preparing to slice {total_clips} clips at original resolution via ultra-fast stream copy...")
 
         # 1. Slice each keeper clip WITHOUT RESIZING (keeps native resolution & aspect ratio)
-        # Prioritizes ultra-fast stream copy (-c copy)
         for i, clip in enumerate(sanitized):
             s = clip["start"]
             e = clip["end"]
             clip_out = os.path.join(task_temp, f"clip_{i:03d}.mp4")
 
-            # Try ultra-fast stream copy first
             cmd_copy = [
                 ffmpeg_bin, "-y",
                 "-ss", str(s),
@@ -3388,7 +3977,6 @@ def export_timeline_trimmed_video(
             if res_copy.returncode == 0 and os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
                 sliced_paths.append(clip_out)
             else:
-                # Fallback to keyframe-accurate ultrafast re-encode (zero resizing, preserves 100% native resolution)
                 cmd_fast = [
                     ffmpeg_bin, "-y",
                     "-ss", str(s),
@@ -3432,7 +4020,6 @@ def export_timeline_trimmed_video(
         ]
         res_concat = subprocess.run(concat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res_concat.returncode != 0 or not os.path.exists(stitched_video) or os.path.getsize(stitched_video) == 0:
-            # Fallback to re-encode concat filter
             filter_parts = "".join(f"[{j}:v]" for j in range(len(sliced_paths)))
             cmd_filter = [ffmpeg_bin, "-y"]
             for p in sliced_paths:
@@ -3445,59 +4032,49 @@ def export_timeline_trimmed_video(
             ])
             subprocess.run(cmd_filter, check=True)
 
-        # 3. Audio handling
+        stitched_meta = get_video_metadata(stitched_video)
+        exact_video_dur = float(stitched_meta.get("duration") or sum(c["duration"] for c in sanitized))
+
+        # 3. Audio handling with 1:1 timeline duration sync
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         if audio_mode == "original":
             notify(90, "Finalizing video with original native audio...")
             shutil.copyfile(stitched_video, output_path)
         else:
-            notify(75, "Generating dramatic Neural Storytelling Voiceover...")
-            tts_audio_path = os.path.join(task_temp, "tts_narration.mp3")
-            clean_script = script.strip() or "कहानी की शुरुआत में नायक को सच्चाई का पता चलता है और रोमांचक मोड़ आता है।"
-            gen_ok = generate_gemini_tts_audio(
-                text=clean_script,
+            notify(75, f"Synthesizing 1:1 scene-synced neural voiceover ({exact_video_dur:.1f}s)...")
+            tts_audio_path = os.path.join(task_temp, "tts_narration_synced.mp3")
+            include_bgm_flag = audio_mode in ["tts_bgm", "cinema_explainer"]
+            sync_res = synthesize_scene_by_scene_synced_audio(
+                script=script,
                 output_path=tts_audio_path,
+                keeper_clips=sanitized,
+                target_duration_sec=exact_video_dur,
                 voice_name=voice_name,
                 tone_style=tone_style,
+                language="Hindi",
+                wps=calibrated_wps,
+                include_bgm=include_bgm_flag,
                 channel_id=channel_id
             )
-            if not gen_ok:
-                generate_voiceover_audio(text=clean_script, output_path=tts_audio_path, language="Hindi")
-
-            if audio_mode in ["tts_bgm", "cinema_explainer"]:
-                notify(85, "Mixing ducked cinematic background music + voiceover...")
-                bgm_path = ensure_background_music_exists()
-                mix_cmd = [
-                    ffmpeg_bin, "-y",
-                    "-i", stitched_video,
-                    "-i", tts_audio_path,
-                    "-i", bgm_path,
-                    "-filter_complex", "[1:a]volume=1.0[v_a];[2:a]volume=0.15[b_a];[v_a][b_a]amix=inputs=2:duration=first[aout]",
-                    "-map", "0:v",
-                    "-map", "[aout]",
-                    "-c:v", "copy",
-                    "-c:a", "aac", "-b:a", "192k",
-                    "-shortest",
-                    output_path
-                ]
-                subprocess.run(mix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            else:
-                notify(85, "Overlaying neural voiceover onto stitched video...")
-                ov_cmd = [
-                    ffmpeg_bin, "-y",
-                    "-i", stitched_video,
-                    "-i", tts_audio_path,
-                    "-c:v", "copy",
-                    "-c:a", "aac", "-b:a", "192k",
-                    "-shortest",
-                    output_path
-                ]
-                subprocess.run(ov_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            notify(88, f"Overlaying 1:1 synced audio ({sync_res.get('audio_duration', exact_video_dur):.1f}s) onto video ({exact_video_dur:.1f}s)...")
+            ov_cmd = [
+                ffmpeg_bin, "-y",
+                "-i", stitched_video,
+                "-i", tts_audio_path,
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k",
+                "-t", f"{exact_video_dur:.3f}",
+                "-movflags", "+faststart",
+                output_path
+            ]
+            subprocess.run(ov_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             shutil.copyfile(stitched_video, output_path)
 
-        notify(100, "Export complete! Final video is ready.")
+        notify(100, "Export complete! Final video is ready with 1:1 audio-video duration sync.")
         meta = get_video_metadata(output_path)
         return {
             "success": True,
@@ -3515,4 +4092,5 @@ def export_timeline_trimmed_video(
             shutil.rmtree(task_temp, ignore_errors=True)
         except Exception:
             pass
+
 

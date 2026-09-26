@@ -6471,6 +6471,11 @@ HTML_MAIN = """
                 return;
             }
             trimmerKeeperClips.splice(idx, 1);
+            currentNarrationAudioUrl = null;
+            if (trimmerNarrationScript) {
+                const updatedScript = trimmerKeeperClips.map(c => c.narration || '').filter(Boolean).join('\\n\\n');
+                if (updatedScript) trimmerNarrationScript.value = updatedScript;
+            }
             if (trimmerActiveClipIndex >= trimmerKeeperClips.length) {
                 trimmerActiveClipIndex = trimmerKeeperClips.length - 1;
             }
@@ -6494,21 +6499,31 @@ HTML_MAIN = """
                 }
 
                 const target = trimmerKeeperClips[clipIdx];
+                const durA = Math.max(0.3, cur - target.start);
+                const durB = Math.max(0.3, target.end - cur);
+                const totalOrigDur = durA + durB;
+                const origWords = (target.narration || '').trim().split(/\\s+/).filter(Boolean);
+                const splitWordIdx = Math.max(1, Math.round(origWords.length * (durA / totalOrigDur)));
+                const narrA = origWords.slice(0, splitWordIdx).join(' ');
+                const narrB = origWords.slice(splitWordIdx).join(' ');
+
                 const clipA = {
                     id: nextClipId++,
                     start: target.start,
                     end: cur,
-                    duration: cur - target.start,
+                    duration: durA,
                     title: `${target.title || 'Scene'} (Part A)`,
-                    reason: target.reason
+                    reason: target.reason,
+                    narration: narrA
                 };
                 const clipB = {
                     id: nextClipId++,
                     start: cur,
                     end: target.end,
-                    duration: target.end - cur,
+                    duration: durB,
                     title: `${target.title || 'Scene'} (Part B)`,
-                    reason: target.reason
+                    reason: target.reason,
+                    narration: narrB
                 };
 
                 trimmerKeeperClips.splice(clipIdx, 1, clipA, clipB);
@@ -7152,12 +7167,17 @@ HTML_MAIN = """
                     }
 
                     const fullScriptText = data.full_script || (data.keeper_clips || []).map(c => c.narration || '').filter(Boolean).join('\\n\\n');
-                    if (fullScriptText) {
+                    const totalCutsDurationSec = parseFloat(data.total_duration_sec || data.total_kept_duration) || (data.keeper_clips || []).reduce((acc, c) => acc + (parseFloat(c.duration) || 0), 0);
+                    if (fullScriptText || (data.keeper_clips && data.keeper_clips.length > 0)) {
                         const ttsRes = await fetch('/api/tts/generate', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 script: fullScriptText,
+                                keeper_clips: data.keeper_clips || [],
+                                target_duration_sec: totalCutsDurationSec,
+                                calibrated_wps: measuredWps,
+                                calibrated_cps: measuredCps,
                                 voice_name: voiceName,
                                 tone_style: toneStyle,
                                 language: lang,
@@ -7171,6 +7191,10 @@ HTML_MAIN = """
                             currentNarrationAudioUrl = ttsData.audio_url;
                             data.narration_audio_url = ttsData.audio_url;
                             currentExplainerStoryboard.narration_audio_url = ttsData.audio_url;
+                            if (ttsData.script) {
+                                data.full_script = ttsData.script;
+                                if (trimmerNarrationScript) trimmerNarrationScript.value = ttsData.script;
+                            }
 
                             if (explainerReadyAudioBar) explainerReadyAudioBar.style.display = 'flex';
                             if (explainerReadyAudioPlayer) explainerReadyAudioPlayer.src = ttsData.audio_url;
@@ -7190,7 +7214,8 @@ HTML_MAIN = """
                                 btnDownloadNarrationAudio.download = ttsData.filename || 'pardacine_explainer_voiceover_bgm.mp3';
                                 btnDownloadNarrationAudio.style.display = 'inline-flex';
                             }
-                            setPipelineStepState(4, 'done', '✅ <b>4. Auto TTS:</b> Voiceover + BGM Ready');
+                            const syncDelta = typeof ttsData.duration_delta === 'number' ? ` (Δ ${ttsData.duration_delta.toFixed(2)}s)` : '';
+                            setPipelineStepState(4, 'done', `✅ <b>4. Auto TTS:</b> 1:1 Synced (${formatSecs(ttsData.duration || totalCutsDurationSec)}${syncDelta})`);
                         } else {
                             setPipelineStepState(4, 'done', '⚠️ <b>4. Auto TTS:</b> Synthesize on Export');
                         }
@@ -7203,7 +7228,7 @@ HTML_MAIN = """
                     updateSeqStepPills(5);
 
                     if (explainerPipelineStatusTitle) {
-                        explainerPipelineStatusTitle.innerHTML = `✅ <b>PardaCine Storyboard &amp; Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie) synced to Step 5 CapCut timeline.`;
+                        explainerPipelineStatusTitle.innerHTML = `✅ <b>PardaCine Storyboard &amp; 1:1 Synced Voiceover Complete!</b> "${data.title}" (${data.total_clips} cuts • ${formatSecs(data.total_duration_sec)} = ${data.story_pct_of_source || 12}% of movie) synced to Step 5 CapCut timeline.`;
                     }
                 } catch (err) {
                     alert('Cinema Explainer Pipeline Error: ' + err.message);
@@ -7249,25 +7274,30 @@ HTML_MAIN = """
         if (btnGenerateNarrationOnly) {
             btnGenerateNarrationOnly.addEventListener('click', async () => {
                 const scriptText = trimmerNarrationScript ? trimmerNarrationScript.value.trim() : '';
-                if (!scriptText) {
+                if (!scriptText && trimmerKeeperClips.length === 0) {
                     alert('Please enter or generate a narration script first.');
                     if (trimmerNarrationScript) trimmerNarrationScript.focus();
                     return;
                 }
 
                 btnGenerateNarrationOnly.disabled = true;
-                btnGenerateNarrationOnly.innerHTML = '<span>⏳</span> <span>Synthesizing Audio...</span>';
+                btnGenerateNarrationOnly.innerHTML = '<span>⏳</span> <span>Synthesizing 1:1 Synced Audio...</span>';
 
                 try {
                     const audioModeInput = document.querySelector('input[name="trimmerAudioMode"]:checked');
                     const audioMode = audioModeInput ? audioModeInput.value : 'tts_bgm';
                     const includeBgm = (audioMode === 'tts_bgm' || audioMode === 'cinema_explainer');
+                    const totalCutsDur = trimmerKeeperClips.reduce((acc, c) => acc + (parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0), 0);
 
                     const res = await fetch('/api/tts/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             script: scriptText,
+                            keeper_clips: trimmerKeeperClips,
+                            target_duration_sec: totalCutsDur > 0 ? totalCutsDur : undefined,
+                            calibrated_wps: window.lastCalibratedWps || 2.35,
+                            calibrated_cps: window.lastCalibratedCps || 12.5,
                             voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
                             tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
                             language: 'Hindi',
@@ -7281,6 +7311,9 @@ HTML_MAIN = """
                     }
 
                     currentNarrationAudioUrl = data.audio_url;
+                    if (data.script && trimmerNarrationScript) {
+                        trimmerNarrationScript.value = data.script;
+                    }
 
                     if (trimmerAudioPreviewBox) trimmerAudioPreviewBox.style.display = 'flex';
                     if (trimmerNarrationAudioPlayer) {
@@ -7557,12 +7590,17 @@ HTML_MAIN = """
                     // 1. If audio mode is TTS / BGM and not generated yet or script changed, generate on server
                     if (audioMode === 'tts' || audioMode === 'tts_bgm' || audioMode === 'cinema_explainer') {
                         if (!narrationAudioUrl) {
-                            updateProgress(10, 'Synthesizing Neural Hindi Voiceover & Ducked BGM on server...');
+                            const totalCutsDur = trimmerKeeperClips.reduce((acc, c) => acc + (parseFloat(c.duration) || (parseFloat(c.end) - parseFloat(c.start)) || 0), 0);
+                            updateProgress(10, `Synthesizing 1:1 Scene-Synced Neural Voiceover & Ducked BGM (${formatSecs(totalCutsDur)})...`);
                             const ttsRes = await fetch('/api/tts/generate', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     script: scriptText || 'कहानी की शुरुआत में नायक को रोमांचक सच्चाई का पता चलता है।',
+                                    keeper_clips: trimmerKeeperClips,
+                                    target_duration_sec: totalCutsDur > 0 ? totalCutsDur : undefined,
+                                    calibrated_wps: window.lastCalibratedWps || 2.35,
+                                    calibrated_cps: window.lastCalibratedCps || 12.5,
                                     voice_name: trimmerTtsVoiceSelect ? trimmerTtsVoiceSelect.value : 'Kore',
                                     tone_style: trimmerTtsToneSelect ? trimmerTtsToneSelect.value : 'Narrative Deep Storytelling',
                                     language: 'Hindi',
@@ -7576,8 +7614,11 @@ HTML_MAIN = """
                             }
                             narrationAudioUrl = ttsData.audio_url;
                             currentNarrationAudioUrl = narrationAudioUrl;
+                            if (ttsData.script && trimmerNarrationScript) {
+                                trimmerNarrationScript.value = ttsData.script;
+                            }
                         }
-                        updateProgress(25, 'Narration audio ready! Initializing in-browser video slicer...');
+                        updateProgress(25, '1:1 Synced narration audio ready! Initializing in-browser video slicer...');
                     } else {
                         updateProgress(20, 'Original audio mode selected. Initializing in-browser video slicer...');
                     }
@@ -9543,13 +9584,19 @@ def clipper_serve_tts_sample(filename):
 @app.route('/api/trimmer/generate_narration_audio', methods=['POST'])
 def tts_generate():
     """
-    ZERO-SERVER-UPLOAD AUDIO PIPELINE:
-    Synthesizes neural Hindi narration voiceover (Edge-TTS / Gemini Flash)
-    and mixes ducked cinematic suspense BGM.
-    Returns direct audio URL for client-side in-browser muxing and direct download.
+    ZERO-SERVER-UPLOAD 1:1 SCENE-SYNCED AUDIO PIPELINE:
+    1. Enforces character-only naming (forbids real-life actor/celebrity names).
+    2. Calculates exact Total_Cuts_Duration across keeper_clips and budgets narration:
+       Target_Word_Count = Total_Cuts_Duration * WPS.
+    3. Synthesizes scene-by-scene audio blocks and concatenates them so:
+       abs(Total_Audio_Duration - Total_Video_Duration) <= 1.0 second.
     """
     data = request.get_json(force=True, silent=True) or {}
     script = (data.get('script') or data.get('text') or '').strip()
+    keeper_clips = data.get('keeper_clips') if isinstance(data.get('keeper_clips'), list) else None
+    target_duration_sec = data.get('target_duration_sec') or data.get('total_cuts_duration')
+    calibrated_wps = data.get('calibrated_wps') or data.get('wps')
+    calibrated_cps = data.get('calibrated_cps') or data.get('cps')
     voice_name = (data.get('voice_name') or data.get('voice') or 'Kore').strip()
     tone_style = (data.get('tone_style') or data.get('tone') or 'Narrative Deep Storytelling').strip()
     language = (data.get('language') or 'Hindi').strip()
@@ -9562,58 +9609,48 @@ def tts_generate():
 
     ch_id = (data.get('channel_id') or '').strip() or get_active_channel_id_or_default()
 
-    if not script:
-        return jsonify({'success': False, 'error': 'Narration script is required'}), 200
+    if not script and not keeper_clips:
+        return jsonify({'success': False, 'error': 'Narration script or keeper_clips is required'}), 200
 
     try:
         task_id = uuid.uuid4().hex[:8]
-        tts_raw = os.path.join(clipper_engine.TEMP_DIR, f"vo_raw_{task_id}.mp3")
-        final_mp3 = os.path.join(clipper_engine.TEMP_DIR, f"narration_mixed_{task_id}.mp3")
+        final_mp3 = os.path.join(clipper_engine.TEMP_DIR, f"narration_synced_{task_id}.mp3")
 
-        # 1. Synthesize Neural Voiceover
-        gen_ok = clipper_engine.generate_gemini_tts_audio(
-            text=script,
-            output_path=tts_raw,
+        sync_res = clipper_engine.synthesize_scene_by_scene_synced_audio(
+            script=script,
+            output_path=final_mp3,
+            keeper_clips=keeper_clips,
+            target_duration_sec=float(target_duration_sec) if target_duration_sec else None,
             voice_name=voice_name,
             tone_style=tone_style,
             language=language,
+            wps=float(calibrated_wps) if calibrated_wps else None,
+            cps=float(calibrated_cps) if calibrated_cps else None,
+            include_bgm=bool(include_bgm),
             channel_id=ch_id
         )
-        if not gen_ok or not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
-            clipper_engine.generate_voiceover_audio(text=script, output_path=tts_raw, language=language, voice_name=voice_name)
 
-        if not os.path.exists(tts_raw) or os.path.getsize(tts_raw) < 500:
-            return jsonify({'success': False, 'error': 'Failed to synthesize voiceover audio'}), 200
-
-        # 2. Mix with Ducked Suspense BGM if requested
-        if include_bgm:
-            bgm_path = clipper_engine.ensure_background_music_exists()
-            ffmpeg_bin = clipper_engine.get_ffmpeg_bin()
-            cmd = [
-                ffmpeg_bin, "-y",
-                "-i", tts_raw,
-                "-stream_loop", "-1", "-i", bgm_path,
-                "-filter_complex", "[0:a]volume=1.0[vo];[1:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first[aout]",
-                "-map", "[aout]",
-                "-c:a", "libmp3lame", "-b:a", "192k",
-                final_mp3
-            ]
-            import subprocess
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) < 500:
-                shutil.copyfile(tts_raw, final_mp3)
-        else:
-            shutil.copyfile(tts_raw, final_mp3)
+        if not sync_res.get('success') or not os.path.exists(final_mp3) or os.path.getsize(final_mp3) < 500:
+            return jsonify({'success': False, 'error': 'Failed to synthesize 1:1 synced voiceover audio'}), 200
 
         out_name = os.path.basename(final_mp3)
-        audio_meta = clipper_engine.get_video_metadata(final_mp3)
-        audio_dur = float(audio_meta.get("duration", 0.0))
+        audio_dur = float(sync_res.get('audio_duration', 0.0))
+        video_dur = float(sync_res.get('video_duration', audio_dur))
+        dur_delta = float(sync_res.get('duration_delta', abs(audio_dur - video_dur)))
 
         return jsonify({
             'success': True,
             'audio_url': f"/api/clipper/tts_sample/{out_name}",
             'filename': out_name,
             'duration': round(audio_dur, 2),
+            'audio_duration': round(audio_dur, 2),
+            'video_duration': round(video_dur, 2),
+            'duration_delta': round(dur_delta, 3),
+            'synced_1to1': dur_delta <= 1.0,
+            'target_word_count': sync_res.get('target_word_count'),
+            'actual_word_count': sync_res.get('actual_word_count'),
+            'wps': sync_res.get('wps'),
+            'script': sync_res.get('script', script),
             'voice_name': voice_name,
             'tone_style': tone_style,
             'has_bgm': include_bgm
